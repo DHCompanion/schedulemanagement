@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { ActivityTable, type ActivityRow } from "@/components/ActivityTable";
+import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
+import { getFinalizedEntries } from "@/lib/updates/updateService";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +22,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     include: { activities: { orderBy: { wbsCode: "asc" } } },
   });
 
+  const currentProgress = resolveCurrentProgress(await getFinalizedEntries(project.id));
   const mpd = latest?.minutesPerDay ?? 480;
   const rows: ActivityRow[] = (latest?.activities ?? []).map((a) => ({
     id: a.id,
@@ -31,7 +34,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
     outlineLevel: a.outlineLevel,
     plannedStart: a.plannedStart ? a.plannedStart.toISOString() : null,
     plannedFinish: a.plannedFinish ? a.plannedFinish.toISOString() : null,
-    percentComplete: a.percentComplete,
+    percentComplete: currentProgress.get(a.canonicalActivityKey)?.percentComplete ?? a.percentComplete,
     totalSlackDays: toDays(a.totalSlackMinutes, mpd),
     durationDays: a.durationDays,
     customFields: (a.customFields as Record<string, string>) ?? {},
