@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id                  String   @id @default(cuid())
+  name                String
+  client              String?
+  sector              String?
+  buildingType        String?
+  sizeSqFt            Int?
+  contractValue       Decimal? @db.Decimal(14, 2)
+  region              String?
+  deliveryMethod      String?
+  status              String   @default("active")
+  externalProjectKey  String?
+  externalProjectGuid String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  imports             ScheduleImport[]
+}
+
+model ScheduleImport {
+  id                     String    @id @default(cuid())
+  projectId              String
+  project                Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceFormat           String
+  fileName               String
+  fileHash               String
+  importedAt             DateTime  @default(now())
+  importedBy             String?
+  projectTitleFromFile   String?
+  statusDate             DateTime?
+  isBaseline             Boolean   @default(false)
+  projectStart           DateTime?
+  projectFinish          DateTime?
+  minutesPerDay          Int?
+  minutesPerWeek         Int?
+  daysPerMonth           Int?
+  rawProjectProps        Json?
+  importFieldDefinitions Json?
+  activityCount          Int       @default(0)
+  relationshipCount      Int       @default(0)
+  resourceCount          Int       @default(0)
+  warnings               Json?
+  notes                  String?
+  activities             Activity[]
+  relationships          Relationship[]
+  resources              Resource[]
+  assignments            Assignment[]
+  calendars              Calendar[]
+
+  @@index([projectId])
+}
+
+model Activity {
+  id                       String    @id @default(cuid())
+  scheduleImportId         String
+  scheduleImport           ScheduleImport @relation(fields: [scheduleImportId], references: [id], onDelete: Cascade)
+  externalUid              Int
+  externalGuid             String?
+  externalId               Int?
+  wbsCode                  String?
+  outlineNumber            String?
+  outlineLevel             Int       @default(0)
+  parentExternalUid        Int?
+  name                     String
+  canonicalActivityKey     String
+  type                     String
+  rawType                  String?
+  isMilestone              Boolean   @default(false)
+  isSummary                Boolean   @default(false)
+  isProjectSummary         Boolean   @default(false)
+  isCritical               Boolean   @default(false)
+  isActive                 Boolean   @default(true)
+  plannedStart             DateTime?
+  plannedFinish            DateTime?
+  earlyStart               DateTime?
+  earlyFinish              DateTime?
+  lateStart                DateTime?
+  lateFinish               DateTime?
+  actualStart              DateTime?
+  actualFinish             DateTime?
+  baselineStart            DateTime?
+  baselineFinish           DateTime?
+  baselineDurationMinutes  Float?
+  durationMinutes          Float?
+  durationDays             Float?
+  remainingDurationMinutes Float?
+  actualDurationMinutes    Float?
+  percentComplete          Int?
+  percentWorkComplete      Int?
+  totalSlackMinutes        Float?
+  freeSlackMinutes         Float?
+  constraintType           Int?
+  constraintDate           DateTime?
+  deadline                 DateTime?
+  calendarExternalUid      Int?
+  customFields             Json?
+  rawBaselines             Json?
+
+  @@index([scheduleImportId])
+  @@index([scheduleImportId, externalUid])
+  @@index([scheduleImportId, wbsCode])
+  @@index([scheduleImportId, plannedStart])
+}
+
+model Relationship {
+  id                     String   @id @default(cuid())
+  scheduleImportId       String
+  scheduleImport         ScheduleImport @relation(fields: [scheduleImportId], references: [id], onDelete: Cascade)
+  predecessorExternalUid Int
+  successorExternalUid   Int
+  type                   String
+  rawType                String?
+  lagMinutes             Float?
+  rawLagFormat           String?
+  crossProject           Boolean  @default(false)
+
+  @@index([scheduleImportId])
+}
+
+model Resource {
+  id               String   @id @default(cuid())
+  scheduleImportId String
+  scheduleImport   ScheduleImport @relation(fields: [scheduleImportId], references: [id], onDelete: Cascade)
+  externalUid      Int
+  name             String?
+  type             String?
+  group            String?
+  customFields     Json?
+
+  @@index([scheduleImportId])
+}
+
+model Assignment {
+  id                  String   @id @default(cuid())
+  scheduleImportId    String
+  scheduleImport      ScheduleImport @relation(fields: [scheduleImportId], references: [id], onDelete: Cascade)
+  activityExternalUid Int
+  resourceExternalUid Int
+  units               Float?
+  workMinutes         Float?
+
+  @@index([scheduleImportId])
+}
+
+model Calendar {
+  id               String   @id @default(cuid())
+  scheduleImportId String
+  scheduleImport   ScheduleImport @relation(fields: [scheduleImportId], references: [id], onDelete: Cascade)
+  externalUid      Int
+  name             String?
+  raw              Json?
+
+  @@index([scheduleImportId])
+}
