@@ -23,6 +23,7 @@ model Project {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   imports             ScheduleImport[]
+  progressUpdates     ProgressUpdate[]
 }
 
 model ScheduleImport {
@@ -54,6 +55,7 @@ model ScheduleImport {
   resources              Resource[]
   assignments            Assignment[]
   calendars              Calendar[]
+  progressUpdates        ProgressUpdate[]
 
   @@index([projectId])
 }
@@ -159,4 +161,42 @@ model Calendar {
   raw              Json?
 
   @@index([scheduleImportId])
+}
+
+model ProgressUpdate {
+  id               String         @id @default(cuid())
+  projectId        String
+  project          Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scheduleImportId String
+  scheduleImport   ScheduleImport @relation(fields: [scheduleImportId], references: [id], onDelete: Cascade)
+  asOfDate         DateTime
+  lookaheadWeeks   Int            @default(3)
+  state            String         @default("draft")
+  submittedBy      String?
+  note             String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  finalizedAt      DateTime?
+  entries          ProgressEntry[]
+
+  @@index([projectId])
+  @@index([scheduleImportId])
+}
+
+model ProgressEntry {
+  id                   String         @id @default(cuid())
+  progressUpdateId     String
+  progressUpdate       ProgressUpdate @relation(fields: [progressUpdateId], references: [id], onDelete: Cascade)
+  activityExternalUid  Int
+  canonicalActivityKey String
+  status               String
+  actualStart          DateTime?
+  actualFinish         DateTime?
+  percentComplete      Int?
+  note                 String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([progressUpdateId])
+  @@index([canonicalActivityKey])
 }
