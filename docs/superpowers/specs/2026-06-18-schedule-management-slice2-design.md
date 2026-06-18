@@ -293,5 +293,10 @@ complex yet" boundary.
   cross-project aggregation).
 - **Autosave:** single save-all POST now; per-field autosave is a UX refinement
   if weekly lists get long.
+- **WBS grouping in the update editor (UI, backlog):** group the lookahead
+  activities under their WBS branch headers so the person updating can see *which
+  area of the project* each activity belongs to. The flat list loses that
+  context. Activities already carry `wbsCode` / `outlineNumber` / outline
+  hierarchy, so this is presentation-only — no data change.
 - **Actor identity:** `submittedBy` is a string until per-user auth lands.
 ```
