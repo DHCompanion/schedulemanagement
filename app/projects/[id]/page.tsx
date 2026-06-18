@@ -46,6 +46,9 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       <div className="mb-4 mt-1 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">{project.name}</h1>
         <div className="flex gap-2">
+          <Link href={`/projects/${project.id}/export`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
+            Export to MS Project
+          </Link>
           <Link href={`/projects/${project.id}/updates`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
             Weekly updates
           </Link>
