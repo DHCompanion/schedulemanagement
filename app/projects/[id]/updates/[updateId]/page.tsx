@@ -28,6 +28,9 @@ export default async function UpdateEditorPage({ params }: { params: { id: strin
     isActive: a.isActive,
     plannedStart: a.plannedStart,
     plannedFinish: a.plannedFinish,
+    actualStart: a.actualStart,
+    actualFinish: a.actualFinish,
+    percentComplete: a.percentComplete,
   }));
 
   // Effective progress = carry-forward from finalized updates, overridden by this draft's own entries.

@@ -18,6 +18,11 @@ export interface LookaheadActivity {
   isActive: boolean;
   plannedStart: Date | null;
   plannedFinish: Date | null;
+  // Actuals already recorded in the imported base schedule. Used as the starting
+  // progress when no in-app update has touched the activity yet.
+  actualStart: Date | null;
+  actualFinish: Date | null;
+  percentComplete: number | null;
 }
 
 export interface LookaheadRow {
@@ -38,6 +43,14 @@ export function defaultProgress(): ActivityProgress {
   return { status: "not_started", actualStart: null, actualFinish: null, percentComplete: null, note: null };
 }
 
+/** Starting progress derived from the imported base schedule's own actuals. */
+export function baselineProgress(a: LookaheadActivity): ActivityProgress {
+  let status: ProgressStatus = "not_started";
+  if (a.actualFinish || a.percentComplete === 100) status = "complete";
+  else if (a.actualStart || (a.percentComplete ?? 0) > 0) status = "in_progress";
+  return { status, actualStart: a.actualStart, actualFinish: a.actualFinish, percentComplete: a.percentComplete, note: null };
+}
+
 export function computeSlippage(a: LookaheadActivity, p: ActivityProgress, asOfDate: Date): SlippageFlag {
   if (a.plannedFinish && a.plannedFinish < asOfDate && p.status !== "complete") return "overdue";
   if (a.plannedStart && a.plannedStart < asOfDate && p.status === "not_started") return "should-have-started";
@@ -55,7 +68,7 @@ export function computeLookahead(
   for (const a of activities) {
     if (a.type === "summary" || a.type === "project_summary") continue;
     if (!a.isActive) continue;
-    const progress = progressByKey.get(a.canonicalActivityKey) ?? defaultProgress();
+    const progress = progressByKey.get(a.canonicalActivityKey) ?? baselineProgress(a);
     const inProgress = progress.status === "in_progress" || (!!progress.actualStart && !progress.actualFinish);
     const startsInWindow = !!a.plannedStart && a.plannedStart >= asOfDate && a.plannedStart <= windowEnd;
     const finishesInWindow = !!a.plannedFinish && a.plannedFinish >= asOfDate && a.plannedFinish <= windowEnd;

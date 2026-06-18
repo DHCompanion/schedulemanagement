@@ -9,7 +9,8 @@ const asOf = new Date("2026-06-18T00:00:00Z");
 function act(p: Partial<LookaheadActivity>): LookaheadActivity {
   return {
     externalUid: 1, canonicalActivityKey: "1|a", wbsCode: "1", name: "A",
-    type: "task", isActive: true, plannedStart: null, plannedFinish: null, ...p,
+    type: "task", isActive: true, plannedStart: null, plannedFinish: null,
+    actualStart: null, actualFinish: null, percentComplete: null, ...p,
   };
 }
 const empty = new Map<string, ActivityProgress>();
@@ -69,6 +70,32 @@ describe("computeLookahead inclusion", () => {
     const rows = computeLookahead([act({ plannedStart: new Date("2026-06-10T00:00:00Z"), plannedFinish: null })], empty, asOf, 1);
     expect(rows.length).toBe(1);
     expect(rows[0].slippage).toBe("should-have-started");
+  });
+  it("excludes an item already complete in the base schedule (actuals present, no in-app progress)", () => {
+    const rows = computeLookahead([act({
+      plannedStart: new Date("2025-06-16T08:00:00Z"), plannedFinish: new Date("2025-07-04T17:00:00Z"),
+      actualStart: new Date("2025-06-16T08:00:00Z"), actualFinish: new Date("2025-07-04T17:00:00Z"), percentComplete: 100,
+    })], empty, asOf, 1);
+    expect(rows.length).toBe(0);
+  });
+  it("treats a base-schedule in-progress item as in_progress", () => {
+    const rows = computeLookahead([act({
+      plannedStart: new Date("2026-06-15T00:00:00Z"), plannedFinish: new Date("2026-06-30T00:00:00Z"),
+      actualStart: new Date("2026-06-15T00:00:00Z"), actualFinish: null, percentComplete: 30,
+    })], empty, asOf, 1);
+    expect(rows.length).toBe(1);
+    expect(rows[0].progress.status).toBe("in_progress");
+    expect(rows[0].progress.percentComplete).toBe(30);
+  });
+  it("lets an in-app overlay override the base-schedule actuals", () => {
+    const baseComplete = act({
+      plannedFinish: new Date("2025-07-04T17:00:00Z"),
+      actualFinish: new Date("2025-07-04T17:00:00Z"), percentComplete: 100,
+    });
+    const overlay = new Map<string, ActivityProgress>([["1|a", { ...defaultProgress(), status: "in_progress", percentComplete: 50 }]]);
+    const rows = computeLookahead([baseComplete], overlay, asOf, 1);
+    expect(rows.length).toBe(1); // overlay says in_progress -> back in the lookahead
+    expect(rows[0].progress.percentComplete).toBe(50);
   });
 });
 
