@@ -42,9 +42,14 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       <Link href="/" className="text-sm text-slate-500">← Projects</Link>
       <div className="mb-4 mt-1 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">{project.name}</h1>
-        <Link href={`/projects/${project.id}/import`} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
-          Import schedule
-        </Link>
+        <div className="flex gap-2">
+          <Link href={`/projects/${project.id}/updates`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
+            Weekly updates
+          </Link>
+          <Link href={`/projects/${project.id}/import`} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
+            Import schedule
+          </Link>
+        </div>
       </div>
       <div className="mb-4 flex flex-wrap gap-2 text-xs text-slate-600">
         {project.client && <span className="rounded bg-slate-200 px-2 py-1">{project.client}</span>}
