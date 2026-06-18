@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requestBaseUrl } from "@/lib/http";
 
 export async function GET() {
   const projects = await prisma.project.findMany({ orderBy: { createdAt: "desc" } });
@@ -7,9 +8,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const base = requestBaseUrl(req);
   const form = await req.formData();
   const name = String(form.get("name") ?? "").trim();
-  if (!name) return NextResponse.redirect(new URL("/projects/new?error=1", req.url), { status: 303 });
+  if (!name) return NextResponse.redirect(new URL("/projects/new?error=1", base), { status: 303 });
 
   const sizeSqFtRaw = String(form.get("sizeSqFt") ?? "").trim();
   const contractValueRaw = String(form.get("contractValue") ?? "").trim();
@@ -26,5 +28,5 @@ export async function POST(req: Request) {
       deliveryMethod: String(form.get("deliveryMethod") ?? "").trim() || null,
     },
   });
-  return NextResponse.redirect(new URL(`/projects/${project.id}`, req.url), { status: 303 });
+  return NextResponse.redirect(new URL(`/projects/${project.id}`, base), { status: 303 });
 }
