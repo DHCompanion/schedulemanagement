@@ -33,7 +33,7 @@ export async function getOrCreateDraft(projectId: string, asOfDate: string, look
       projectId,
       scheduleImportId: latest.id,
       asOfDate: toDbDate(asOfDate) ?? new Date(),
-      lookaheadWeeks: lookaheadWeeks === 6 ? 6 : 3,
+      lookaheadWeeks: [1, 3, 6].includes(lookaheadWeeks) ? lookaheadWeeks : 3,
       state: "draft",
     },
   });

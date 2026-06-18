@@ -61,7 +61,10 @@ export function computeLookahead(
     const finishesInWindow = !!a.plannedFinish && a.plannedFinish >= asOfDate && a.plannedFinish <= windowEnd;
     const spansWindow = !!a.plannedStart && !!a.plannedFinish && a.plannedStart <= asOfDate && a.plannedFinish >= asOfDate;
     const pastDueIncomplete = !!a.plannedFinish && a.plannedFinish < asOfDate && progress.status !== "complete";
-    if (!(inProgress || startsInWindow || finishesInWindow || spansWindow || pastDueIncomplete)) continue;
+    // Older items that should already be underway but aren't complete — surfaced in every
+    // window so a tight 1-week lookahead never drops a not-started item that's slipping.
+    const olderNotComplete = !!a.plannedStart && a.plannedStart < asOfDate && progress.status !== "complete";
+    if (!(inProgress || startsInWindow || finishesInWindow || spansWindow || pastDueIncomplete || olderNotComplete)) continue;
     rows.push({
       externalUid: a.externalUid,
       canonicalActivityKey: a.canonicalActivityKey,

@@ -30,7 +30,8 @@ export default async function UpdatesPage({ params }: { params: { id: string } }
             <input type="date" name="asOfDate" defaultValue={today} className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm" />
           </label>
           <label className="text-sm">Lookahead
-            <select name="lookaheadWeeks" defaultValue="3" className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm">
+            <select name="lookaheadWeeks" defaultValue="1" className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm">
+              <option value="1">1 week</option>
               <option value="3">3 weeks</option>
               <option value="6">6 weeks</option>
             </select>
