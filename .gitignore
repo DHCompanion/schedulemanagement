@@ -10,3 +10,6 @@ next-env.d.ts
 
 # Large sample schedule exports (kept locally as reference; fixtures live in tests/)
 /*.xml
+
+# Real-data parser fixtures kept local only (synthetic minimal.xml stays tracked)
+/tests/fixtures/cath-ir-baseline.xml

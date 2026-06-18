@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project xmlns="http://schemas.microsoft.com/project">
+  <Title>Minimal Test Schedule</Title>
+  <GUID>TEST-GUID-1</GUID>
+  <StartDate>2025-06-03T08:00:00</StartDate>
+  <FinishDate>2025-06-10T17:00:00</FinishDate>
+  <StatusDate>2025-06-05T17:00:00</StatusDate>
+  <MinutesPerDay>480</MinutesPerDay>
+  <MinutesPerWeek>2400</MinutesPerWeek>
+  <DaysPerMonth>20</DaysPerMonth>
+  <CalendarUID>1</CalendarUID>
+  <ExtendedAttributes>
+    <ExtendedAttribute>
+      <FieldID>188743731</FieldID>
+      <FieldName>Text1</FieldName>
+      <Alias>Phoenix ID</Alias>
+    </ExtendedAttribute>
+  </ExtendedAttributes>
+  <Tasks>
+    <Task>
+      <UID>0</UID><ID>0</ID><Name>Minimal Test Schedule</Name>
+      <WBS>0</WBS><OutlineNumber>0</OutlineNumber><OutlineLevel>0</OutlineLevel>
+      <Milestone>0</Milestone><Summary>1</Summary><IsNull>0</IsNull>
+    </Task>
+    <Task>
+      <UID>1</UID><ID>1</ID><Name>Mobilize</Name>
+      <WBS>1</WBS><OutlineNumber>1</OutlineNumber><OutlineLevel>1</OutlineLevel>
+      <Type>1</Type><Milestone>0</Milestone><Summary>0</Summary><Critical>1</Critical><IsNull>0</IsNull>
+      <Start>2025-06-03T08:00:00</Start><Finish>2025-06-03T17:00:00</Finish>
+      <Duration>PT8H0M0S</Duration><PercentComplete>100</PercentComplete>
+      <ActualStart>2025-06-03T08:00:00</ActualStart><ActualFinish>2025-06-03T17:00:00</ActualFinish>
+      <TotalSlack>0</TotalSlack><CalendarUID>1</CalendarUID>
+      <ExtendedAttribute><FieldID>188743731</FieldID><Value>PX-1</Value></ExtendedAttribute>
+      <Baseline><Number>0</Number><Start>2025-06-03T08:00:00</Start><Finish>2025-06-03T17:00:00</Finish><Duration>PT8H0M0S</Duration></Baseline>
+    </Task>
+    <Task>
+      <UID>2</UID><ID>2</ID><Name>Electrical Rough-In</Name>
+      <WBS>2</WBS><OutlineNumber>2</OutlineNumber><OutlineLevel>1</OutlineLevel>
+      <Type>1</Type><Milestone>0</Milestone><Summary>0</Summary><IsNull>0</IsNull>
+      <Start>2025-06-04T08:00:00</Start><Finish>2025-06-06T17:00:00</Finish>
+      <Duration>PT24H0M0S</Duration><PercentComplete>0</PercentComplete><TotalSlack>4800</TotalSlack>
+      <PredecessorLink><PredecessorUID>1</PredecessorUID><Type>1</Type><LinkLag>0</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+    <Task>
+      <UID>3</UID><ID>3</ID><Name>Project Complete</Name>
+      <WBS>3</WBS><OutlineNumber>3</OutlineNumber><OutlineLevel>1</OutlineLevel>
+      <Type>1</Type><Milestone>1</Milestone><Summary>0</Summary><IsNull>0</IsNull>
+      <Start>2025-06-06T17:00:00</Start><Finish>2025-06-06T17:00:00</Finish>
+      <Duration>PT0H0M0S</Duration>
+      <PredecessorLink><PredecessorUID>2</PredecessorUID><Type>1</Type><LinkLag>4800</LinkLag><LagFormat>7</LagFormat></PredecessorLink>
+    </Task>
+    <Task>
+      <UID>99</UID><ID>99</ID><Name>Null Placeholder</Name>
+      <OutlineLevel>1</OutlineLevel><IsNull>1</IsNull>
+    </Task>
+  </Tasks>
+  <Resources><Resource><UID>0</UID><Name></Name></Resource></Resources>
+  <Calendars><Calendar><UID>1</UID><Name>Standard</Name></Calendar></Calendars>
+</Project>
