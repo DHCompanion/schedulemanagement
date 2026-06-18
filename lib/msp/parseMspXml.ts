@@ -10,9 +10,9 @@ import { canonicalActivityKey } from "./canonicalKey";
 
 type Any = Record<string, unknown>;
 
-function toArray<T>(v: T | T[] | undefined | null): T[] {
+function toArray(v: unknown): Any[] {
   if (v === undefined || v === null) return [];
-  return Array.isArray(v) ? v : [v];
+  return (Array.isArray(v) ? v : [v]) as Any[];
 }
 function str(v: unknown): string | null {
   if (v === undefined || v === null) return null;
