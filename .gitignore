@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+.env
+.env.local
+.env.*.local
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+
+# Large sample schedule exports (kept locally as reference; fixtures live in tests/)
+/*.xml
