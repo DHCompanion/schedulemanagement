@@ -82,6 +82,13 @@ data — see §6). Goals #3 and #5 are solved by one normalization engine:
   should be split into properly tracked scopes (e.g. a single "MEP Rough" that
   should be electrical rough / plumbing rough / mechanical rough), driven by
   project-type-adjusted templates.
+- Add a **schedule-health / date-sanity check** alongside completeness: flag
+  activities with implausible dates — planned dates before the project start, or
+  in the past with no actuals — as their own surfaced check rather than relying
+  on a human noticing them in the lookahead. *Motivating example (2026-06): a
+  real imported schedule had a future scope of work mis-dated in 2025; Slice 2's
+  past-due catch-all happened to surface it, validating the value — but a
+  dedicated health check should own this rather than leaning on the lookahead.*
 
 Slice 1 captures all raw inputs (names, WBS, custom fields) so this is buildable
 later without re-importing anything.
