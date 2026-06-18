@@ -50,4 +50,25 @@ describe.runIf(hasDb)("buildExport", () => {
     await expect(buildExport(p.id, xml, "minimal.xml")).rejects.toThrow(/no imported schedule/i);
     await prisma.project.delete({ where: { id: p.id } });
   });
+
+  it("route returns the updated xml as an attachment", async () => {
+    const { POST } = await import("@/app/api/export/route");
+    const project = await prisma.project.create({ data: { name: "Export Route Test" } });
+    await commitImport({ projectId: project.id, fileName: "minimal.xml", xml });
+    const { id } = await getOrCreateDraft(project.id, "2026-06-18", 1);
+    await saveEntries(id, [{ activityExternalUid: 2, canonicalActivityKey: "2|electrical rough-in", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-18", percentComplete: 100, note: null }]);
+    await finalizeUpdate(id);
+
+    const fd = new FormData();
+    fd.append("file", new File([xml], "minimal.xml", { type: "application/xml" }));
+    fd.append("projectId", project.id);
+    const res = await POST(new Request("http://localhost/api/export", { method: "POST", body: fd }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/xml");
+    expect(res.headers.get("Content-Disposition")).toContain("minimal-updated-2026-06-18.xml");
+    const body = await res.text();
+    expect(body).toContain("<ActualFinish>2026-06-18T00:00:00</ActualFinish>");
+
+    await prisma.project.delete({ where: { id: project.id } });
+  }, 30000);
 });
