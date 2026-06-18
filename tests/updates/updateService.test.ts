@@ -61,4 +61,21 @@ describe.runIf(hasDb)("updateService", () => {
     await expect(getOrCreateDraft(p.id, "2026-06-18", 3)).rejects.toThrow();
     await prisma.project.delete({ where: { id: p.id } });
   });
+
+  it("entries route handler saves via a JSON request", async () => {
+    const { POST } = await import("@/app/api/updates/[updateId]/entries/route");
+    const project = await prisma.project.create({ data: { name: "Route Test" } });
+    await prisma.scheduleImport.create({ data: { projectId: project.id, sourceFormat: "msproject_xml", fileName: "x.xml", fileHash: "h" } });
+    const draft = await getOrCreateDraft(project.id, "2026-06-18", 3);
+    const req = new Request("http://localhost/api/updates/x/entries", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries: [{ activityExternalUid: 9, canonicalActivityKey: "9|x", status: "in_progress", actualStart: null, actualFinish: null, percentComplete: 25, note: null }] }),
+    });
+    const res = await POST(req, { params: { updateId: draft.id } });
+    expect(res.status).toBe(200);
+    const saved = await prisma.progressEntry.findMany({ where: { progressUpdateId: draft.id } });
+    expect(saved.length).toBe(1);
+    expect(saved[0].percentComplete).toBe(25);
+    await prisma.project.delete({ where: { id: project.id } });
+  }, 15000);
 });
