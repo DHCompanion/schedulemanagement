@@ -7,7 +7,8 @@ export async function POST(req: Request) {
   const form = await req.formData();
   const projectId = String(form.get("projectId") ?? "");
   const asOfDate = String(form.get("asOfDate") ?? "").trim() || new Date().toISOString().slice(0, 10);
-  const weeks = Number(form.get("lookaheadWeeks") ?? 3) === 6 ? 6 : 3;
+  const n = Number(form.get("lookaheadWeeks") ?? 3);
+  const weeks = [1, 3, 6].includes(n) ? n : 3;
   if (!projectId) return NextResponse.redirect(new URL("/", base), { status: 303 });
   try {
     const { id } = await getOrCreateDraft(projectId, asOfDate, weeks);

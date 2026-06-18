@@ -60,6 +60,16 @@ describe("computeLookahead inclusion", () => {
     expect(computeLookahead(a, empty, asOf, 3).length).toBe(0);
     expect(computeLookahead(a, empty, asOf, 6).length).toBe(1);
   });
+  it("1-week window excludes work starting beyond a week that 3-week includes", () => {
+    const a = [act({ plannedStart: new Date("2026-06-28T00:00:00Z") })];
+    expect(computeLookahead(a, empty, asOf, 1).length).toBe(0);
+    expect(computeLookahead(a, empty, asOf, 3).length).toBe(1);
+  });
+  it("includes an older not-started item even with no planned finish", () => {
+    const rows = computeLookahead([act({ plannedStart: new Date("2026-06-10T00:00:00Z"), plannedFinish: null })], empty, asOf, 1);
+    expect(rows.length).toBe(1);
+    expect(rows[0].slippage).toBe("should-have-started");
+  });
 });
 
 describe("computeSlippage", () => {
