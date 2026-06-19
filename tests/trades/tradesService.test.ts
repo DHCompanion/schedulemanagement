@@ -38,4 +38,22 @@ describe.runIf(hasDb)("tradesService", () => {
     await assignTradePartner(project.id, "Electrical-Low-Voltage", company);
     expect(await prisma.tradePartner.count({ where: { name: company } })).toBe(1);
   }, 30000);
+
+  it("route persists disciplines and assignments", async () => {
+    const { POST } = await import("@/app/api/trades/route");
+    const project = await prisma.project.create({ data: { name: "Trades Route Test" } });
+    const scope = `ZZ RouteScope ${Date.now()}`;
+    const company = `ZZ RouteCo ${Date.now()}`;
+    scopes.push(scope);
+    partners.push(company);
+    const req = new Request("http://localhost/api/trades", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: project.id, disciplines: [{ canonicalScope: scope, discipline: "Plumbing" }], assignments: [{ discipline: "Plumbing", companyName: company }] }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect((await getTradeDictionary()).get(scope)).toBe("Plumbing");
+    expect((await getProjectAssignments(project.id)).get("Plumbing")).toBe(company);
+    await prisma.project.delete({ where: { id: project.id } });
+  }, 30000);
 });
