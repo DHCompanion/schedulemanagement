@@ -52,6 +52,9 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           <Link href={`/projects/${project.id}/updates`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
             Weekly updates
           </Link>
+          <Link href={`/projects/${project.id}/normalize`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
+            Normalize scopes
+          </Link>
           <Link href={`/projects/${project.id}/import`} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
             Import schedule
           </Link>
