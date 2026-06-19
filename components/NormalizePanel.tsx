@@ -19,6 +19,18 @@ export function NormalizePanel({ projectId, rows, knownScopes }: { projectId: st
     setValues((v) => ({ ...v, [rawName]: scope }));
   }
 
+  function useAsIs(rawName: string) {
+    set(rawName, rawName);
+  }
+
+  function acceptAllAsIs() {
+    setValues((v) => {
+      const next = { ...v };
+      for (const r of rows) if (!next[r.rawName]?.trim()) next[r.rawName] = r.rawName;
+      return next;
+    });
+  }
+
   async function save() {
     setBusy(true);
     setError(null);
@@ -51,13 +63,12 @@ export function NormalizePanel({ projectId, rows, knownScopes }: { projectId: st
               <span className="font-medium">{r.rawName}</span>
               <span className="text-xs text-slate-400">{r.count} activit{r.count === 1 ? "y" : "ies"}</span>
             </div>
-            {r.suggestions.length > 0 && (
-              <div className="mt-1 flex flex-wrap gap-1">
-                {r.suggestions.map((s) => (
-                  <button key={s} onClick={() => set(r.rawName, s)} className="rounded bg-slate-100 px-2 py-1 text-xs hover:bg-slate-200">{s}</button>
-                ))}
-              </div>
-            )}
+            <div className="mt-1 flex flex-wrap gap-1">
+              <button onClick={() => useAsIs(r.rawName)} className="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100">Use as-is</button>
+              {r.suggestions.map((s) => (
+                <button key={s} onClick={() => set(r.rawName, s)} className="rounded bg-slate-100 px-2 py-1 text-xs hover:bg-slate-200">{s}</button>
+              ))}
+            </div>
             <input
               list="known-scopes"
               value={values[r.rawName] ?? ""}
@@ -68,9 +79,14 @@ export function NormalizePanel({ projectId, rows, knownScopes }: { projectId: st
           </li>
         ))}
       </ul>
-      <button disabled={busy} onClick={save} className="mt-4 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
-        {busy ? "Saving…" : "Save mappings"}
-      </button>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <button disabled={busy} onClick={acceptAllAsIs} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
+          Accept all shown as-is
+        </button>
+        <button disabled={busy} onClick={save} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+          {busy ? "Saving…" : "Save mappings"}
+        </button>
+      </div>
     </div>
   );
 }
