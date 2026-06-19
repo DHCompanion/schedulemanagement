@@ -43,4 +43,18 @@ describe.runIf(hasDb)("normalizationService (db)", () => {
     expect(entry?.canonicalScope).toBe("Test Scope B");
     expect(entry?.timesConfirmed).toBe(2);
   }, 30000);
+
+  it("route persists posted mappings", async () => {
+    const { POST } = await import("@/app/api/normalize/route");
+    const raw = `ZZ Route Scope ${Date.now()}`;
+    made.push(raw.trim().toLowerCase().replace(/\s+/g, " "));
+    const req = new Request("http://localhost/api/normalize", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mappings: [{ rawName: raw, canonicalScope: "Routed Scope" }] }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const dict = await getDictionary();
+    expect(dict.get(raw.trim().toLowerCase())).toBe("Routed Scope");
+  }, 30000);
 });
