@@ -58,7 +58,7 @@ function iso(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
-function isLeafActive(a: HealthActivity): boolean {
+export function isLeafActive(a: HealthActivity): boolean {
   return a.type !== "summary" && a.type !== "project_summary" && a.isActive;
 }
 
