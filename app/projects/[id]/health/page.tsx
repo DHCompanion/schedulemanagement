@@ -2,13 +2,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getScheduleHealth } from "@/lib/health/healthService";
-import { HealthIssuesTable } from "@/components/HealthIssuesTable";
+import { HealthCheckSection } from "@/components/HealthCheckSection";
+import type { HealthCheck } from "@/lib/health/dateChecks";
 
 export const dynamic = "force-dynamic";
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
+const SECTIONS: { check: HealthCheck; title: string }[] = [
+  { check: "out_of_envelope", title: "Out-of-envelope dates" },
+  { check: "future_actual", title: "Future actuals" },
+  { check: "missing_dates", title: "Missing dates" },
+  { check: "percent_contradiction", title: "Percent contradictions" },
+];
 
 export default async function HealthPage({ params }: { params: { id: string } }) {
   const project = await prisma.project.findUnique({ where: { id: params.id } });
@@ -24,15 +28,19 @@ export default async function HealthPage({ params }: { params: { id: string } })
         <p className="text-slate-500">Import a schedule first.</p>
       ) : (
         <>
-          <p className="mb-4 text-sm text-slate-500">
-            {plural(health.summary.errors, "error")} · {plural(health.summary.warnings, "warning")}
-            {health.asOfDate && <> · data date {health.asOfDate.toISOString().slice(0, 10)}</>}
-          </p>
-          {health.issues.length === 0 ? (
-            <p className="rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">No date issues found.</p>
-          ) : (
-            <HealthIssuesTable issues={health.issues} />
-          )}
+          {health.asOfDate && <p className="mb-4 text-sm text-slate-500">Data date {health.asOfDate.toISOString().slice(0, 10)}</p>}
+          <section className="mb-6 rounded border border-slate-200 bg-white p-3">
+            <h2 className="mb-2 text-sm font-semibold text-slate-700">Progress</h2>
+            <div className="flex flex-wrap gap-4 text-sm">
+              <div><span className="font-medium">{health.progress.total}</span> total</div>
+              <div><span className="font-medium">{health.progress.completed}</span> completed</div>
+              <div><span className="font-medium">{health.progress.remaining}</span> remaining</div>
+              <div><span className="font-medium">{health.progress.percentComplete}%</span> complete</div>
+            </div>
+          </section>
+          {SECTIONS.map(({ check, title }) => (
+            <HealthCheckSection key={check} title={title} issues={health.issues.filter((i) => i.check === check)} />
+          ))}
         </>
       )}
     </main>
