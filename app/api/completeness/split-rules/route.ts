@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { addSplitRule, removeSplitRule } from "@/lib/completeness/splitRuleService";
+import { isAdminRequest } from "@/lib/auth";
 
 interface SplitRuleBody {
   coarseScope?: string;
@@ -12,6 +13,7 @@ function validate(body: SplitRuleBody): string | null {
 }
 
 export async function POST(req: Request) {
+  if (!isAdminRequest(req)) return NextResponse.json({ error: { message: "Admin access required." } }, { status: 403 });
   const body = (await req.json()) as SplitRuleBody;
   const err = validate(body);
   if (err) return NextResponse.json({ error: { message: err } }, { status: 422 });
@@ -25,6 +27,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (!isAdminRequest(req)) return NextResponse.json({ error: { message: "Admin access required." } }, { status: 403 });
   const body = (await req.json()) as SplitRuleBody;
   const err = validate(body);
   if (err) return NextResponse.json({ error: { message: err } }, { status: 422 });

@@ -6,6 +6,7 @@ const hasDb = !!process.env.DATABASE_URL;
 
 describe.runIf(hasDb)("splitRuleService", () => {
   const coarse = `ZZ Test Coarse ${Date.now()}`;
+  process.env.APP_SESSION_TOKEN = process.env.APP_SESSION_TOKEN || "token-abc";
 
   afterAll(async () => {
     await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
@@ -33,15 +34,16 @@ describe.runIf(hasDb)("splitRuleService", () => {
   it("route adds and removes a rule", async () => {
     const { POST, DELETE } = await import("@/app/api/completeness/split-rules/route");
     const body = JSON.stringify({ coarseScope: coarse, finerScope: "Route Finer" });
+    const adminHeaders = { "Content-Type": "application/json", Cookie: `sms_admin=${process.env.APP_SESSION_TOKEN}` };
 
     const postRes = await POST(new Request("http://localhost/api/completeness/split-rules", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body,
+      method: "POST", headers: adminHeaders, body,
     }));
     expect(postRes.status).toBe(200);
     expect((await getSplitRules()).get(coarse)).toContain("Route Finer");
 
     const delRes = await DELETE(new Request("http://localhost/api/completeness/split-rules", {
-      method: "DELETE", headers: { "Content-Type": "application/json" }, body,
+      method: "DELETE", headers: adminHeaders, body,
     }));
     expect(delRes.status).toBe(200);
     expect((await getSplitRules()).get(coarse) ?? []).not.toContain("Route Finer");
@@ -50,8 +52,21 @@ describe.runIf(hasDb)("splitRuleService", () => {
   it("route rejects a missing coarseScope", async () => {
     const { POST } = await import("@/app/api/completeness/split-rules/route");
     const res = await POST(new Request("http://localhost/api/completeness/split-rules", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ finerScope: "x" }),
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `sms_admin=${process.env.APP_SESSION_TOKEN}` },
+      body: JSON.stringify({ finerScope: "x" }),
     }));
     expect(res.status).toBe(422);
+  });
+
+  it("route rejects a non-admin session", async () => {
+    const { POST } = await import("@/app/api/completeness/split-rules/route");
+    const res = await POST(new Request("http://localhost/api/completeness/split-rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coarseScope: coarse, finerScope: "Route Finer" }),
+    }));
+    expect(res.status).toBe(403);
+    expect((await getSplitRules()).get(coarse) ?? []).not.toContain("Route Finer");
   });
 });
