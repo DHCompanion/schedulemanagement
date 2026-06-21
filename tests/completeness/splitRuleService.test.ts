@@ -29,4 +29,29 @@ describe.runIf(hasDb)("splitRuleService", () => {
     const rules = await getSplitRules();
     expect(rules.has("")).toBe(false);
   }, 15000);
+
+  it("route adds and removes a rule", async () => {
+    const { POST, DELETE } = await import("@/app/api/completeness/split-rules/route");
+    const body = JSON.stringify({ coarseScope: coarse, finerScope: "Route Finer" });
+
+    const postRes = await POST(new Request("http://localhost/api/completeness/split-rules", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body,
+    }));
+    expect(postRes.status).toBe(200);
+    expect((await getSplitRules()).get(coarse)).toContain("Route Finer");
+
+    const delRes = await DELETE(new Request("http://localhost/api/completeness/split-rules", {
+      method: "DELETE", headers: { "Content-Type": "application/json" }, body,
+    }));
+    expect(delRes.status).toBe(200);
+    expect((await getSplitRules()).get(coarse) ?? []).not.toContain("Route Finer");
+  }, 30000);
+
+  it("route rejects a missing coarseScope", async () => {
+    const { POST } = await import("@/app/api/completeness/split-rules/route");
+    const res = await POST(new Request("http://localhost/api/completeness/split-rules", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ finerScope: "x" }),
+    }));
+    expect(res.status).toBe(422);
+  });
 });
