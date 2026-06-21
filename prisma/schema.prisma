@@ -20,6 +20,7 @@ model Project {
   status              String   @default("active")
   externalProjectKey  String?
   externalProjectGuid String?
+  onboardingCompletedAt DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   imports             ScheduleImport[]
