@@ -8,10 +8,11 @@ import { getSplitRules } from "@/lib/completeness/splitRuleService";
 import { isAdmin, ADMIN_SESSION_COOKIE } from "@/lib/auth";
 import { NormalizePanel, type UnmappedRow } from "@/components/NormalizePanel";
 import { SplitRulesPanel, type SplitRuleRow } from "@/components/SplitRulesPanel";
+import { WizardBanner } from "@/components/WizardBanner";
 
 export const dynamic = "force-dynamic";
 
-export default async function NormalizePage({ params }: { params: { id: string } }) {
+export default async function NormalizePage({ params, searchParams }: { params: { id: string }; searchParams: { wizard?: string } }) {
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 
@@ -43,6 +44,13 @@ export default async function NormalizePage({ params }: { params: { id: string }
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link href={`/projects/${project.id}`} className="text-sm text-slate-500">← {project.name}</Link>
       <h1 className="mb-1 mt-1 text-xl font-semibold">Normalize activity names</h1>
+      {searchParams.wizard === "1" && (
+        <WizardBanner
+          projectId={project.id}
+          step={1}
+          why="Give every activity a consistent standard name so reporting and rollups work, and flag any scope that's too coarse to track meaningfully."
+        />
+      )}
       <p className="mb-4 text-sm text-slate-500">{mapped.length} activities already mapped · {rows.length} names to review</p>
       {!latest ? (
         <p className="text-slate-500">Import a schedule first.</p>

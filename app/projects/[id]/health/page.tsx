@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getScheduleHealth } from "@/lib/health/healthService";
 import { HealthCheckSection } from "@/components/HealthCheckSection";
+import { WizardBanner } from "@/components/WizardBanner";
 import type { HealthCheck } from "@/lib/health/dateChecks";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ const SECTIONS: { check: HealthCheck; title: string }[] = [
   { check: "percent_contradiction", title: "Percent contradictions" },
 ];
 
-export default async function HealthPage({ params }: { params: { id: string } }) {
+export default async function HealthPage({ params, searchParams }: { params: { id: string }; searchParams: { wizard?: string } }) {
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 
@@ -24,6 +25,13 @@ export default async function HealthPage({ params }: { params: { id: string } })
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link href={`/projects/${project.id}`} className="text-sm text-slate-500">← {project.name}</Link>
       <h1 className="mb-1 mt-1 text-xl font-semibold">Schedule health</h1>
+      {searchParams.wizard === "1" && (
+        <WizardBanner
+          projectId={project.id}
+          step={0}
+          why="Catch bad or implausible dates before anything else, since a bad date can throw off everything downstream."
+        />
+      )}
       {!health.hasImport ? (
         <p className="text-slate-500">Import a schedule first.</p>
       ) : (
