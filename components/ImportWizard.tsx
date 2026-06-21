@@ -51,7 +51,8 @@ export function ImportWizard({ projectId }: { projectId: string }) {
       setError((await res.json())?.error?.message ?? "Import failed.");
       return;
     }
-    router.push(`/projects/${projectId}`);
+    const data: { startWizard?: boolean } = await res.json();
+    router.push(data.startWizard ? `/projects/${projectId}/health?wizard=1` : `/projects/${projectId}`);
     router.refresh();
   }
 
