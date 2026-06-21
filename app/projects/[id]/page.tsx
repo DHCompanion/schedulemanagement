@@ -61,6 +61,9 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           <Link href={`/projects/${project.id}/health`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
             Schedule health
           </Link>
+          <Link href={`/projects/${project.id}/completeness`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
+            Completeness
+          </Link>
           <Link href={`/projects/${project.id}/import`} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
             Import schedule
           </Link>

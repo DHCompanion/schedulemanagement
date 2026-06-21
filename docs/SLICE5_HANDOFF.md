@@ -1,6 +1,6 @@
 # Handoff — Schedule Management (Skiles Connect)
 
-_Last updated: 2026-06-20_
+_Last updated: 2026-06-21_
 
 ## What this is
 A construction schedule tool: import MS Project XML → verify → capture weekly field
@@ -12,7 +12,7 @@ Next.js 14 + Prisma + Postgres, deployed on Railway.
   Railway** (~60–90s). `gh` CLI is at `~/.local/bin/gh`, authed as `DHCompanion`.
 - **Working dir:** `/home/coder/projects/Skilesconnect/schedulemanagement`
 
-## Live in production (Slices 1, 2, 3, 5a, 5b, 5d)
+## Live in production (Slices 1, 2, 3, 5a, 5b, 5c, 5d)
 1. **Import** — MS Project XML → canonical immutable snapshots + verification view.
 2. **Weekly updates** — 1/3/6-week lookahead, record progress, finalize snapshots.
    Seeds progress from the base schedule's existing actuals so already-complete
@@ -28,6 +28,14 @@ Next.js 14 + Prisma + Postgres, deployed on Railway.
    out-of-envelope dates (the 2025 mis-date catch), future actuals, and missing /
    100%-contradictory dates. Pure read-time overlay; no schema change. Dedicated
    "Schedule health" page + nav button.
+7. **5c Completeness (granularity check)** — flags activities mapped (via 5a) to a
+   coarse canonical scope that an admin has marked should really be split into
+   finer scopes (`ScopeSplitRule`, global, authored inline on the Normalize page).
+   Per-project, per-`canonicalActivityKey` dismiss (`CompletenessDismissal`,
+   survives re-import). Pure read-time overlay over `applyDictionary` + split
+   rules; no mutation of `Activity`/`ScheduleImport`. Dedicated "Completeness"
+   page + nav button. Coverage/template detection (missing scopes entirely) is
+   explicitly out of scope — deferred to a future sub-slice if needed.
 
 Full attribution chain now in data: `name → scope → discipline → project's company`.
 
@@ -46,11 +54,12 @@ Full attribution chain now in data: `name → scope → discipline → project's
 - **Hard rules:** no AI/LLM (CLAUDE.md "Don't Build Yet"); imports are immutable —
   normalization/attribution/progress are read-time overlays.
 - Specs + plans live in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
-  Tests: **78 passing, 23 files** at handoff (DB-gated suites skip without `DATABASE_URL`).
+  Tests: **83 passing, 26 files** at handoff (DB-gated suites skip without `DATABASE_URL`).
 
 ## Suggested next steps
-- **Slice 5c — completeness check** (flag coarse activities to split; needs 5a + a
-  "standard template" concept first).
+- **5c coverage/templates** — deferred sub-slice: detect entirely-missing scopes
+  per project type ("standard template" concept), as distinct from 5c's
+  granularity check (coarse scope flagged for splitting), which is now live.
 - Later: trade **performance/workload analytics** (consumes 5b data); Slice 4
   importers (P6 XER, Phoenix); Slice 6 reminders + lessons learned.
 - **5d v2 candidates:** reversed-date check (finish < start — deselected from v1);
@@ -62,4 +71,4 @@ Full attribution chain now in data: `name → scope → discipline → project's
 - Multiple subs per discipline per project; re-upload-free export (store raw XML).
 - "Schedule builder" tool (preliminary schedules from history) — true future item.
 
-**Clean resume line for next session:** _"Plan and execute Slice 5c (completeness check)."_
+**Clean resume line for next session:** _"Plan 5c coverage/templates (deferred sub-slice), or pick up Slice 4 importers / Slice 6."_
