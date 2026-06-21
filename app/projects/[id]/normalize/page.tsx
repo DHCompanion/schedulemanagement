@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { applyDictionary, getKnownScopes } from "@/lib/normalize/normalizationService";
 import { suggestScopes } from "@/lib/normalize/suggestScopes";
+import { getSplitRules } from "@/lib/completeness/splitRuleService";
 import { NormalizePanel, type UnmappedRow } from "@/components/NormalizePanel";
+import { SplitRulesPanel, type SplitRuleRow } from "@/components/SplitRulesPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +21,8 @@ export default async function NormalizePage({ params }: { params: { id: string }
   const leaves = (latest?.activities ?? []).filter((a) => a.type !== "summary" && a.type !== "project_summary");
   const { mapped, unmappedNames } = await applyDictionary(leaves);
   const knownScopes = await getKnownScopes();
+  const splitRulesMap = await getSplitRules();
+  const splitRules: SplitRuleRow[] = [...splitRulesMap.entries()].map(([coarseScope, finerScopes]) => ({ coarseScope, finerScopes }));
 
   const counts = new Map<string, number>();
   for (const a of leaves) {
@@ -44,6 +48,9 @@ export default async function NormalizePage({ params }: { params: { id: string }
       ) : (
         <NormalizePanel projectId={project.id} rows={rows} knownScopes={knownScopes} />
       )}
+      <div className="mt-8">
+        <SplitRulesPanel rules={splitRules} knownScopes={knownScopes} />
+      </div>
     </main>
   );
 }
