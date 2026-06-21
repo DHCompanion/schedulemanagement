@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { injectActuals, type ProgressForExport } from "@/lib/export/injectActuals";
+import { injectActuals, injectNames, type ProgressForExport } from "@/lib/export/injectActuals";
 
 function doc() {
   return {
@@ -51,5 +51,20 @@ describe("injectActuals", () => {
     const d = { Project: { Tasks: { Task: { UID: "1", Name: "A", Start: "2025-06-03T08:00:00", Finish: "2025-06-03T17:00:00" } } } } as Record<string, unknown>;
     injectActuals(d, new Map([[1, prog({ status: "complete" })]]));
     expect(((d.Project as any).Tasks.Task).PercentComplete).toBe("100");
+  });
+});
+
+describe("injectNames", () => {
+  it("overwrites the Name of matched tasks only", () => {
+    const d = doc();
+    injectNames(d, new Map([[1, "Mobilization"]]));
+    expect(tasks(d)[0].Name).toBe("Mobilization");
+    expect(tasks(d)[1].Name).toBe("B");
+    expect(tasks(d)[2].Name).toBe("C");
+  });
+  it("handles a single (non-array) Task node", () => {
+    const d = { Project: { Tasks: { Task: { UID: "1", Name: "A" } } } } as Record<string, unknown>;
+    injectNames(d, new Map([[1, "Renamed"]]));
+    expect(((d.Project as any).Tasks.Task).Name).toBe("Renamed");
   });
 });

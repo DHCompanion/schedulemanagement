@@ -25,6 +25,11 @@ describe.runIf(hasDb)("buildExport", () => {
     const project = await prisma.project.create({ data: { name: "Export Test" } });
     projectId = project.id;
     await commitImport({ projectId: project.id, fileName: "minimal.xml", xml });
+    await prisma.scopeDictionaryEntry.upsert({
+      where: { normalizedName: "electrical rough-in" },
+      create: { normalizedName: "electrical rough-in", canonicalScope: "Electrical Rough-In (Standard)" },
+      update: { canonicalScope: "Electrical Rough-In (Standard)" },
+    });
 
     // no finalized progress yet -> throws
     await expect(buildExport(project.id, xml, "minimal.xml")).rejects.toThrow(/no finalized progress/i);
@@ -40,9 +45,13 @@ describe.runIf(hasDb)("buildExport", () => {
     expect(findTask(doc, "2").ActualStart).toBe("2026-06-16T00:00:00");
     expect(String(findTask(doc, "2").PercentComplete)).toBe("50");
     expect((doc.Project as any).StatusDate).toBe("2026-06-18T00:00:00");
+    expect(findTask(doc, "2").Name).toBe("Electrical Rough-In (Standard)");
+    expect(findTask(doc, "1").Name).toBe("Mobilize"); // unmapped — untouched
 
     // hash mismatch -> throws
     await expect(buildExport(project.id, xml + "<!-- changed -->", "minimal.xml")).rejects.toThrow(/match/i);
+
+    await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: "electrical rough-in" } });
   }, 30000);
 
   it("throws when the project has no import", async () => {

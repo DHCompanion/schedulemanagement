@@ -2,9 +2,10 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
-import { injectActuals, type ProgressForExport } from "@/lib/export/injectActuals";
+import { injectActuals, injectNames, type ProgressForExport } from "@/lib/export/injectActuals";
 import { parseForExport, buildMspdi } from "@/lib/export/serializeMspdi";
 import { toMspdiDate } from "@/lib/export/mspdiDate";
+import { applyDictionary } from "@/lib/normalize/normalizationService";
 
 export async function buildExport(
   projectId: string,
@@ -37,8 +38,15 @@ export async function buildExport(
     orderBy: { asOfDate: "desc" },
   });
 
+  const { mapped } = await applyDictionary(latest.activities);
+  const nameByUid = new Map<number, string>();
+  for (const { activity, canonicalScope } of mapped) {
+    nameByUid.set(activity.externalUid, canonicalScope);
+  }
+
   const doc = parseForExport(uploadedXml);
   injectActuals(doc, progressByUid);
+  injectNames(doc, nameByUid);
   const project = doc.Project as Record<string, unknown> | undefined;
   if (project && latestUpdate) project.StatusDate = toMspdiDate(latestUpdate.asOfDate);
   const xml = buildMspdi(doc);

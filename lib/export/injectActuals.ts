@@ -36,3 +36,14 @@ export function injectActuals(doc: AnyRec, progressByUid: Map<number, ProgressFo
   }
   return doc;
 }
+
+/** Mutate matching <Task> nodes' Name with the canonical scope from the map; leaves everything else untouched. */
+export function injectNames(doc: AnyRec, nameByUid: Map<number, string>): AnyRec {
+  const project = doc.Project as AnyRec | undefined;
+  const tasksNode = project?.Tasks as AnyRec | undefined;
+  for (const task of asArray(tasksNode?.Task)) {
+    const name = nameByUid.get(Number(task.UID));
+    if (name) task.Name = name;
+  }
+  return doc;
+}
