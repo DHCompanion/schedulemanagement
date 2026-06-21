@@ -217,6 +217,22 @@ export function runHealthChecks(activities: HealthActivity[], env: ImportEnvelop
   return issues;
 }
 
+export interface ProgressSummary {
+  total: number;
+  completed: number;
+  remaining: number;
+  percentComplete: number;
+}
+
+export function summarizeProgress(activities: HealthActivity[]): ProgressSummary {
+  const leaves = activities.filter(isLeafActive);
+  const total = leaves.length;
+  const completed = leaves.filter((a) => a.percentComplete === 100).length;
+  const remaining = total - completed;
+  const percentComplete = total === 0 ? 0 : Math.round((completed / total) * 100);
+  return { total, completed, remaining, percentComplete };
+}
+
 export function summarizeHealth(issues: HealthIssue[]): HealthSummary {
   const byCheck: Record<HealthCheck, number> = {
     out_of_envelope: 0,

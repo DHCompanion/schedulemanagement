@@ -2,12 +2,14 @@ import { prisma } from "@/lib/db";
 import {
   runHealthChecks,
   summarizeHealth,
+  summarizeProgress,
   computeEnvelope,
   isLeafActive,
   type HealthActivity,
   type HealthIssue,
   type HealthSummary,
   type DateWindow,
+  type ProgressSummary,
 } from "@/lib/health/dateChecks";
 
 export interface ScheduleHealth {
@@ -16,6 +18,7 @@ export interface ScheduleHealth {
   window: DateWindow | null;
   issues: HealthIssue[];
   summary: HealthSummary;
+  progress: ProgressSummary;
 }
 
 /**
@@ -29,7 +32,7 @@ export async function getScheduleHealth(projectId: string): Promise<ScheduleHeal
     include: { activities: true },
   });
   if (!latest) {
-    return { hasImport: false, asOfDate: null, window: null, issues: [], summary: summarizeHealth([]) };
+    return { hasImport: false, asOfDate: null, window: null, issues: [], summary: summarizeHealth([]), progress: summarizeProgress([]) };
   }
 
   const asOfDate = latest.statusDate ?? latest.importedAt;
@@ -51,5 +54,5 @@ export async function getScheduleHealth(projectId: string): Promise<ScheduleHeal
 
   const issues = runHealthChecks(activities, env, asOfDate);
   const window = computeEnvelope(activities.filter(isLeafActive), env);
-  return { hasImport: true, asOfDate, window, issues, summary: summarizeHealth(issues) };
+  return { hasImport: true, asOfDate, window, issues, summary: summarizeHealth(issues), progress: summarizeProgress(activities) };
 }

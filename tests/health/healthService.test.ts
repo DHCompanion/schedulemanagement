@@ -58,6 +58,8 @@ describe.runIf(hasDb)("healthService", () => {
     expect(health.summary.byCheck.future_actual).toBe(1);
     expect(health.summary.errors).toBe(2);
     expect(health.summary.warnings).toBe(0);
+    // 5 leaf activities total (uid 1,2,3,9,10); only uid 10 is 100% complete.
+    expect(health.progress).toEqual({ total: 5, completed: 1, remaining: 4, percentComplete: 20 });
 
     const envIssue = health.issues.find((i) => i.check === "out_of_envelope");
     expect(envIssue?.externalId).toBe(9);
@@ -70,6 +72,7 @@ describe.runIf(hasDb)("healthService", () => {
     const health = await getScheduleHealth(p.id);
     expect(health.hasImport).toBe(false);
     expect(health.issues).toEqual([]);
+    expect(health.progress).toEqual({ total: 0, completed: 0, remaining: 0, percentComplete: 0 });
     await prisma.project.delete({ where: { id: p.id } });
   }, 15000);
 });

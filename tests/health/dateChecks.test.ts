@@ -7,6 +7,7 @@ import {
   checkPercentContradictions,
   runHealthChecks,
   summarizeHealth,
+  summarizeProgress,
   type HealthActivity,
   type DateWindow,
 } from "@/lib/health/dateChecks";
@@ -178,5 +179,23 @@ describe("summarizeHealth", () => {
     expect(summary.warnings).toBe(1);
     expect(summary.byCheck.future_actual).toBe(1);
     expect(summary.byCheck.missing_dates).toBe(1);
+  });
+});
+
+describe("summarizeProgress", () => {
+  it("counts completed vs remaining leaf-active activities", () => {
+    const activities: HealthActivity[] = [
+      act({ id: "a", percentComplete: 100 }),
+      act({ id: "b", percentComplete: 100 }),
+      act({ id: "c", percentComplete: 50 }),
+      act({ id: "d", percentComplete: null }),
+      act({ id: "summary", type: "summary", percentComplete: 100 }), // excluded: not a leaf
+      act({ id: "inactive", isActive: false, percentComplete: 100 }), // excluded: inactive
+    ];
+    expect(summarizeProgress(activities)).toEqual({ total: 4, completed: 2, remaining: 2, percentComplete: 50 });
+  });
+
+  it("returns zeros for an empty schedule", () => {
+    expect(summarizeProgress([])).toEqual({ total: 0, completed: 0, remaining: 0, percentComplete: 0 });
   });
 });
