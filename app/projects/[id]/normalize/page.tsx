@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { applyDictionary, getKnownScopes } from "@/lib/normalize/normalizationService";
 import { suggestScopes } from "@/lib/normalize/suggestScopes";
 import { getSplitRules } from "@/lib/completeness/splitRuleService";
+import { isAdmin, ADMIN_SESSION_COOKIE } from "@/lib/auth";
 import { NormalizePanel, type UnmappedRow } from "@/components/NormalizePanel";
 import { SplitRulesPanel, type SplitRuleRow } from "@/components/SplitRulesPanel";
 
@@ -23,6 +25,7 @@ export default async function NormalizePage({ params }: { params: { id: string }
   const knownScopes = await getKnownScopes();
   const splitRulesMap = await getSplitRules();
   const splitRules: SplitRuleRow[] = [...splitRulesMap.entries()].map(([coarseScope, finerScopes]) => ({ coarseScope, finerScopes }));
+  const adminSession = isAdmin(cookies().get(ADMIN_SESSION_COOKIE)?.value);
 
   const counts = new Map<string, number>();
   for (const a of leaves) {
@@ -39,17 +42,17 @@ export default async function NormalizePage({ params }: { params: { id: string }
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link href={`/projects/${project.id}`} className="text-sm text-slate-500">← {project.name}</Link>
-      <h1 className="mb-1 mt-1 text-xl font-semibold">Normalize scopes</h1>
+      <h1 className="mb-1 mt-1 text-xl font-semibold">Normalize activity names</h1>
       <p className="mb-4 text-sm text-slate-500">{mapped.length} activities already mapped · {rows.length} names to review</p>
       {!latest ? (
         <p className="text-slate-500">Import a schedule first.</p>
       ) : rows.length === 0 ? (
         <p className="text-slate-500">All activity names are mapped.</p>
       ) : (
-        <NormalizePanel projectId={project.id} rows={rows} knownScopes={knownScopes} />
+        <NormalizePanel projectId={project.id} rows={rows} knownScopes={knownScopes} isAdmin={adminSession} />
       )}
       <div className="mt-8">
-        <SplitRulesPanel rules={splitRules} knownScopes={knownScopes} />
+        <SplitRulesPanel rules={splitRules} isAdmin={adminSession} />
       </div>
     </main>
   );
