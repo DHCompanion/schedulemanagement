@@ -36,6 +36,22 @@ Next.js 14 + Prisma + Postgres, deployed on Railway.
    rules; no mutation of `Activity`/`ScheduleImport`. Dedicated "Completeness"
    page + nav button. Coverage/template detection (missing scopes entirely) is
    explicitly out of scope — deferred to a future sub-slice if needed.
+8. **5e Workflow integration** — sequences the pipeline as
+   Import → Health → Normalize → Completeness → Trades → Weekly updates →
+   Export (project nav reordered to match; no hard gate outside the wizard).
+   A first-time setup wizard (`?wizard=1` banner on the Health/Normalize/
+   Completeness pages) walks a project through those three steps on its first
+   import only (`Project.onboardingCompletedAt`); existing projects were
+   backfilled so they aren't retroactively forced through it. Health gained a
+   Progress section (total/completed/remaining/%) above the 4 existing checks,
+   now shown as individually-headed "clean"/issue-count sections. Normalize's
+   split-rule authoring moved inline onto each unmapped-name row (instead of a
+   disconnected global form) and, along with removing a rule, is now
+   **admin-only** — a second `APP_ADMIN_PASSWORD` sets an elevated session
+   cookie (`sms_admin`), same pattern as the existing shared `APP_PASSWORD`.
+   Export now also injects each activity's canonical (normalized) name into
+   the exported XML's `Task.Name`, parallel to the existing actuals injection
+   — export-time only, no mutation of stored `Activity` rows.
 
 Full attribution chain now in data: `name → scope → discipline → project's company`.
 
@@ -54,7 +70,7 @@ Full attribution chain now in data: `name → scope → discipline → project's
 - **Hard rules:** no AI/LLM (CLAUDE.md "Don't Build Yet"); imports are immutable —
   normalization/attribution/progress are read-time overlays.
 - Specs + plans live in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
-  Tests: **83 passing, 26 files** at handoff (DB-gated suites skip without `DATABASE_URL`).
+  Tests: **118 passing, 27 files** at handoff (DB-gated suites skip without `DATABASE_URL`).
 
 ## Suggested next steps
 - **5c coverage/templates** — deferred sub-slice: detect entirely-missing scopes
@@ -70,5 +86,10 @@ Full attribution chain now in data: `name → scope → discipline → project's
 - Near-duplicate cleanup for scopes/disciplines/partners (managed taxonomy).
 - Multiple subs per discipline per project; re-upload-free export (store raw XML).
 - "Schedule builder" tool (preliminary schedules from history) — true future item.
+- **5e follow-ups (noted, not built):** per-row qualifier preservation in
+  exported names if literal canonical-scope replacement makes MS Project files
+  hard to read (multiple identically-named rows); a "browse all scopes in use"
+  view on Normalize if the inline-resurfaces-on-new-mapping pattern proves
+  insufficient for retroactively marking long-standing scopes as coarse.
 
 **Clean resume line for next session:** _"Plan 5c coverage/templates (deferred sub-slice), or pick up Slice 4 importers / Slice 6."_
