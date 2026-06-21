@@ -25,6 +25,7 @@ model Project {
   imports             ScheduleImport[]
   progressUpdates     ProgressUpdate[]
   tradeAssignments    ProjectTradeAssignment[]
+  completenessDismissals CompletenessDismissal[]
 }
 
 model ScheduleImport {
@@ -241,5 +242,31 @@ model ProjectTradeAssignment {
   updatedAt       DateTime     @updatedAt
 
   @@unique([projectId, tradeDiscipline])
+  @@index([projectId])
+}
+
+model ScopeSplitRule {
+  id          String   @id @default(cuid())
+  coarseScope String
+  finerScope  String
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([coarseScope, finerScope])
+  @@index([coarseScope])
+}
+
+model CompletenessDismissal {
+  id                   String   @id @default(cuid())
+  projectId            String
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  canonicalActivityKey String
+  coarseScope          String
+  dismissedBy          String?
+  note                 String?
+  createdAt            DateTime @default(now())
+
+  @@unique([projectId, canonicalActivityKey, coarseScope])
   @@index([projectId])
 }
