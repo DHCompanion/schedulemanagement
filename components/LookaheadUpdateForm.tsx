@@ -12,7 +12,7 @@ export interface LookaheadFormRow {
   plannedStart: string | null;
   plannedFinish: string | null;
   slippage: "overdue" | "should-have-started" | "on-track";
-  status: "not_started" | "in_progress" | "complete";
+  status: "not_started" | "in_progress" | "complete" | "completed_as_planned";
   actualStart: string;
   actualFinish: string;
   percentComplete: number | null;
@@ -43,7 +43,7 @@ export function LookaheadUpdateForm({
     const entries = data.map((r) => ({
       activityExternalUid: r.externalUid,
       canonicalActivityKey: r.canonicalActivityKey,
-      status: r.status,
+      status: r.status === "completed_as_planned" ? "complete" : r.status,
       actualStart: r.actualStart || null,
       actualFinish: r.actualFinish || null,
       percentComplete: r.percentComplete,
@@ -80,10 +80,31 @@ export function LookaheadUpdateForm({
             </div>
             <div className={`mt-1 text-xs ${slipClass[r.slippage]}`}>{r.slippage}</div>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <select disabled={readOnly} value={r.status} onChange={(e) => patch(i, { status: e.target.value as LookaheadFormRow["status"] })} className="rounded border border-slate-300 px-2 py-1 text-sm" aria-label="Status">
+              <select
+                disabled={readOnly}
+                value={r.status}
+                onChange={(e) => {
+                  const value = e.target.value as LookaheadFormRow["status"];
+                  if (value === "completed_as_planned") {
+                    patch(i, {
+                      status: "completed_as_planned",
+                      actualStart: r.plannedStart ?? "",
+                      actualFinish: r.plannedFinish ?? "",
+                      percentComplete: 100,
+                    });
+                    return;
+                  }
+                  patch(i, { status: value });
+                }}
+                className="rounded border border-slate-300 px-2 py-1 text-sm"
+                aria-label="Status"
+              >
                 <option value="not_started">Not started</option>
                 <option value="in_progress">In progress</option>
                 <option value="complete">Complete</option>
+                <option value="completed_as_planned" disabled={!r.plannedStart || !r.plannedFinish}>
+                  Completed as Planned
+                </option>
               </select>
               <input disabled={readOnly} type="date" value={r.actualStart} onChange={(e) => patch(i, { actualStart: e.target.value })} className="rounded border border-slate-300 px-2 py-1 text-sm" aria-label="Actual start" />
               <input disabled={readOnly} type="date" value={r.actualFinish} onChange={(e) => patch(i, { actualFinish: e.target.value })} className="rounded border border-slate-300 px-2 py-1 text-sm" aria-label="Actual finish" />
