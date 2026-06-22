@@ -22,3 +22,13 @@ export function minutesToDays(minutes: number | null, minutesPerDay: number): nu
   if (minutes === null || !minutesPerDay) return null;
   return minutes / minutesPerDay;
 }
+
+/** Inverse of parseIsoDurationToMinutes: format minutes back to an ISO-8601 duration like "PT8H0M0S". */
+export function minutesToIsoDuration(minutes: number | null): string | null {
+  if (minutes === null) return null;
+  const totalSeconds = Math.round(minutes * 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  return `PT${hours}H${mins}M${secs}S`;
+}

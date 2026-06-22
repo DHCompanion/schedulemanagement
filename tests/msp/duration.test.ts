@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseIsoDurationToMinutes, tenthsOfMinuteToMinutes, minutesToDays } from "@/lib/msp/duration";
+import { parseIsoDurationToMinutes, tenthsOfMinuteToMinutes, minutesToDays, minutesToIsoDuration } from "@/lib/msp/duration";
 
 describe("parseIsoDurationToMinutes", () => {
   it("parses hours/minutes/seconds", () => {
@@ -32,5 +32,17 @@ describe("minutesToDays", () => {
   });
   it("returns null when minutes is null", () => {
     expect(minutesToDays(null, 480)).toBeNull();
+  });
+});
+
+describe("minutesToIsoDuration", () => {
+  it("round-trips with parseIsoDurationToMinutes", () => {
+    expect(minutesToIsoDuration(480)).toBe("PT8H0M0S");
+    expect(parseIsoDurationToMinutes(minutesToIsoDuration(480)!)).toBe(480);
+    expect(minutesToIsoDuration(90)).toBe("PT1H30M0S");
+    expect(minutesToIsoDuration(2400)).toBe("PT40H0M0S");
+  });
+  it("returns null for null", () => {
+    expect(minutesToIsoDuration(null)).toBeNull();
   });
 });
