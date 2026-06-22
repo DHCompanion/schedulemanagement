@@ -1,6 +1,6 @@
 # Handoff — Schedule Management (Skiles Connect)
 
-_Last updated: 2026-06-21_
+_Last updated: 2026-06-21 (Slice 5f)_
 
 ## What this is
 A construction schedule tool: import MS Project XML → verify → capture weekly field
@@ -12,7 +12,7 @@ Next.js 14 + Prisma + Postgres, deployed on Railway.
   Railway** (~60–90s). `gh` CLI is at `~/.local/bin/gh`, authed as `DHCompanion`.
 - **Working dir:** `/home/coder/projects/Skilesconnect/schedulemanagement`
 
-## Live in production (Slices 1, 2, 3, 5a, 5b, 5c, 5d)
+## Live in production (Slices 1, 2, 3, 5a, 5b, 5c, 5d, 5e, 5f)
 1. **Import** — MS Project XML → canonical immutable snapshots + verification view.
 2. **Weekly updates** — 1/3/6-week lookahead, record progress, finalize snapshots.
    Seeds progress from the base schedule's existing actuals so already-complete
@@ -52,6 +52,24 @@ Next.js 14 + Prisma + Postgres, deployed on Railway.
    Export now also injects each activity's canonical (normalized) name into
    the exported XML's `Task.Name`, parallel to the existing actuals injection
    — export-time only, no mutation of stored `Activity` rows.
+9. **5f Completeness Accept/Split** — Completeness issues gained an **Accept**
+   button (any logged-in user) alongside Dismiss. Accepting clones the latest
+   `ScheduleImport` into a new **synthetic** import (`isSynthetic: true`,
+   `derivedFromImportId` → parent) that replaces the coarse activity with its
+   finer scopes as parallel tasks (fan-out/fan-in: predecessors/successors of
+   the coarse activity are rewired onto every new task; duration/dates copied
+   from the coarse activity), and records a `CompletenessSplit` row. The
+   synthetic import becomes the new "latest," so every existing latest-import
+   reader (dashboard, Health, Normalize, Trades, Completeness) picks it up
+   automatically with no other code changes — imports themselves stay
+   immutable. Export walks the `derivedFromImportId` chain
+   (`resolveExportBase`) back to the nearest real ancestor to validate the
+   re-uploaded file's hash, then replays every `CompletenessSplit` in the
+   chain (`injectSplits`) into the exported XML before injecting actuals/
+   names. Because MS Project's Unique-ID merge can add/update but never
+   delete tasks, the export route returns an `X-Deleted-Tasks` header and the
+   Export page shows a manual-delete checklist (also documented in
+   README step 8).
 
 Full attribution chain now in data: `name → scope → discipline → project's company`.
 
@@ -70,7 +88,7 @@ Full attribution chain now in data: `name → scope → discipline → project's
 - **Hard rules:** no AI/LLM (CLAUDE.md "Don't Build Yet"); imports are immutable —
   normalization/attribution/progress are read-time overlays.
 - Specs + plans live in `docs/superpowers/specs/` and `docs/superpowers/plans/`.
-  Tests: **118 passing, 27 files** at handoff (DB-gated suites skip without `DATABASE_URL`).
+  Tests: **128 passing, 29 files** at handoff (DB-gated suites skip without `DATABASE_URL`).
 
 ## Suggested next steps
 - **5c coverage/templates** — deferred sub-slice: detect entirely-missing scopes
