@@ -6,6 +6,7 @@ import { commitImport } from "@/lib/import/commitImport";
 import { getOrCreateDraft, saveEntries, finalizeUpdate } from "@/lib/updates/updateService";
 import { buildExport } from "@/lib/export/buildExport";
 import { parseForExport } from "@/lib/export/serializeMspdi";
+import { acceptSplit } from "@/lib/completeness/acceptSplit";
 
 const xml = readFileSync(resolve(__dirname, "../fixtures/minimal.xml"), "utf8");
 const hasDb = !!process.env.DATABASE_URL;
@@ -78,6 +79,44 @@ describe.runIf(hasDb)("buildExport", () => {
     const body = await res.text();
     expect(body).toContain("<ActualFinish>2026-06-18T00:00:00</ActualFinish>");
 
+    await prisma.project.delete({ where: { id: project.id } });
+  }, 30000);
+
+  it("exports a synthetic split against the original real file", async () => {
+    const coarse = `ZZ Export Split ${Date.now()}`;
+    await prisma.scopeSplitRule.createMany({
+      data: [
+        { coarseScope: coarse, finerScope: "Finer A" },
+        { coarseScope: coarse, finerScope: "Finer B" },
+      ],
+    });
+    await prisma.scopeDictionaryEntry.upsert({
+      where: { normalizedName: coarse.toLowerCase() },
+      create: { normalizedName: coarse.toLowerCase(), canonicalScope: coarse },
+      update: { canonicalScope: coarse },
+    });
+
+    const project = await prisma.project.create({ data: { name: "Export Split Test" } });
+    await commitImport({ projectId: project.id, fileName: "minimal.xml", xml });
+
+    const latest = await prisma.scheduleImport.findFirstOrThrow({ where: { projectId: project.id }, include: { activities: true } });
+    const electrical = latest.activities.find((a) => a.name === "Electrical Rough-In")!;
+    await prisma.activity.update({ where: { id: electrical.id }, data: { name: coarse, canonicalActivityKey: `2|${coarse.toLowerCase()}` } });
+
+    const { id: draftId } = await getOrCreateDraft(project.id, "2026-06-18", 1);
+    await saveEntries(draftId, [{ activityExternalUid: 1, canonicalActivityKey: "1|mobilize", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-16", percentComplete: 100, note: null }]);
+    await finalizeUpdate(draftId);
+
+    await acceptSplit(project.id, `2|${coarse.toLowerCase()}`, coarse);
+
+    const out = await buildExport(project.id, xml, "minimal.xml");
+    const doc = parseForExport(out.xml);
+    const taskUids = ((doc.Project as any).Tasks.Task as any[]).map((t) => String(t.UID));
+    expect(taskUids).not.toContain("2");
+    expect(out.deletedTasks).toEqual([{ name: coarse, wbsCode: "2" }]);
+
+    await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
+    await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: coarse.toLowerCase() } });
     await prisma.project.delete({ where: { id: project.id } });
   }, 30000);
 });
