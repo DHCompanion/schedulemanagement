@@ -49,7 +49,16 @@ export function NormalizePanel({
   async function save() {
     setBusy(true);
     setError(null);
-    const mappings = Object.entries(values)
+    // A row with finer scopes typed but no Standard scope still needs a
+    // canonical scope to attach the split rule to — default it to the raw
+    // name (same as "Use as-is") instead of silently dropping the row.
+    const effectiveValues: Record<string, string> = { ...values };
+    for (const r of rows) {
+      if (!effectiveValues[r.rawName]?.trim() && splits[r.rawName]?.trim()) {
+        effectiveValues[r.rawName] = r.rawName;
+      }
+    }
+    const mappings = Object.entries(effectiveValues)
       .filter(([, s]) => s.trim())
       .map(([rawName, canonicalScope]) => ({ rawName, canonicalScope: canonicalScope.trim() }));
     const res = await fetch("/api/normalize", {
@@ -63,7 +72,7 @@ export function NormalizePanel({
       return;
     }
     for (const [rawName, finerRaw] of Object.entries(splits)) {
-      const coarseScope = values[rawName]?.trim();
+      const coarseScope = effectiveValues[rawName]?.trim();
       if (!coarseScope || !finerRaw.trim()) continue;
       for (const finerScope of finerRaw.split(",").map((s) => s.trim()).filter(Boolean)) {
         await fetch("/api/completeness/split-rules", {
