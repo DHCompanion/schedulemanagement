@@ -9,6 +9,7 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all");
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const coarseScopes = useMemo(() => [...new Set(issues.map((i) => i.coarseScope))].sort(), [issues]);
 
@@ -25,6 +26,7 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
   async function dismiss(issue: CompletenessIssue) {
     const key = `${issue.canonicalActivityKey}::${issue.coarseScope}`;
     setBusyKey(key);
+    setError(null);
     await fetch("/api/completeness/dismiss", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -34,8 +36,31 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
     router.refresh();
   }
 
+  async function accept(issue: CompletenessIssue) {
+    const key = `${issue.canonicalActivityKey}::${issue.coarseScope}`;
+    const confirmed = window.confirm(
+      `Replace "${issue.name}" (WBS ${issue.wbsCode ?? "—"}) with ${issue.finerScopes.length} parallel activities — ` +
+        `${issue.finerScopes.join(", ")} — each inheriting its predecessors, successors, and duration. Continue?`,
+    );
+    if (!confirmed) return;
+    setBusyKey(key);
+    setError(null);
+    const res = await fetch("/api/completeness/accept", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, canonicalActivityKey: issue.canonicalActivityKey, coarseScope: issue.coarseScope }),
+    });
+    setBusyKey(null);
+    if (!res.ok) {
+      setError((await res.json())?.error?.message ?? "Accept failed.");
+      return;
+    }
+    router.refresh();
+  }
+
   return (
     <div>
+      {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       <div className="mb-3 flex flex-wrap gap-2">
         <input
           value={q}
@@ -52,6 +77,7 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
       <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
         {view.map((i) => {
           const key = `${i.canonicalActivityKey}::${i.coarseScope}`;
+          const busy = busyKey === key;
           return (
             <li key={key} className="px-3 py-2">
               <div className="flex items-start justify-between gap-3">
@@ -59,13 +85,22 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
                   <span className="mr-2 text-xs text-slate-400">{i.wbsCode}</span>
                   <span className="font-medium">{i.name}</span>
                 </span>
-                <button
-                  disabled={busyKey === key}
-                  onClick={() => dismiss(i)}
-                  className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
-                >
-                  {busyKey === key ? "Dismissing…" : "Dismiss"}
-                </button>
+                <span className="flex shrink-0 gap-1">
+                  <button
+                    disabled={busy}
+                    onClick={() => accept(i)}
+                    className="whitespace-nowrap rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                  >
+                    {busy ? "Working…" : "Accept"}
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => dismiss(i)}
+                    className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    {busy ? "Working…" : "Dismiss"}
+                  </button>
+                </span>
               </div>
               <div className="mt-1 text-xs text-slate-600">
                 <span className="mr-2 rounded bg-slate-100 px-1.5 py-0.5 text-slate-500">{i.coarseScope}</span>
