@@ -52,6 +52,9 @@ Project does, when you merge the actuals back in.
 6. Ensure the imported fields include **Actual Start, Actual Finish, % Complete**
    (and Status Date). Save the import map the first time so it is reusable.
 7. Finish the wizard — Project applies the actuals and recalculates.
+8. If the app's checklist flagged any replaced activities, manually delete those
+   rows from the schedule now — Project's Unique-ID merge adds and updates tasks
+   but never deletes them.
 
 Notes: it is a merge wizard, not a one-click apply (the saved map makes repeat
 runs fast). Actual times land at midnight because the update form captures

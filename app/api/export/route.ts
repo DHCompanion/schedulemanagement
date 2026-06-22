@@ -16,6 +16,7 @@ export async function POST(req: Request) {
       headers: {
         "Content-Type": "application/xml",
         "Content-Disposition": `attachment; filename="${out.fileName}"`,
+        "X-Deleted-Tasks": JSON.stringify(out.deletedTasks),
       },
     });
   } catch (e) {
