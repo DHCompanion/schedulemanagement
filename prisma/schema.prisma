@@ -27,6 +27,7 @@ model Project {
   progressUpdates     ProgressUpdate[]
   tradeAssignments    ProjectTradeAssignment[]
   completenessDismissals CompletenessDismissal[]
+  completenessSplits     CompletenessSplit[]
 }
 
 model ScheduleImport {
@@ -59,6 +60,11 @@ model ScheduleImport {
   assignments            Assignment[]
   calendars              Calendar[]
   progressUpdates        ProgressUpdate[]
+  isSynthetic            Boolean          @default(false)
+  derivedFromImportId    String?
+  derivedFromImport      ScheduleImport?  @relation("ImportLineage", fields: [derivedFromImportId], references: [id])
+  derivedImports         ScheduleImport[] @relation("ImportLineage")
+  completenessSplits     CompletenessSplit[]
 
   @@index([projectId])
 }
@@ -269,5 +275,28 @@ model CompletenessDismissal {
   createdAt            DateTime @default(now())
 
   @@unique([projectId, canonicalActivityKey, coarseScope])
+  @@index([projectId])
+}
+
+model CompletenessSplit {
+  id                     String   @id @default(cuid())
+  projectId              String
+  project                Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceScheduleImportId String                      // the import this was accepted from
+  resultScheduleImportId String   @unique             // the synthetic import this created
+  resultScheduleImport   ScheduleImport @relation(fields: [resultScheduleImportId], references: [id], onDelete: Cascade)
+  coarseExternalUid      Int                          // for locating the task in the export XML
+  coarseWbsCode          String?
+  coarseOutlineNumber    String?
+  coarseOutlineLevel     Int      @default(0)
+  coarseName             String
+  coarseDurationMinutes  Float?
+  coarseStart            DateTime?
+  coarseFinish           DateTime?
+  finerScopes            Json                         // ordered string[]
+  mintedUids             Json                         // ordered number[], same order as finerScopes
+  acceptedBy             String?
+  createdAt              DateTime @default(now())
+
   @@index([projectId])
 }
