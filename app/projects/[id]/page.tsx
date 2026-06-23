@@ -45,27 +45,24 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       <Link href="/" className="text-sm text-slate-500">← Projects</Link>
       <div className="mb-4 mt-1 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">{project.name}</h1>
-        <div className="flex gap-2">
-          <Link href={`/projects/${project.id}/health`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
-            Schedule health
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/projects/${project.id}/normalize`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Task Naming
           </Link>
-          <Link href={`/projects/${project.id}/normalize`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
-            Normalize activity names
+          <Link href={`/projects/${project.id}/completeness`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Task Granularity
           </Link>
-          <Link href={`/projects/${project.id}/completeness`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
-            Completeness
-          </Link>
-          <Link href={`/projects/${project.id}/trades`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
+          <Link href={`/projects/${project.id}/trades`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Trades
           </Link>
-          <Link href={`/projects/${project.id}/updates`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
-            Weekly updates
+          <Link href={`/projects/${project.id}/updates`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Progress Update
           </Link>
-          <Link href={`/projects/${project.id}/export`} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
+          <Link href={`/projects/${project.id}/export`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Export to MS Project
           </Link>
-          <Link href={`/projects/${project.id}/import`} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
-            Import schedule
+          <Link href={`/projects/${project.id}/import`} className="rounded-lg bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-800">
+            Import Schedule
           </Link>
         </div>
       </div>
