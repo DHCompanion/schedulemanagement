@@ -51,6 +51,7 @@ function leafMatches(a: ActivityRow, q: string, filter: Filter): boolean {
   if (filter === "milestones" && a.type !== "milestone") return false;
   if (filter === "critical" && !a.isCritical) return false;
   if (filter === "in_progress" && !((a.percentComplete ?? 0) > 0 && (a.percentComplete ?? 0) < 100)) return false;
+  if (filter === "not_completed" && a.percentComplete === 100) return false;
   return true;
 }
 
@@ -164,6 +165,7 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
           <option value="milestones">Milestones</option>
           <option value="critical">Critical</option>
           <option value="in_progress">In progress</option>
+          <option value="not_completed">Not completed</option>
         </select>
         <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded border border-slate-300 px-2 py-2 text-sm">
           <option value="wbs">Sort: WBS</option>
