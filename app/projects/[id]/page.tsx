@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { ActivityTable, type ActivityRow } from "@/components/ActivityTable";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
+import { getScheduleHealth } from "@/lib/health/healthService";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
   });
 
   const currentProgress = resolveCurrentProgress(await getFinalizedEntries(project.id));
+  const health = await getScheduleHealth(project.id);
   const mpd = latest?.minutesPerDay ?? 480;
   const rows: ActivityRow[] = (latest?.activities ?? []).map((a) => ({
     id: a.id,
@@ -76,12 +78,23 @@ export default async function ProjectPage({ params }: { params: { id: string } }
         <p className="text-slate-500">No schedule imported yet.</p>
       ) : (
         <>
-          <div className="mb-4 rounded border border-slate-200 bg-white p-3 text-sm text-slate-600">
+          <div className={`rounded border border-slate-200 bg-white p-3 text-sm text-slate-600 ${health.hasImport ? "border-b-0" : "mb-4"}`}>
             <div>File: {latest.fileName}</div>
             <div>Imported: {latest.importedAt.toISOString().slice(0, 16).replace("T", " ")}</div>
             <div>Status date: {latest.statusDate ? latest.statusDate.toISOString().slice(0, 10) : "—"}</div>
             <div>{latest.isBaseline ? "Baseline import" : "Update import"} · {latest.activityCount} activities · {latest.relationshipCount} relationships</div>
           </div>
+          {health.hasImport && (
+            <Link
+              href={`/projects/${project.id}/health`}
+              className="mb-4 flex flex-wrap gap-4 rounded border border-t-0 border-slate-200 bg-white p-3 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              <div><span className="font-medium">{health.progress.total}</span> total</div>
+              <div><span className="font-medium">{health.progress.completed}</span> completed</div>
+              <div><span className="font-medium">{health.progress.remaining}</span> remaining</div>
+              <div><span className="font-medium">{health.progress.percentComplete}%</span> complete</div>
+            </Link>
+          )}
           <ActivityTable rows={rows} />
         </>
       )}
