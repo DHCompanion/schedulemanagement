@@ -13,3 +13,6 @@ next-env.d.ts
 
 # Real-data parser fixtures kept local only (synthetic minimal.xml stays tracked)
 /tests/fixtures/cath-ir-baseline.xml
+
+# Brainstorming visual-companion session files
+.superpowers/
