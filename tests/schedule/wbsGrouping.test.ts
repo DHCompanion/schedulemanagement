@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveSectionInfo, isHiddenByCollapse } from "@/lib/schedule/wbsGrouping";
+import { deriveSectionInfo, isHiddenByCollapse, assignSiblingIndices } from "@/lib/schedule/wbsGrouping";
 
 // Document-order rows (project_summary already excluded by the caller):
 //   A (1)            -> top section
@@ -40,14 +40,27 @@ describe("deriveSectionInfo", () => {
     expect(info.get("A.2")?.ancestorIds).toEqual(["A"]);
     expect(info.get("A.1.task1")?.ancestorIds).not.toContain("A.2");
   });
+});
 
-  it("resolves topSectionId to the outline-level-1 ancestor at any depth", () => {
-    expect(info.get("A")?.topSectionId).toBe("A");
-    expect(info.get("A.1")?.topSectionId).toBe("A");
-    expect(info.get("A.1.task1")?.topSectionId).toBe("A");
-    expect(info.get("A.2.task1")?.topSectionId).toBe("A");
-    expect(info.get("B")?.topSectionId).toBe("B");
-    expect(info.get("B.task1")?.topSectionId).toBe("B");
+describe("assignSiblingIndices", () => {
+  const info = deriveSectionInfo(rows);
+  const indices = assignSiblingIndices(rows, info);
+
+  it("indexes root-level rows by their own sibling order", () => {
+    expect(indices.get("A")).toBe(0);
+    expect(indices.get("B")).toBe(1);
+  });
+
+  it("indexes nested rows by sibling order under their own immediate parent, independent of the parent's index", () => {
+    expect(indices.get("A.1")).toBe(0);
+    expect(indices.get("A.2")).toBe(1);
+    expect(indices.get("B.task1")).toBe(0);
+  });
+
+  it("restarts the counter per parent so unrelated groups don't share a sequence", () => {
+    expect(indices.get("A.1.task1")).toBe(0);
+    expect(indices.get("A.1.task2")).toBe(1);
+    expect(indices.get("A.2.task1")).toBe(0);
   });
 });
 

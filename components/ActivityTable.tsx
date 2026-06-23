@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { deriveSectionInfo, isHiddenByCollapse } from "@/lib/schedule/wbsGrouping";
+import { deriveSectionInfo, isHiddenByCollapse, assignSiblingIndices } from "@/lib/schedule/wbsGrouping";
 
 export interface ActivityRow {
   id: string;
@@ -19,7 +19,7 @@ export interface ActivityRow {
   customFields: Record<string, string>;
 }
 
-type Filter = "all" | "milestones" | "critical" | "in_progress";
+type Filter = "all" | "milestones" | "critical" | "in_progress" | "not_completed";
 type Sort = "wbs" | "start" | "slack";
 
 interface RenderItem {
@@ -91,8 +91,9 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
       }
     }
 
-    const sectionIndex = new Map<string, number>();
-    let nextIndex = 0;
+    const visibleSections = candidates.filter((a) => a.type === "summary" && hasVisibleDescendant.has(a.id));
+    const siblingIndex = assignSiblingIndices(visibleSections, info);
+
     const result: RenderItem[] = [];
     for (const a of candidates) {
       const isLeaf = a.type !== "summary";
@@ -100,10 +101,9 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
       if (!included) continue;
       const rowInfo = info.get(a.id)!;
       if (isHiddenByCollapse(rowInfo.ancestorIds, collapsed)) continue;
-      if (rowInfo.topSectionId && !sectionIndex.has(rowInfo.topSectionId)) sectionIndex.set(rowInfo.topSectionId, nextIndex++);
       result.push({
         row: a,
-        paletteIndex: rowInfo.topSectionId ? sectionIndex.get(rowInfo.topSectionId)! : 0,
+        paletteIndex: siblingIndex.get(a.id) ?? 0,
         descendantCount: descendantCounts.get(a.id) ?? 0,
       });
     }
