@@ -16,7 +16,7 @@ export default async function CompletenessPage({ params, searchParams }: { param
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link href={`/projects/${project.id}`} className="text-sm text-slate-500">← {project.name}</Link>
-      <h1 className="mb-1 mt-1 text-xl font-semibold">Completeness</h1>
+      <h1 className="mb-1 mt-1 text-xl font-semibold">Task Granularity</h1>
       {searchParams.wizard === "1" && (
         <WizardBanner
           projectId={project.id}

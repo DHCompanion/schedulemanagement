@@ -14,7 +14,7 @@ export default async function ImportPage({ params }: { params: { id: string } })
       <Link href={`/projects/${project.id}`} className="text-sm text-slate-500">
         ← {project.name}
       </Link>
-      <h1 className="mb-4 mt-1 text-xl font-semibold">Import schedule (MS Project XML)</h1>
+      <h1 className="mb-4 mt-1 text-xl font-semibold">Import Schedule (MS Project XML)</h1>
       <ImportWizard projectId={project.id} />
     </main>
   );

@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 const STEPS = [
-  { path: "health", label: "Schedule health" },
-  { path: "normalize", label: "Normalize activity names" },
-  { path: "completeness", label: "Completeness" },
+  { path: "health", label: "Schedule Health" },
+  { path: "normalize", label: "Task Naming" },
+  { path: "completeness", label: "Task Granularity" },
 ] as const;
 
 export function WizardBanner({ projectId, step, why }: { projectId: string; step: 0 | 1 | 2; why: string }) {

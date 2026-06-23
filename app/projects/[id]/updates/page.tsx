@@ -19,7 +19,7 @@ export default async function UpdatesPage({ params }: { params: { id: string } }
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link href={`/projects/${project.id}`} className="text-sm text-slate-500">← {project.name}</Link>
-      <h1 className="mb-4 mt-1 text-xl font-semibold">Weekly updates</h1>
+      <h1 className="mb-4 mt-1 text-xl font-semibold">Progress Update</h1>
 
       {!latest ? (
         <p className="text-slate-500">Import a schedule before starting weekly updates.</p>
