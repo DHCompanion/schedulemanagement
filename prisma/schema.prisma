@@ -28,6 +28,7 @@ model Project {
   tradeAssignments    ProjectTradeAssignment[]
   completenessDismissals CompletenessDismissal[]
   completenessSplits     CompletenessSplit[]
+  tradeScopeDismissals   TradeScopeDismissal[]
 }
 
 model ScheduleImport {
@@ -298,5 +299,17 @@ model CompletenessSplit {
   acceptedBy             String?
   createdAt              DateTime @default(now())
 
+  @@index([projectId])
+}
+
+model TradeScopeDismissal {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  canonicalScope String
+  dismissedBy    String?
+  createdAt      DateTime @default(now())
+
+  @@unique([projectId, canonicalScope])
   @@index([projectId])
 }

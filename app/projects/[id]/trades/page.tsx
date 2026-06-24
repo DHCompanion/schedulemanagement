@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { suggestScopes } from "@/lib/normalize/suggestScopes";
-import { getTradeDictionary, getKnownDisciplines, getTradePartners, getProjectAssignments } from "@/lib/trades/tradesService";
+import { getTradeDictionary, getKnownDisciplines, getTradePartners, getProjectAssignments, getDismissedScopes } from "@/lib/trades/tradesService";
 import { applyTradeDictionaryWith } from "@/lib/trades/applyTradeDictionary";
 import { TradesPanel, type DisciplineRow, type AssignmentRow } from "@/components/TradesPanel";
 
@@ -31,8 +31,11 @@ export default async function TradesPage({ params }: { params: { id: string } })
   const knownDisciplines = await getKnownDisciplines();
   const partners = await getTradePartners();
   const assignments = await getProjectAssignments(project.id);
+  const dismissedScopes = await getDismissedScopes(project.id);
 
-  const disciplineRows: DisciplineRow[] = unmappedScopes.map((scope) => ({ canonicalScope: scope, suggestions: suggestScopes(scope, knownDisciplines) }));
+  const dismissed = new Set(dismissedScopes);
+  const reviewScopes = unmappedScopes.filter((scope) => !dismissed.has(scope));
+  const disciplineRows: DisciplineRow[] = reviewScopes.map((scope) => ({ canonicalScope: scope, suggestions: suggestScopes(scope, knownDisciplines) }));
   const disciplinesPresent = [...new Set(mapped.map((m) => m.discipline))].sort();
   const assignmentRows: AssignmentRow[] = disciplinesPresent.map((discipline) => ({ discipline, currentCompany: assignments.get(discipline) ?? "" }));
 
@@ -47,7 +50,14 @@ export default async function TradesPage({ params }: { params: { id: string } })
       {!latest ? (
         <p className="text-slate-500">Import a schedule first.</p>
       ) : (
-        <TradesPanel projectId={project.id} disciplineRows={disciplineRows} assignmentRows={assignmentRows} knownDisciplines={knownDisciplines} partners={partners} />
+        <TradesPanel
+          projectId={project.id}
+          disciplineRows={disciplineRows}
+          assignmentRows={assignmentRows}
+          knownDisciplines={knownDisciplines}
+          partners={partners}
+          dismissedScopes={dismissedScopes}
+        />
       )}
     </main>
   );

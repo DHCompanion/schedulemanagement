@@ -46,3 +46,20 @@ export async function assignTradePartner(projectId: string, discipline: string, 
     update: { tradePartnerId: partner.id },
   });
 }
+
+export async function dismissScope(projectId: string, canonicalScope: string, dismissedBy?: string): Promise<void> {
+  await prisma.tradeScopeDismissal.upsert({
+    where: { projectId_canonicalScope: { projectId, canonicalScope } },
+    create: { projectId, canonicalScope, dismissedBy },
+    update: {},
+  });
+}
+
+export async function restoreScope(projectId: string, canonicalScope: string): Promise<void> {
+  await prisma.tradeScopeDismissal.deleteMany({ where: { projectId, canonicalScope } });
+}
+
+export async function getDismissedScopes(projectId: string): Promise<string[]> {
+  const rows = await prisma.tradeScopeDismissal.findMany({ where: { projectId }, orderBy: { createdAt: "desc" } });
+  return rows.map((r) => r.canonicalScope);
+}
