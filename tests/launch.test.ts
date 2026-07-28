@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vites
 import { GET } from "@/app/launch/route";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { appPath, appUrl } from "@/lib/http";
+import { appPath, appUrl, osAppOrigins } from "@/lib/http";
 import { SCOPE_COOKIE, readScope } from "@/lib/scope";
 
 const OS_ORIGIN = "https://sgconnect.dev";
@@ -56,6 +56,13 @@ describe("base-path aware URLs", () => {
 
   it("redirects through APP_BASE_URL so the user stays behind the OS proxy", () => {
     expect(appUrl(launchRequest(""), "/projects/1")).toBe("https://sgconnect.dev/schedule-manager/projects/1");
+  });
+
+  it("parses the OS origin allowlist, trimming and dropping blanks", () => {
+    process.env.SKILES_OS_APP_ORIGIN = "https://www.sgconnect.dev , https://sgconnect.dev ,";
+    expect(osAppOrigins()).toEqual(["https://www.sgconnect.dev", "https://sgconnect.dev"]);
+    delete process.env.SKILES_OS_APP_ORIGIN;
+    expect(osAppOrigins()).toEqual([]);
   });
 
   it("names the variable when APP_BASE_URL is malformed", () => {
@@ -144,7 +151,8 @@ describe.runIf(!!process.env.DATABASE_URL)("OS launch binds a project", () => {
     );
 
     const scope = await readScope(res.cookies.get(SCOPE_COOKIE)?.value, Math.floor(Date.now() / 1000));
-    expect(scope).toMatchObject({ projectId: project?.id, osProjectId, personId: 4 });
+    // personName rides along so the project banner can name who is signed in.
+    expect(scope).toMatchObject({ projectId: project?.id, osProjectId, personId: 4, personName: "A. Woodyard" });
     // The shared-password session is cleared: an unscoped session sitting
     // alongside a scoped one would defeat the scoping.
     expect(res.cookies.get(SESSION_COOKIE)?.value).toBe("");

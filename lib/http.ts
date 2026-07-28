@@ -33,3 +33,14 @@ export function appUrl(req: Request, path: string): string {
   }
   return `${configured}${path}`;
 }
+
+// SKILES_OS_APP_ORIGIN is a comma-separated list of OS origins. One value was too
+// rigid: the OS builds returnUrl from window.location.origin, production serves
+// www while the apex redirects to it, and every launch 400d. Shared by the launch
+// guard and the "back to Connect" link so they cannot drift.
+export function osAppOrigins(): string[] {
+  return (process.env.SKILES_OS_APP_ORIGIN ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}

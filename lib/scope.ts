@@ -19,6 +19,8 @@ export type ProjectScope = {
   projectId: string;
   osProjectId: number;
   personId: number;
+  /** Optional: absent from cookies minted before the banner existed. */
+  personName?: string | null;
   accessRole: string | null;
   exp: number;
 };

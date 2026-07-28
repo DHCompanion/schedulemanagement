@@ -44,8 +44,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   return (
     <main className="mx-auto max-w-4xl p-4 sm:p-6">
-      <Link href="/" className="text-sm text-slate-500">← Projects</Link>
-      <div className="mb-4 mt-1 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">{project.name}</h1>
         <div className="flex flex-wrap items-center gap-2">
           <Link href={`/projects/${project.id}/normalize`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">

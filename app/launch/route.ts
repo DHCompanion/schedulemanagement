@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { appUrl } from "@/lib/http";
+import { appUrl, osAppOrigins } from "@/lib/http";
 import { getProjectContext, getTradePartners } from "@/lib/os-gateway";
 import { SCOPE_COOKIE, scopeCookieOptions, signScope } from "@/lib/scope";
 
@@ -17,7 +17,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
   const returnUrl = url.searchParams.get("returnUrl") ?? "";
-  const osOrigins = allowedOsOrigins();
+  const osOrigins = osAppOrigins();
 
   if (!token) return new NextResponse("Missing token", { status: 400 });
 
@@ -59,6 +59,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       projectId: project.id,
       osProjectId,
       personId,
+      personName: context.person?.displayName ?? null,
       accessRole: context.access?.accessRole ?? null,
     },
     Math.floor(Date.now() / 1000)
@@ -94,18 +95,6 @@ async function cacheTradePartners(token: string, projectId: string): Promise<voi
   } catch {
     // Keep whatever was cached previously.
   }
-}
-
-// SKILES_OS_APP_ORIGIN is a comma-separated list. One value was too rigid: the OS
-// builds returnUrl from window.location.origin, production serves www but the
-// apex is what was configured, and every launch 400d. Preview deployments of the
-// OS are a third legitimate origin. Matching is still an exact origin comparison
-// against the list — this widens what counts as "the OS", not the guard itself.
-function allowedOsOrigins(): string[] {
-  return (process.env.SKILES_OS_APP_ORIGIN ?? "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
 }
 
 function isOsOrigin(candidate: string, allowedOrigins: string[]): boolean {
