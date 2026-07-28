@@ -16,3 +16,7 @@ next-env.d.ts
 
 # Brainstorming visual-companion session files
 .superpowers/
+.vercel
+.env*
+# ...but the checked-in template must stay tracked (vercel link added .env*)
+!.env.example
