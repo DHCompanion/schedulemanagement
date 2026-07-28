@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { appPath } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function UpdatesPage({ params }: { params: { id: string } }
       {!latest ? (
         <p className="text-slate-500">Import a schedule before starting weekly updates.</p>
       ) : (
-        <form action="/api/updates" method="post" className="mb-6 flex flex-wrap items-end gap-2 rounded border border-slate-200 bg-white p-3">
+        <form action={appPath("/api/updates")} method="post" className="mb-6 flex flex-wrap items-end gap-2 rounded border border-slate-200 bg-white p-3">
           <input type="hidden" name="projectId" value={project.id} />
           <label className="text-sm">As-of date
             <input type="date" name="asOfDate" defaultValue={today} className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm" />

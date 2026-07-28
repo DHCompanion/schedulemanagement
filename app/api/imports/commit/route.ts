@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { commitImport } from "@/lib/import/commitImport";
+import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -10,9 +11,19 @@ export async function POST(req: Request) {
   if (!(file instanceof File) || !projectId) {
     return NextResponse.json({ error: { message: "file and projectId are required." } }, { status: 400 });
   }
+
+  const scope = await scopeFromRequest(req, Math.floor(Date.now() / 1000));
+  const denied = denyOutOfScope(scope, projectId);
+  if (denied) return denied;
   const xml = await file.text();
   try {
-    const { id } = await commitImport({ projectId, fileName: file.name, xml, statusDateOverride: statusDate });
+    const { id } = await commitImport({
+      projectId,
+      fileName: file.name,
+      xml,
+      statusDateOverride: statusDate,
+      personId: scope?.personId,
+    });
     const [importCount, project] = await Promise.all([
       prisma.scheduleImport.count({ where: { projectId } }),
       prisma.project.findUnique({ where: { id: projectId }, select: { onboardingCompletedAt: true } }),

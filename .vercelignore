@@ -1,0 +1,20 @@
+# Vercel uses this INSTEAD of .gitignore when deciding what to upload, so it has
+# to repeat the exclusions that matter — it is not additive.
+#
+# .env is a symlink to .env.local here. Uploading the link without its (ignored)
+# target leaves a dangling .env on the build machine, and `next build` fails with
+# ENOENT while stat-ing it. Environment values come from the Vercel project, not
+# from an uploaded file.
+.env
+.env.local
+
+node_modules
+.next
+
+# Large sample schedules and the real-data parser fixture (tests run in CI, not
+# on the build machine).
+/*.xml
+/tests/fixtures/cath-ir-baseline.xml
+
+.superpowers
+CLAUDE-SECURITY-*

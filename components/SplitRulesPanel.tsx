@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { appPath } from "@/lib/http";
 
 export interface SplitRuleRow {
   coarseScope: string;
@@ -16,7 +17,7 @@ export function SplitRulesPanel({ rules, isAdmin }: { rules: SplitRuleRow[]; isA
   async function remove(coarseScope: string, finerScope: string) {
     setBusy(true);
     setError(null);
-    const res = await fetch("/api/completeness/split-rules", {
+    const res = await fetch(appPath("/api/completeness/split-rules"), {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ coarseScope, finerScope }),

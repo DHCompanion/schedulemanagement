@@ -54,7 +54,7 @@ describe.runIf(hasDb)("updateService", () => {
     // a fresh draft can start once the prior is finalized
     const d3 = await getOrCreateDraft(project.id, "2026-06-25", 3);
     expect(d3.id).not.toBe(d1.id);
-  }, 30000); // many sequential round-trips over Railway's public proxy; in-region latency is far lower
+  }, 30000); // many sequential round-trips to a remote Neon endpoint; in-region latency is far lower
 
   it("refuses to start an update when no import exists", async () => {
     const p = await prisma.project.create({ data: { name: "No Import Test" } });

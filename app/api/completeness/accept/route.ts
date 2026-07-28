@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { acceptSplit } from "@/lib/completeness/acceptSplit";
+import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
 
 interface AcceptBody {
   projectId?: string;
@@ -16,8 +17,21 @@ export async function POST(req: Request) {
       { status: 422 },
     );
   }
+
+  // body.acceptedBy is a client-supplied label, not identity — the verified
+  // person comes off the signed scope.
+  const scope = await scopeFromRequest(req, Math.floor(Date.now() / 1000));
+  const denied = denyOutOfScope(scope, body.projectId);
+  if (denied) return denied;
+
   try {
-    const { newImportId } = await acceptSplit(body.projectId, body.canonicalActivityKey, body.coarseScope, body.acceptedBy);
+    const { newImportId } = await acceptSplit(
+      body.projectId,
+      body.canonicalActivityKey,
+      body.coarseScope,
+      body.acceptedBy,
+      scope?.personId,
+    );
     return NextResponse.json({ ok: true, newImportId });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to accept.";

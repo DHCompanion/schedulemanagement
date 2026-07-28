@@ -1,3 +1,4 @@
+import { appPath } from "@/lib/http";
 function Field({ label, name, type = "text" }: { label: string; name: string; type?: string }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
@@ -12,7 +13,7 @@ export default function NewProjectPage({ searchParams }: { searchParams: { error
     <main className="mx-auto max-w-lg p-4 sm:p-6">
       <h1 className="mb-4 text-xl font-semibold">New Project</h1>
       {searchParams.error && <p className="mb-3 text-sm text-red-600">Name is required.</p>}
-      <form action="/api/projects" method="post" className="flex flex-col gap-3">
+      <form action={appPath("/api/projects")} method="post" className="flex flex-col gap-3">
         <Field label="Name *" name="name" />
         <Field label="Client" name="client" />
         <Field label="Sector (e.g. Healthcare)" name="sector" />

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { appPath } from "@/lib/http";
 
 export interface LookaheadFormRow {
   externalUid: number;
@@ -49,14 +50,14 @@ export function LookaheadUpdateForm({
       percentComplete: r.percentComplete,
       note: r.note || null,
     }));
-    const res = await fetch(`/api/updates/${updateId}/entries`, {
+    const res = await fetch(appPath(`/api/updates/${updateId}/entries`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entries }),
     });
     if (!res.ok) { setError("Failed to save."); setBusy(false); return; }
     if (finalize) {
-      const fin = await fetch(`/api/updates/${updateId}/finalize`, { method: "POST" });
+      const fin = await fetch(appPath(`/api/updates/${updateId}/finalize`), { method: "POST" });
       if (!fin.ok) { setError("Failed to finalize."); setBusy(false); return; }
     }
     setBusy(false);

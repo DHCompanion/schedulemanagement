@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { appPath } from "@/lib/http";
 
 export interface UnmappedRow {
   rawName: string;
@@ -61,7 +62,7 @@ export function NormalizePanel({
     const mappings = Object.entries(effectiveValues)
       .filter(([, s]) => s.trim())
       .map(([rawName, canonicalScope]) => ({ rawName, canonicalScope: canonicalScope.trim() }));
-    const res = await fetch("/api/normalize", {
+    const res = await fetch(appPath("/api/normalize"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mappings }),
@@ -75,7 +76,7 @@ export function NormalizePanel({
       const coarseScope = effectiveValues[rawName]?.trim();
       if (!coarseScope || !finerRaw.trim()) continue;
       for (const finerScope of finerRaw.split(",").map((s) => s.trim()).filter(Boolean)) {
-        await fetch("/api/completeness/split-rules", {
+        await fetch(appPath("/api/completeness/split-rules"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ coarseScope, finerScope }),

@@ -5,11 +5,13 @@ _Last updated: 2026-06-21 (Slice 5f)_
 ## What this is
 A construction schedule tool: import MS Project XML → verify → capture weekly field
 progress → export updates back to MS Project → normalize names → attribute trades.
-Next.js 14 + Prisma + Postgres, deployed on Railway.
+Next.js 14 + Prisma + Postgres (Neon), deployed on Vercel.
 
-- **App (live):** https://schedulemanagement-production-bb38.up.railway.app
+- **App (live):** https://schedule-manager-orcin-nine.vercel.app/schedule-manager
+  (served under `BASE_PATH`; the Railway deployment it replaced is being retired)
 - **Repo:** `github.com/DHCompanion/schedulemanagement` — **`master` auto-deploys to
-  Railway** (~60–90s). `gh` CLI is at `~/.local/bin/gh`, authed as `DHCompanion`.
+  Vercel** (`skiles-group/schedule-manager`). `gh` CLI is at `~/.local/bin/gh`,
+  authed as `DHCompanion`.
 - **Working dir:** `/home/coder/projects/Skilesconnect/schedulemanagement`
 
 ## Live in production (Slices 1, 2, 3, 5a, 5b, 5c, 5d, 5e, 5f)
@@ -77,9 +79,9 @@ Full attribution chain now in data: `name → scope → discipline → project's
 - **Build directly on `master`** — no feature branches, no commit-permission prompts
   (prototype phase). Still gate every push on `npm run test && npm run build`.
 - **TDD per task**, commit per task.
-- **DB-gated tests** run only with `DATABASE_URL` set → use the Railway **public** URL
-  (Railway dashboard → Postgres → Connect). They self-clean. Use a `30000`ms timeout
-  for multi-round-trip tests (public-proxy latency).
+- **DB-gated tests** run only with `DATABASE_URL` set → use the Neon pooled URL from
+  `.env`. They self-clean. Use a `30000`ms timeout for multi-round-trip tests
+  (remote-endpoint latency).
 - **Migrations (offline diff):** `cp prisma/schema.prisma /tmp/schema-prev.prisma`,
   edit, `prisma migrate diff --from-schema-datamodel /tmp/schema-prev.prisma
   --to-schema-datamodel prisma/schema.prisma --script`, then `prisma migrate deploy`.

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { appPath } from "@/lib/http";
 
 const STEPS = [
   { path: "health", label: "Schedule Health" },
@@ -27,7 +28,7 @@ export function WizardBanner({ projectId, step, why }: { projectId: string; step
             Next
           </Link>
         ) : (
-          <form action={`/api/projects/${projectId}/complete-onboarding`} method="POST">
+          <form action={appPath(`/api/projects/${projectId}/complete-onboarding`)} method="POST">
             <button type="submit" className="rounded bg-blue-900 px-3 py-1.5 text-xs font-medium text-white">
               Finish setup
             </button>

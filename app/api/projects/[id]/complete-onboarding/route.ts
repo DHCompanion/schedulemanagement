@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requestBaseUrl } from "@/lib/http";
+import { appUrl } from "@/lib/http";
+import { denyIfOutOfScope } from "@/lib/scope";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
+  const denied = await denyIfOutOfScope(req, params.id);
+  if (denied) return denied;
+
   await prisma.project.update({ where: { id: params.id }, data: { onboardingCompletedAt: new Date() } });
-  const base = requestBaseUrl(req);
-  return NextResponse.redirect(new URL(`/projects/${params.id}`, base), { status: 303 });
+  return NextResponse.redirect(appUrl(req, `/projects/${params.id}`), { status: 303 });
 }
