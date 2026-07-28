@@ -35,7 +35,7 @@ function stubGatewayContext(osProjectId: number, name: string) {
 beforeEach(() => {
   process.env.NEXT_PUBLIC_BASE_PATH = "/schedule-manager";
   process.env.APP_BASE_URL = "https://sgconnect.dev/schedule-manager";
-  process.env.SKILES_OS_APP_ORIGIN = OS_ORIGIN;
+  process.env.SKILES_OS_APP_ORIGIN = `https://www.sgconnect.dev, ${OS_ORIGIN}`;
   process.env.SKILES_OS_API_BASE_URL = "https://api.sgconnect.dev/api";
   process.env.APP_SESSION_TOKEN = "token-abc";
 });
@@ -89,6 +89,21 @@ describe("OS launch handoff", () => {
 
   it("rejects a returnUrl pointing off the OS origin", async () => {
     const res = await GET(launchRequest("?token=t&returnUrl=https://evil.example/steal"));
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts every configured OS origin", async () => {
+    // Production serves www while the apex redirects to it, so the OS builds a
+    // www returnUrl. Accepting only one of them 400d every real launch.
+    for (const origin of ["https://www.sgconnect.dev", OS_ORIGIN]) {
+      stubGateway(false);
+      const res = await GET(launchRequest(`?token=t&returnUrl=${origin}/tools`));
+      expect(res.status, `${origin} should pass the guard`).toBe(303);
+    }
+  });
+
+  it("still rejects a lookalike host", async () => {
+    const res = await GET(launchRequest("?token=t&returnUrl=https://sgconnect.dev.evil.example/tools"));
     expect(res.status).toBe(400);
   });
 

@@ -17,12 +17,12 @@ export async function GET(req: Request): Promise<NextResponse> {
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
   const returnUrl = url.searchParams.get("returnUrl") ?? "";
-  const osOrigin = process.env.SKILES_OS_APP_ORIGIN;
+  const osOrigins = allowedOsOrigins();
 
   if (!token) return new NextResponse("Missing token", { status: 400 });
 
   // Open-redirect guard: only bounce back to the OS itself.
-  if (returnUrl && !isOsOrigin(returnUrl, osOrigin)) {
+  if (returnUrl && !isOsOrigin(returnUrl, osOrigins)) {
     return new NextResponse("Invalid returnUrl", { status: 400 });
   }
 
@@ -31,7 +31,7 @@ export async function GET(req: Request): Promise<NextResponse> {
     context = await getProjectContext(token);
   } catch {
     // Expired or rejected token — send the user back to re-launch from the OS.
-    return NextResponse.redirect(returnUrl || osOrigin || appUrl(req, "/login"), 303);
+    return NextResponse.redirect(returnUrl || osOrigins[0] || appUrl(req, "/login"), 303);
   }
 
   const osProjectId = context.project?.id;
@@ -96,11 +96,30 @@ async function cacheTradePartners(token: string, projectId: string): Promise<voi
   }
 }
 
-function isOsOrigin(candidate: string, allowedOrigin: string | undefined): boolean {
-  if (!allowedOrigin) return false;
+// SKILES_OS_APP_ORIGIN is a comma-separated list. One value was too rigid: the OS
+// builds returnUrl from window.location.origin, production serves www but the
+// apex is what was configured, and every launch 400d. Preview deployments of the
+// OS are a third legitimate origin. Matching is still an exact origin comparison
+// against the list — this widens what counts as "the OS", not the guard itself.
+function allowedOsOrigins(): string[] {
+  return (process.env.SKILES_OS_APP_ORIGIN ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function isOsOrigin(candidate: string, allowedOrigins: string[]): boolean {
+  let candidateOrigin: string;
   try {
-    return new URL(candidate).origin === new URL(allowedOrigin).origin;
+    candidateOrigin = new URL(candidate).origin;
   } catch {
     return false;
   }
+  return allowedOrigins.some((allowed) => {
+    try {
+      return new URL(allowed).origin === candidateOrigin;
+    } catch {
+      return false;
+    }
+  });
 }

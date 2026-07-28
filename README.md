@@ -91,6 +91,9 @@ standalone with no OS env vars set — see `.env.example` for the integration se
   router navigation, but **not** raw `fetch()` URLs or `<form action>` — those go
   through `appPath()` in `lib/http.ts`. Route-handler redirects use `appUrl()`,
   which prefers `APP_BASE_URL` so the user stays behind the OS proxy.
+- `SKILES_OS_APP_ORIGIN` is a comma-separated allowlist of OS origins for the
+  launch `returnUrl`. Production serves `www` while the apex redirects to it, so
+  both belong in the list; a single value rejects the OS's own URL.
 - `GET /launch?token=…&returnUrl=…` is the OS handoff: it validates the
   short-lived gateway token by exchanging it for project context, then
   establishes the session. `/api/health` is what the OS health check polls. Both
