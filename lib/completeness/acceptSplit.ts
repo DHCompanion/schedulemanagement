@@ -8,6 +8,7 @@ export async function acceptSplit(
   canonicalActivityKey: string,
   coarseScope: string,
   acceptedBy?: string,
+  personId?: number | null,
 ): Promise<{ newImportId: string }> {
   const latest = await prisma.scheduleImport.findFirst({
     where: { projectId },
@@ -37,6 +38,7 @@ export async function acceptSplit(
         sourceFormat: latest.sourceFormat,
         fileName: latest.fileName,
         fileHash: latest.fileHash,
+        personId: personId ?? null,
         statusDate: latest.statusDate,
         projectStart: latest.projectStart,
         projectFinish: latest.projectFinish,
@@ -202,6 +204,7 @@ export async function acceptSplit(
         finerScopes: finerScopes as Prisma.InputJsonValue,
         mintedUids: mintedUids as Prisma.InputJsonValue,
         acceptedBy: acceptedBy ?? null,
+        personId: personId ?? null,
       },
     });
 

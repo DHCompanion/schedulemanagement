@@ -28,7 +28,20 @@ export function isAdmin(cookieValue: string | undefined): boolean {
   return token.length > 0 && cookieValue === token;
 }
 
-function parseCookie(req: Request, name: string): string | undefined {
+// Scoped to the base path so that, once the tool is proxied under
+// sgconnect.dev/schedule-manager, its session cookie is never sent to the OS or
+// to any other tool sharing the domain.
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: process.env.NEXT_PUBLIC_BASE_PATH || "/",
+    maxAge: 60 * 60 * 24 * 30,
+  };
+}
+
+export function parseCookie(req: Request, name: string): string | undefined {
   const header = req.headers.get("cookie") ?? "";
   for (const part of header.split(";")) {
     const [k, ...rest] = part.trim().split("=");

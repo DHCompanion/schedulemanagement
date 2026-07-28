@@ -23,7 +23,12 @@ function isMeaningful(e: EntryInput): boolean {
 }
 
 /** One draft per project: return the existing draft, else create one against the latest import. */
-export async function getOrCreateDraft(projectId: string, asOfDate: string, lookaheadWeeks: number): Promise<{ id: string }> {
+export async function getOrCreateDraft(
+  projectId: string,
+  asOfDate: string,
+  lookaheadWeeks: number,
+  personId?: number | null,
+): Promise<{ id: string }> {
   const existing = await prisma.progressUpdate.findFirst({ where: { projectId, state: "draft" } });
   if (existing) return { id: existing.id };
   const latest = await prisma.scheduleImport.findFirst({ where: { projectId }, orderBy: { importedAt: "desc" } });
@@ -35,6 +40,7 @@ export async function getOrCreateDraft(projectId: string, asOfDate: string, look
       asOfDate: toDbDate(asOfDate) ?? new Date(),
       lookaheadWeeks: [1, 3, 6].includes(lookaheadWeeks) ? lookaheadWeeks : 3,
       state: "draft",
+      personId: personId ?? null,
     },
   });
   return { id: created.id };

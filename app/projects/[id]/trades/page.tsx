@@ -4,7 +4,13 @@ import { prisma } from "@/lib/db";
 import { getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { suggestScopes } from "@/lib/normalize/suggestScopes";
-import { getTradeDictionary, getKnownDisciplines, getTradePartners, getProjectAssignments, getDismissedScopes } from "@/lib/trades/tradesService";
+import {
+  getTradeDictionary,
+  getProjectDisciplines,
+  getPartnersForDiscipline,
+  getProjectAssignments,
+  getDismissedScopes,
+} from "@/lib/trades/tradesService";
 import { applyTradeDictionaryWith } from "@/lib/trades/applyTradeDictionary";
 import { TradesPanel, type DisciplineRow, type AssignmentRow } from "@/components/TradesPanel";
 
@@ -28,16 +34,39 @@ export default async function TradesPage({ params }: { params: { id: string } })
 
   const tradeDict = await getTradeDictionary();
   const { mapped, unmappedScopes } = applyTradeDictionaryWith([...scopesPresent], tradeDict);
-  const knownDisciplines = await getKnownDisciplines();
-  const partners = await getTradePartners();
+  const disciplines = await getProjectDisciplines(project.id);
   const assignments = await getProjectAssignments(project.id);
   const dismissedScopes = await getDismissedScopes(project.id);
 
   const dismissed = new Set(dismissedScopes);
   const reviewScopes = unmappedScopes.filter((scope) => !dismissed.has(scope));
-  const disciplineRows: DisciplineRow[] = reviewScopes.map((scope) => ({ canonicalScope: scope, suggestions: suggestScopes(scope, knownDisciplines) }));
-  const disciplinesPresent = [...new Set(mapped.map((m) => m.discipline))].sort();
-  const assignmentRows: AssignmentRow[] = disciplinesPresent.map((discipline) => ({ discipline, currentCompany: assignments.get(discipline) ?? "" }));
+
+  // suggestScopes ranks by token overlap, so it needs names; map the winners
+  // back to the OS disciplines they came from.
+  const byName = new Map(disciplines.map((d) => [d.name, d]));
+  const disciplineRows: DisciplineRow[] = reviewScopes.map((scope) => ({
+    canonicalScope: scope,
+    suggestions: suggestScopes(scope, [...byName.keys()])
+      .map((name) => byName.get(name))
+      .filter((d): d is NonNullable<typeof d> => Boolean(d)),
+  }));
+
+  // Only disciplines this schedule actually contains get an assignment row.
+  const presentIds = [...new Map(mapped.map((m) => [m.discipline.id, m.discipline])).values()]
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const assignmentRows: AssignmentRow[] = await Promise.all(
+    presentIds.map(async (discipline) => {
+      const assigned = assignments.get(discipline.id);
+      return {
+        osDisciplineId: discipline.id,
+        disciplineName: discipline.name,
+        currentPartnerId: assigned?.osPartnerId ?? null,
+        currentPartnerName: assigned?.name ?? "",
+        onRoster: assigned?.onRoster ?? true,
+        partners: await getPartnersForDiscipline(project.id, discipline.id),
+      };
+    })
+  );
 
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
@@ -54,8 +83,7 @@ export default async function TradesPage({ params }: { params: { id: string } })
           projectId={project.id}
           disciplineRows={disciplineRows}
           assignmentRows={assignmentRows}
-          knownDisciplines={knownDisciplines}
-          partners={partners}
+          disciplines={disciplines}
           dismissedScopes={dismissedScopes}
         />
       )}

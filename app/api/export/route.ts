@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildExport } from "@/lib/export/buildExport";
+import { denyIfOutOfScope } from "@/lib/scope";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -8,6 +9,9 @@ export async function POST(req: Request) {
   if (!(file instanceof File) || !projectId) {
     return NextResponse.json({ error: { message: "file and projectId are required." } }, { status: 400 });
   }
+
+  const denied = await denyIfOutOfScope(req, projectId);
+  if (denied) return denied;
   const xml = await file.text();
   try {
     const out = await buildExport(projectId, xml, file.name);

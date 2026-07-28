@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { appPath } from "@/lib/http";
 
 interface DeletedTask {
   name: string;
@@ -21,7 +22,7 @@ export function ExportPanel({ projectId }: { projectId: string }) {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("projectId", projectId);
-    const res = await fetch("/api/export", { method: "POST", body: fd });
+    const res = await fetch(appPath("/api/export"), { method: "POST", body: fd });
     if (!res.ok) {
       setError((await res.json())?.error?.message ?? "Export failed.");
       setBusy(false);

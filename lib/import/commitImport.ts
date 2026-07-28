@@ -24,6 +24,8 @@ export interface CommitOptions {
   xml: string;
   statusDateOverride?: string | null;
   importedBy?: string | null;
+  /** OS person id from the verified launch scope; null in standalone mode. */
+  personId?: number | null;
   isBaseline?: boolean;
 }
 
@@ -40,6 +42,7 @@ export async function commitImport(opts: CommitOptions): Promise<{ id: string }>
         fileName: opts.fileName,
         fileHash,
         importedBy: opts.importedBy ?? null,
+        personId: opts.personId ?? null,
         projectTitleFromFile: parsed.header.titleFromFile,
         statusDate: toDbDate(statusDate),
         isBaseline,

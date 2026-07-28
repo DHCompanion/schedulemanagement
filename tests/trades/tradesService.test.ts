@@ -1,59 +1,118 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
-import { confirmDiscipline, getTradeDictionary, getKnownDisciplines, assignTradePartner, getProjectAssignments, getTradePartners, dismissScope, restoreScope, getDismissedScopes } from "@/lib/trades/tradesService";
+import {
+  confirmDiscipline,
+  getTradeDictionary,
+  getProjectDisciplines,
+  getPartnersForDiscipline,
+  assignTradePartner,
+  getProjectAssignments,
+  dismissScope,
+  restoreScope,
+  getDismissedScopes,
+} from "@/lib/trades/tradesService";
+
+const ELECTRICAL = { id: 4101, name: "Electrical", division: "26" };
+const LOW_VOLTAGE = { id: 4102, name: "Electrical - Low Voltage", division: "27" };
+
+/** Stands in for the roster Connect caches at launch. */
+async function seedRoster(projectId: string) {
+  await prisma.osTradePartner.createMany({
+    data: [
+      { projectId, osPartnerId: 9001, name: "ZZ Sparks Electric", doNotUse: false, disciplines: [ELECTRICAL, LOW_VOLTAGE] },
+      { projectId, osPartnerId: 9002, name: "ZZ Barred Electric", doNotUse: true, disciplines: [ELECTRICAL] },
+    ],
+  });
+}
 
 const hasDb = !!process.env.DATABASE_URL;
 
 describe.runIf(hasDb)("tradesService", () => {
   let projectId = "";
   const scopes: string[] = [];
-  const partners: string[] = [];
   afterAll(async () => {
     if (projectId) await prisma.project.delete({ where: { id: projectId } });
     if (scopes.length) await prisma.tradeDictionaryEntry.deleteMany({ where: { canonicalScope: { in: scopes } } });
-    if (partners.length) await prisma.tradePartner.deleteMany({ where: { name: { in: partners } } });
     await prisma.$disconnect();
   });
 
-  it("learns disciplines globally and assigns partners per project", async () => {
+  it("learns the scope mapping globally and assigns an OS partner per project", async () => {
     const project = await prisma.project.create({ data: { name: "Trades Test" } });
     projectId = project.id;
+    await seedRoster(project.id);
     const scope = `ZZ Scope ${Date.now()}`;
-    const company = `ZZ Co ${Date.now()}`;
     scopes.push(scope);
-    partners.push(company);
 
-    await confirmDiscipline(scope, "Electrical");
-    expect((await getTradeDictionary()).get(scope)).toBe("Electrical");
-    expect(await getKnownDisciplines()).toContain("Electrical");
+    // Disciplines are the OS ones attached to the project's partners; do-not-use
+    // partners contribute neither disciplines nor candidates.
+    expect(await getProjectDisciplines(project.id)).toEqual([ELECTRICAL, LOW_VOLTAGE]);
 
-    await confirmDiscipline(scope, "Electrical-Low-Voltage");
-    const e = await prisma.tradeDictionaryEntry.findUnique({ where: { canonicalScope: scope } });
-    expect(e?.tradeDiscipline).toBe("Electrical-Low-Voltage");
-    expect(e?.timesConfirmed).toBe(2);
+    await confirmDiscipline(scope, ELECTRICAL.id, ELECTRICAL.name);
+    expect((await getTradeDictionary()).get(scope)).toMatchObject({ id: ELECTRICAL.id, name: ELECTRICAL.name });
 
-    await assignTradePartner(project.id, "Electrical-Low-Voltage", company);
-    expect((await getProjectAssignments(project.id)).get("Electrical-Low-Voltage")).toBe(company);
-    expect(await getTradePartners()).toContain(company);
-    await assignTradePartner(project.id, "Electrical-Low-Voltage", company);
-    expect(await prisma.tradePartner.count({ where: { name: company } })).toBe(1);
+    await confirmDiscipline(scope, LOW_VOLTAGE.id, LOW_VOLTAGE.name);
+    const entry = await prisma.tradeDictionaryEntry.findUnique({ where: { canonicalScope: scope } });
+    expect(entry?.osDisciplineId).toBe(LOW_VOLTAGE.id);
+    expect(entry?.timesConfirmed).toBe(2);
+
+    expect(await getPartnersForDiscipline(project.id, LOW_VOLTAGE.id)).toEqual([
+      { osPartnerId: 9001, name: "ZZ Sparks Electric" },
+    ]);
+
+    await assignTradePartner(project.id, LOW_VOLTAGE.id, 9001, 77);
+    const assigned = (await getProjectAssignments(project.id)).get(LOW_VOLTAGE.id);
+    expect(assigned).toEqual({ osPartnerId: 9001, name: "ZZ Sparks Electric", onRoster: true });
+    expect((await prisma.projectTradeAssignment.findFirst({ where: { projectId: project.id } }))?.personId).toBe(77);
+
+    // Ids that are not on this project's roster are refused, as is a do-not-use
+    // partner — the client supplies them and cannot be trusted.
+    await assignTradePartner(project.id, ELECTRICAL.id, 9999);
+    await assignTradePartner(project.id, ELECTRICAL.id, 9002);
+    expect((await getProjectAssignments(project.id)).has(ELECTRICAL.id)).toBe(false);
   }, 30000);
 
-  it("route persists disciplines and assignments", async () => {
+  it("shows the live roster name and flags a partner that has left the project", async () => {
+    const project = await prisma.project.create({ data: { name: "Trades Rename Test" } });
+    await seedRoster(project.id);
+    await assignTradePartner(project.id, ELECTRICAL.id, 9001);
+
+    await prisma.osTradePartner.update({
+      where: { projectId_osPartnerId: { projectId: project.id, osPartnerId: 9001 } },
+      data: { name: "ZZ Sparks Electric LLC" },
+    });
+    expect((await getProjectAssignments(project.id)).get(ELECTRICAL.id)?.name).toBe("ZZ Sparks Electric LLC");
+
+    await prisma.osTradePartner.deleteMany({ where: { projectId: project.id } });
+    expect((await getProjectAssignments(project.id)).get(ELECTRICAL.id)).toEqual({
+      osPartnerId: 9001,
+      name: "ZZ Sparks Electric",
+      onRoster: false,
+    });
+
+    await prisma.project.delete({ where: { id: project.id } });
+  }, 30000);
+
+  it("route persists the mapping and the assignment", async () => {
     const { POST } = await import("@/app/api/trades/route");
     const project = await prisma.project.create({ data: { name: "Trades Route Test" } });
+    await seedRoster(project.id);
     const scope = `ZZ RouteScope ${Date.now()}`;
-    const company = `ZZ RouteCo ${Date.now()}`;
     scopes.push(scope);
-    partners.push(company);
+
     const req = new Request("http://localhost/api/trades", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId: project.id, disciplines: [{ canonicalScope: scope, discipline: "Plumbing" }], assignments: [{ discipline: "Plumbing", companyName: company }] }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId: project.id,
+        disciplines: [{ canonicalScope: scope, osDisciplineId: ELECTRICAL.id, disciplineName: ELECTRICAL.name }],
+        assignments: [{ osDisciplineId: ELECTRICAL.id, osPartnerId: 9001 }],
+      }),
     });
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect((await getTradeDictionary()).get(scope)).toBe("Plumbing");
-    expect((await getProjectAssignments(project.id)).get("Plumbing")).toBe(company);
+    expect((await getTradeDictionary()).get(scope)).toMatchObject({ id: ELECTRICAL.id });
+    expect((await getProjectAssignments(project.id)).get(ELECTRICAL.id)?.osPartnerId).toBe(9001);
+
     await prisma.project.delete({ where: { id: project.id } });
   }, 30000);
 

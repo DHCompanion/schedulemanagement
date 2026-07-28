@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { appPath } from "@/lib/http";
 
 interface Preview {
   title: string;
@@ -26,7 +27,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
     setError(null);
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch("/api/imports/preview", { method: "POST", body: fd });
+    const res = await fetch(appPath("/api/imports/preview"), { method: "POST", body: fd });
     setBusy(false);
     if (!res.ok) {
       setError((await res.json())?.error?.message ?? "Preview failed.");
@@ -45,7 +46,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
     fd.append("file", file);
     fd.append("projectId", projectId);
     if (statusDate) fd.append("statusDate", `${statusDate}:00`);
-    const res = await fetch("/api/imports/commit", { method: "POST", body: fd });
+    const res = await fetch(appPath("/api/imports/commit"), { method: "POST", body: fd });
     setBusy(false);
     if (!res.ok) {
       setError((await res.json())?.error?.message ?? "Import failed.");

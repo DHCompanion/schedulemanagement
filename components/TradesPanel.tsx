@@ -2,24 +2,49 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { appPath } from "@/lib/http";
 
-export interface DisciplineRow { canonicalScope: string; suggestions: string[]; }
-export interface AssignmentRow { discipline: string; currentCompany: string; }
+export interface OsDisciplineOption { id: number; name: string; division: string; }
+export interface PartnerOption { osPartnerId: number; name: string; }
+export interface DisciplineRow { canonicalScope: string; suggestions: OsDisciplineOption[]; }
+export interface AssignmentRow {
+  osDisciplineId: number;
+  disciplineName: string;
+  currentPartnerId: number | null;
+  currentPartnerName: string;
+  onRoster: boolean;
+  partners: PartnerOption[];
+}
 
 type Tab = "assignment" | "unmapped" | "dismissed";
 
-export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDisciplines, partners, dismissedScopes }: {
-  projectId: string; disciplineRows: DisciplineRow[]; assignmentRows: AssignmentRow[]; knownDisciplines: string[]; partners: string[]; dismissedScopes: string[];
+// Disciplines and companies are closed sets owned by Skiles Connect, so both are
+// <select>s. They were free-text inputs back when the vocabulary was whatever
+// anyone had typed before.
+export function TradesPanel({ projectId, disciplineRows, assignmentRows, disciplines, dismissedScopes }: {
+  projectId: string;
+  disciplineRows: DisciplineRow[];
+  assignmentRows: AssignmentRow[];
+  disciplines: OsDisciplineOption[];
+  dismissedScopes: string[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("assignment");
-  const [disc, setDisc] = useState<Record<string, string>>({});
-  const [comp, setComp] = useState<Record<string, string>>(() => Object.fromEntries(assignmentRows.map((r) => [r.discipline, r.currentCompany])));
+  const [disc, setDisc] = useState<Record<string, number>>({});
+  const [comp, setComp] = useState<Record<number, number>>(() =>
+    Object.fromEntries(
+      assignmentRows
+        .filter((row) => row.currentPartnerId !== null)
+        .map((row) => [row.osDisciplineId, row.currentPartnerId as number])
+    )
+  );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDiscipline, setBulkDiscipline] = useState("");
   const [busy, setBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const disciplineName = (id: number) => disciplines.find((d) => d.id === id)?.name ?? "";
 
   function toggleSelected(scope: string) {
     setSelected((prev) => {
@@ -31,11 +56,11 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDi
   }
 
   function applyBulkDiscipline() {
-    const value = bulkDiscipline.trim();
-    if (!value || selected.size === 0) return;
+    const id = Number(bulkDiscipline);
+    if (!Number.isInteger(id) || id <= 0 || selected.size === 0) return;
     setDisc((prev) => {
       const next = { ...prev };
-      for (const scope of selected) next[scope] = value;
+      for (const scope of selected) next[scope] = id;
       return next;
     });
     setSelected(new Set());
@@ -45,12 +70,16 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDi
   async function save() {
     setBusy(true);
     setError(null);
-    const disciplines = Object.entries(disc).filter(([, v]) => v.trim()).map(([canonicalScope, discipline]) => ({ canonicalScope, discipline: discipline.trim() }));
-    const assignments = Object.entries(comp).filter(([, v]) => v.trim()).map(([discipline, companyName]) => ({ discipline, companyName: companyName.trim() }));
-    const res = await fetch("/api/trades", {
+    const disciplinePayload = Object.entries(disc)
+      .filter(([, id]) => Number.isInteger(id))
+      .map(([canonicalScope, id]) => ({ canonicalScope, osDisciplineId: id, disciplineName: disciplineName(id) }));
+    const assignments = Object.entries(comp)
+      .filter(([, partnerId]) => Number.isInteger(partnerId))
+      .map(([osDisciplineId, osPartnerId]) => ({ osDisciplineId: Number(osDisciplineId), osPartnerId }));
+    const res = await fetch(appPath("/api/trades"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, disciplines, assignments }),
+      body: JSON.stringify({ projectId, disciplines: disciplinePayload, assignments }),
     });
     setBusy(false);
     if (!res.ok) {
@@ -63,7 +92,7 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDi
   async function dismiss(scope: string) {
     setRowBusy(scope);
     setError(null);
-    const res = await fetch("/api/trades/dismiss", {
+    const res = await fetch(appPath("/api/trades/dismiss"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, canonicalScope: scope }),
@@ -79,7 +108,7 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDi
   async function restore(scope: string) {
     setRowBusy(scope);
     setError(null);
-    const res = await fetch("/api/trades/restore", {
+    const res = await fetch(appPath("/api/trades/restore"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, canonicalScope: scope }),
@@ -92,10 +121,20 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDi
     router.refresh();
   }
 
+  if (disciplines.length === 0) {
+    return (
+      <p className="rounded border border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">
+        No trade partners for this project yet. Disciplines and companies come from the project&apos;s trade
+        partner roster in Skiles Connect, which loads when the tool is launched from there.
+      </p>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      <datalist id="known-disciplines">{knownDisciplines.map((d) => <option key={d} value={d} />)}</datalist>
-      <datalist id="known-partners">{partners.map((p) => <option key={p} value={p} />)}</datalist>
+      <p className="text-xs text-slate-500">
+        Disciplines and companies come from this project&apos;s roster in Skiles Connect, refreshed at each launch.
+      </p>
       {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       <div className="flex gap-1 border-b border-slate-200">
@@ -122,9 +161,27 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDi
           ) : (
             <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
               {assignmentRows.map((r) => (
-                <li key={r.discipline} className="px-3 py-3">
-                  <div className="font-medium">{r.discipline}</div>
-                  <input list="known-partners" value={comp[r.discipline] ?? ""} onChange={(e) => setComp((v) => ({ ...v, [r.discipline]: e.target.value }))} placeholder="Trade partner company" className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm" />
+                <li key={r.osDisciplineId} className="px-3 py-3">
+                  <div className="font-medium">{r.disciplineName}</div>
+                  {r.currentPartnerId !== null && !r.onRoster && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      {r.currentPartnerName} is no longer on this project&apos;s roster in Skiles Connect.
+                    </p>
+                  )}
+                  {r.partners.length === 0 ? (
+                    <p className="mt-2 text-xs text-slate-500">No partner on this project covers this discipline.</p>
+                  ) : (
+                    <select
+                      value={comp[r.osDisciplineId] ?? ""}
+                      onChange={(e) => setComp((v) => ({ ...v, [r.osDisciplineId]: Number(e.target.value) }))}
+                      className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                    >
+                      <option value="">Select a trade partner…</option>
+                      {r.partners.map((p) => (
+                        <option key={p.osPartnerId} value={p.osPartnerId}>{p.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </li>
               ))}
             </ul>
@@ -143,13 +200,14 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDi
               {selected.size > 0 && (
                 <div className="flex flex-wrap items-center gap-2 rounded border border-slate-300 bg-slate-50 px-3 py-2">
                   <span className="text-sm text-slate-600">{selected.size} selected</span>
-                  <input
-                    list="known-disciplines"
+                  <select
                     value={bulkDiscipline}
                     onChange={(e) => setBulkDiscipline(e.target.value)}
-                    placeholder="Trade discipline"
                     className="min-w-[10rem] flex-1 rounded border border-slate-300 px-2 py-1 text-sm"
-                  />
+                  >
+                    <option value="">Trade discipline…</option>
+                    {disciplines.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
                   <button onClick={applyBulkDiscipline} className="whitespace-nowrap rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white">
                     Apply to {selected.size} selected
                   </button>
@@ -174,11 +232,18 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, knownDi
                         {r.suggestions.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             {r.suggestions.map((s) => (
-                              <button key={s} onClick={() => setDisc((v) => ({ ...v, [r.canonicalScope]: s }))} className="rounded bg-slate-100 px-2 py-1 text-xs hover:bg-slate-200">{s}</button>
+                              <button key={s.id} onClick={() => setDisc((v) => ({ ...v, [r.canonicalScope]: s.id }))} className="rounded bg-slate-100 px-2 py-1 text-xs hover:bg-slate-200">{s.name}</button>
                             ))}
                           </div>
                         )}
-                        <input list="known-disciplines" value={disc[r.canonicalScope] ?? ""} onChange={(e) => setDisc((v) => ({ ...v, [r.canonicalScope]: e.target.value }))} placeholder="Trade discipline" className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm" />
+                        <select
+                          value={disc[r.canonicalScope] ?? ""}
+                          onChange={(e) => setDisc((v) => ({ ...v, [r.canonicalScope]: Number(e.target.value) }))}
+                          className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                        >
+                          <option value="">Trade discipline…</option>
+                          {disciplines.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
                       </div>
                     </div>
                   </li>

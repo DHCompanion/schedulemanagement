@@ -52,10 +52,11 @@ export async function dismissIssue(
   coarseScope: string,
   dismissedBy?: string,
   note?: string,
+  personId?: number | null,
 ): Promise<void> {
   await prisma.completenessDismissal.upsert({
     where: { projectId_canonicalActivityKey_coarseScope: { projectId, canonicalActivityKey, coarseScope } },
-    create: { projectId, canonicalActivityKey, coarseScope, dismissedBy, note },
-    update: { dismissedBy, note },
+    create: { projectId, canonicalActivityKey, coarseScope, dismissedBy, note, personId: personId ?? null },
+    update: { dismissedBy, note, personId: personId ?? null },
   });
 }
