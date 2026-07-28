@@ -9,7 +9,9 @@ export interface ScheduleCompleteness {
   summary: CompletenessSummary;
 }
 
-function isLeafActive(a: { type: string; isActive: boolean }): boolean {
+// Exported: the OS context packet rolls up the same population, and a second
+// copy of this rule would drift from this one.
+export function isLeafActive(a: { type: string; isActive: boolean }): boolean {
   return a.type !== "summary" && a.type !== "project_summary" && a.isActive;
 }
 

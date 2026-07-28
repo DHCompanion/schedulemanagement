@@ -4,9 +4,14 @@ import { SESSION_COOKIE, isAuthed } from "@/lib/auth";
 import { SCOPE_COOKIE, readScope } from "@/lib/scope";
 
 // Reached before a session exists: the login form, the OS launch handoff (which
-// mints the session), and the health check the OS polls. Paths here are
-// base-path-stripped — Next removes BASE_PATH before middleware sees them.
-const PUBLIC_PATHS = ["/login", "/api/login", "/launch", "/api/health"];
+// mints the session), the health check the OS polls, and the context callback
+// the OS makes server-to-server. Paths here are base-path-stripped — Next
+// removes BASE_PATH before middleware sees them.
+//
+// /api/os-context is authenticated, just not by a cookie: it carries an HMAC
+// signature the route verifies. Without it here every OS callback would be
+// redirected to /login, and the OS would report this tool unreachable.
+const PUBLIC_PATHS = ["/login", "/api/login", "/launch", "/api/health", "/api/os-context"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
