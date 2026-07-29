@@ -10,6 +10,9 @@ export interface ActivityRow {
   name: string;
   /** The standard name confirmed in Task Naming, when this activity has one. */
   canonicalScope: string | null;
+  /** Derived from the scope dictionary and this project's trade assignments. */
+  disciplineName: string | null;
+  partnerName: string | null;
   type: string;
   isCritical: boolean;
   outlineLevel: number;
@@ -44,12 +47,14 @@ function fmtDate(s: string | null): string {
   return s.slice(0, 10);
 }
 
-function leafMatches(a: ActivityRow, q: string, filter: Filter): boolean {
+function leafMatches(a: ActivityRow, q: string, filter: Filter, discipline: string): boolean {
   if (q.trim()) {
     const needle = q.trim().toLowerCase();
     const hit =
       a.name.toLowerCase().includes(needle) ||
       (a.canonicalScope ?? "").toLowerCase().includes(needle) ||
+      (a.disciplineName ?? "").toLowerCase().includes(needle) ||
+      (a.partnerName ?? "").toLowerCase().includes(needle) ||
       (a.wbsCode ?? "").includes(needle) ||
       String(a.externalId ?? "").includes(needle);
     if (!hit) return false;
@@ -58,12 +63,14 @@ function leafMatches(a: ActivityRow, q: string, filter: Filter): boolean {
   if (filter === "critical" && !a.isCritical) return false;
   if (filter === "in_progress" && !((a.percentComplete ?? 0) > 0 && (a.percentComplete ?? 0) < 100)) return false;
   if (filter === "not_completed" && a.percentComplete === 100) return false;
+  if (discipline !== "all" && a.disciplineName !== discipline) return false;
   return true;
 }
 
 export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [discipline, setDiscipline] = useState("all");
   const [sort, setSort] = useState<Sort>("wbs");
   const [openId, setOpenId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -78,7 +85,15 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
 
   const grouped = sort === "wbs";
 
-  const flatView = useMemo(() => sortedRows.filter((a) => leafMatches(a, q, filter)), [sortedRows, q, filter]);
+  const disciplines = useMemo(
+    () => [...new Set(rows.map((r) => r.disciplineName).filter((d): d is string => Boolean(d)))].sort(),
+    [rows],
+  );
+
+  const flatView = useMemo(
+    () => sortedRows.filter((a) => leafMatches(a, q, filter, discipline)),
+    [sortedRows, q, filter, discipline],
+  );
 
   const { items, leafCount } = useMemo(() => {
     if (!grouped) return { items: [] as RenderItem[], leafCount: 0 };
@@ -86,7 +101,7 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
     const candidates = sortedRows.filter((a) => a.type !== "project_summary");
     const info = deriveSectionInfo(candidates.map((a) => ({ id: a.id, outlineLevel: a.outlineLevel })));
     const matchedLeafIds = new Set(
-      candidates.filter((a) => a.type !== "summary" && leafMatches(a, q, filter)).map((a) => a.id),
+      candidates.filter((a) => a.type !== "summary" && leafMatches(a, q, filter, discipline)).map((a) => a.id),
     );
     const hasVisibleDescendant = new Set<string>();
     const descendantCounts = new Map<string, number>();
@@ -115,7 +130,7 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
       });
     }
     return { items: result, leafCount: matchedLeafIds.size };
-  }, [grouped, sortedRows, q, filter, collapsed]);
+  }, [grouped, sortedRows, q, filter, discipline, collapsed]);
 
   function toggleCollapsed(id: string) {
     setCollapsed((prev) => {
@@ -151,6 +166,8 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
             <div>% complete: {a.percentComplete ?? "—"}</div>
             <div>Duration (days): {a.durationDays?.toFixed(2) ?? "—"}</div>
             <div>Total float (days): {a.totalSlackDays?.toFixed(2) ?? "—"}</div>
+            {a.disciplineName && <div>Discipline: {a.disciplineName}</div>}
+            {a.partnerName && <div>Trade partner: {a.partnerName}</div>}
             {Object.entries(a.customFields).map(([k, v]) => (
               <div key={k}>{k}: {v}</div>
             ))}
@@ -176,6 +193,12 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
           <option value="in_progress">In progress</option>
           <option value="not_completed">Not completed</option>
         </select>
+        {disciplines.length > 0 && (
+          <select value={discipline} onChange={(e) => setDiscipline(e.target.value)} className="rounded border border-slate-300 px-2 py-2 text-sm">
+            <option value="all">All trades</option>
+            {disciplines.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        )}
         <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="rounded border border-slate-300 px-2 py-2 text-sm">
           <option value="wbs">Sort: WBS</option>
           <option value="start">Sort: Start</option>

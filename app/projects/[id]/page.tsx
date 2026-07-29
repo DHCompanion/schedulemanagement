@@ -11,6 +11,7 @@ import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getScheduleHealth } from "@/lib/health/healthService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
+import { resolveActivityTrades } from "@/lib/trades/activityTrades";
 
 export const dynamic = "force-dynamic";
 
@@ -43,12 +44,18 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
   // shows; the schedule's own wording stays visible underneath so the row is
   // still findable by what MS Project calls it.
   const scopeDict = await getDictionary();
+  const trades = await resolveActivityTrades(
+    project.id,
+    (latest?.activities ?? []).map((a) => ({ id: a.id, name: a.name })),
+  );
   const rows: ActivityRow[] = (latest?.activities ?? []).map((a) => ({
     id: a.id,
     externalId: a.externalId,
     wbsCode: a.wbsCode,
     name: a.name,
     canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
+    disciplineName: trades.get(a.id)?.disciplineName ?? null,
+    partnerName: trades.get(a.id)?.partnerName ?? null,
     type: a.type,
     isCritical: a.isCritical,
     outlineLevel: a.outlineLevel,
