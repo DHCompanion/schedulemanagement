@@ -16,7 +16,8 @@ import { TradesPanel, type DisciplineRow, type AssignmentRow } from "@/component
 
 export const dynamic = "force-dynamic";
 
-export default async function TradesPage({ params }: { params: { id: string } }) {
+export default async function TradesPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 

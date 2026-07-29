@@ -8,7 +8,8 @@ function Field({ label, name, type = "text" }: { label: string; name: string; ty
   );
 }
 
-export default function NewProjectPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function NewProjectPage(props: { searchParams: Promise<{ error?: string }> }) {
+  const searchParams = await props.searchParams;
   return (
     <main className="mx-auto max-w-lg p-4 sm:p-6">
       <h1 className="mb-4 text-xl font-semibold">New Project</h1>

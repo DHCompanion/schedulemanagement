@@ -45,7 +45,7 @@ describe.runIf(hasDb)("onboarding", () => {
   it("complete-onboarding route sets onboardingCompletedAt and redirects to the project page", async () => {
     const project = await prisma.project.create({ data: { name: "Onboarding Test 3", onboardingCompletedAt: null } });
     const { POST } = await import("@/app/api/projects/[id]/complete-onboarding/route");
-    const res = await POST(new Request(`http://localhost/api/projects/${project.id}/complete-onboarding`, { method: "POST" }), { params: { id: project.id } });
+    const res = await POST(new Request(`http://localhost/api/projects/${project.id}/complete-onboarding`, { method: "POST" }), { params: Promise.resolve({ id: project.id }) });
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toContain(`/projects/${project.id}`);
     const updated = await prisma.project.findUnique({ where: { id: project.id } });

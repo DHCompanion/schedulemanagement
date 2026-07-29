@@ -7,7 +7,8 @@ import { ExportPanel } from "@/components/ExportPanel";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExportPage({ params }: { params: { id: string } }) {
+export default async function ExportPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 

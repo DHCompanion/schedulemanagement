@@ -13,7 +13,8 @@ import { denyIfOutOfScope, isAdminRequest } from "@/lib/scope";
 // wiping them from one project's page would silently reset the others. Bad
 // entries are removed one at a time from the Task Naming and Task Granularity
 // pages.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const denied = await denyIfOutOfScope(req, params.id);
   if (denied) return denied;
   if (!(await isAdminRequest(req))) {

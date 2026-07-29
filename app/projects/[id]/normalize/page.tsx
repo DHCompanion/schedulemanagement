@@ -12,7 +12,11 @@ import { WizardBanner } from "@/components/WizardBanner";
 
 export const dynamic = "force-dynamic";
 
-export default async function NormalizePage({ params, searchParams }: { params: { id: string }; searchParams: { wizard?: string } }) {
+export default async function NormalizePage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ wizard?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 
@@ -24,7 +28,7 @@ export default async function NormalizePage({ params, searchParams }: { params: 
   const leaves = (latest?.activities ?? []).filter((a) => a.type !== "summary" && a.type !== "project_summary");
   const { mapped, unmappedNames } = await applyDictionary(leaves);
   const knownScopes = await getKnownScopes();
-  const jar = cookies();
+  const jar = await cookies();
   const adminSession = await isAdminFromCookies(
     jar.get(ADMIN_SESSION_COOKIE)?.value,
     jar.get(SCOPE_COOKIE)?.value,

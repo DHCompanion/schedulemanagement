@@ -5,7 +5,8 @@ import { ImportWizard } from "@/components/ImportWizard";
 
 export const dynamic = "force-dynamic";
 
-export default async function ImportPage({ params }: { params: { id: string } }) {
+export default async function ImportPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 

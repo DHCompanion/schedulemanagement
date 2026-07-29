@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { denyIfOutOfScope } from "@/lib/scope";
 import { saveEntries, type EntryInput } from "@/lib/updates/updateService";
 
-export async function POST(req: Request, { params }: { params: { updateId: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ updateId: string }> }) {
+  const params = await props.params;
   const body = (await req.json()) as { entries?: EntryInput[] };
 
   // The update names the project, not the request — resolve it before deciding

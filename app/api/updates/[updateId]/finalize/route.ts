@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { denyIfOutOfScope } from "@/lib/scope";
 import { finalizeUpdate } from "@/lib/updates/updateService";
 
-export async function POST(req: Request, { params }: { params: { updateId: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ updateId: string }> }) {
+  const params = await props.params;
   // The update names the project, not the request — resolve it before deciding
   // whether this session may finalize it.
   const update = await prisma.progressUpdate.findUnique({

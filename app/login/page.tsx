@@ -1,5 +1,6 @@
 import { appPath } from "@/lib/http";
-export default function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
+export default async function LoginPage(props: { searchParams: Promise<{ error?: string }> }) {
+  const searchParams = await props.searchParams;
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center p-6">
       <h1 className="mb-4 text-xl font-semibold">Schedule Management</h1>

@@ -19,7 +19,8 @@ function toDays(minutes: number | null, minutesPerDay: number | null): number | 
   return minutes / minutesPerDay;
 }
 
-export default async function ProjectPage({ params }: { params: { id: string } }) {
+export default async function ProjectPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 
@@ -31,7 +32,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   const currentProgress = resolveCurrentProgress(await getFinalizedEntries(project.id));
   const health = await getScheduleHealth(project.id);
-  const jar = cookies();
+  const jar = await cookies();
   const adminSession = await isAdminFromCookies(
     jar.get(ADMIN_SESSION_COOKIE)?.value,
     jar.get(SCOPE_COOKIE)?.value,

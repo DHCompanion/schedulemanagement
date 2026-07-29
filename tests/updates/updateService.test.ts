@@ -71,7 +71,7 @@ describe.runIf(hasDb)("updateService", () => {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ entries: [{ activityExternalUid: 9, canonicalActivityKey: "9|x", status: "in_progress", actualStart: null, actualFinish: null, percentComplete: 25, note: null }] }),
     });
-    const res = await POST(req, { params: { updateId: draft.id } });
+    const res = await POST(req, { params: Promise.resolve({ updateId: draft.id }) });
     expect(res.status).toBe(200);
     const saved = await prisma.progressEntry.findMany({ where: { progressUpdateId: draft.id } });
     expect(saved.length).toBe(1);

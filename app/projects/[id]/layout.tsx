@@ -16,15 +16,17 @@ export default async function ProjectLayout({
   params,
 }: {
   children: ReactNode;
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
+
   const project = await prisma.project.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { name: true, client: true },
   });
   if (!project) notFound();
 
-  const scope = await readScope(cookies().get(SCOPE_COOKIE)?.value, Math.floor(Date.now() / 1000));
+  const scope = await readScope((await cookies()).get(SCOPE_COOKIE)?.value, Math.floor(Date.now() / 1000));
   const person = scope?.personName ?? scope?.accessRole ?? null;
   // Launched from Connect: the way out is back to the Tools page, not this
   // tool's project list — which a scoped session cannot see anyway.
@@ -35,7 +37,7 @@ export default async function ProjectLayout({
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-baseline gap-3">
-            <Link href={`/projects/${params.id}`} className="truncate font-semibold text-slate-900">
+            <Link href={`/projects/${id}`} className="truncate font-semibold text-slate-900">
               {project.name}
             </Link>
             {project.client && <span className="truncate text-sm text-slate-500">{project.client}</span>}

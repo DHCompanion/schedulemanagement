@@ -12,7 +12,8 @@ function isoDay(d: Date | null): string {
   return d ? d.toISOString().slice(0, 10) : "";
 }
 
-export default async function UpdateEditorPage({ params }: { params: { id: string; updateId: string } }) {
+export default async function UpdateEditorPage(props: { params: Promise<{ id: string; updateId: string }> }) {
+  const params = await props.params;
   const update = await prisma.progressUpdate.findUnique({
     where: { id: params.updateId },
     include: { entries: true, scheduleImport: { include: { activities: true } } },

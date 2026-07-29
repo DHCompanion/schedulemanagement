@@ -15,7 +15,11 @@ const SECTIONS: { check: HealthCheck; title: string }[] = [
   { check: "percent_contradiction", title: "Percent contradictions" },
 ];
 
-export default async function HealthPage({ params, searchParams }: { params: { id: string }; searchParams: { wizard?: string } }) {
+export default async function HealthPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ wizard?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 

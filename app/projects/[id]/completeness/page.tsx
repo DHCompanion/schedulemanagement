@@ -13,14 +13,18 @@ import { WizardBanner } from "@/components/WizardBanner";
 
 export const dynamic = "force-dynamic";
 
-export default async function CompletenessPage({ params, searchParams }: { params: { id: string }; searchParams: { wizard?: string } }) {
+export default async function CompletenessPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ wizard?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 
   const completeness = await getCompleteness(project.id);
   const splitRulesMap = await getSplitRules();
   const splitRules: SplitRuleRow[] = [...splitRulesMap.entries()].map(([coarseScope, finerScopes]) => ({ coarseScope, finerScopes }));
-  const jar = cookies();
+  const jar = await cookies();
   const adminSession = await isAdminFromCookies(
     jar.get(ADMIN_SESSION_COOKIE)?.value,
     jar.get(SCOPE_COOKIE)?.value,

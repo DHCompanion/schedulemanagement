@@ -38,7 +38,7 @@ describe.runIf(hasDb)("project reset", () => {
     const projectId = await makeProjectWithImport("Reset Test Denied");
     const { POST } = await import("@/app/api/projects/[id]/reset/route");
 
-    const res = await POST(request(projectId), { params: { id: projectId } });
+    const res = await POST(request(projectId), { params: Promise.resolve({ id: projectId }) });
     expect(res.status).toBe(403);
     expect(await prisma.scheduleImport.count({ where: { projectId } })).toBe(1);
   }, 30000);
@@ -52,7 +52,7 @@ describe.runIf(hasDb)("project reset", () => {
     expect(activitiesBefore).toBeGreaterThan(0);
 
     const { POST } = await import("@/app/api/projects/[id]/reset/route");
-    const res = await POST(request(projectId, `${ADMIN_SESSION_COOKIE}=token-abc`), { params: { id: projectId } });
+    const res = await POST(request(projectId, `${ADMIN_SESSION_COOKIE}=token-abc`), { params: Promise.resolve({ id: projectId }) });
     expect(res.status).toBe(303);
 
     expect(await prisma.scheduleImport.count({ where: { projectId } })).toBe(0);
