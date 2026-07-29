@@ -290,6 +290,16 @@ Then, inside the transaction, replace the single-activity body. `otherActivities
     );
 ```
 
+> **Correction (applied in commit `e0ceafe`).** The `fanned` construction below
+> is WRONG and must not be copied verbatim. Fanning per coarse activity breaks
+> when both ends of a relationship are coarse activities *in the same batch*:
+> each loop re-points only one end, leaving rows that reference the replaced
+> activities. Build `fanned` with a single pass over `latest.relationships`
+> instead, keyed by a `mintedUidsByExternalUid` map: both ends minted → emit the
+> cross-product; one end minted → fan that end only; neither → skip (already
+> covered by `otherRelationships`). One pass means each relationship is emitted
+> exactly once. See `lib/completeness/acceptSplit.ts` for the shipped version.
+
 The finer-task creation, relationship fan-out and split record now loop over every coarse activity. Replace the single `tx.activity.createMany` for finer scopes, the `fanned` construction, and the single `tx.completenessSplit.create` with:
 
 ```ts
