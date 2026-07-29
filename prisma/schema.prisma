@@ -322,7 +322,7 @@ model CompletenessSplit {
   projectId              String
   project                Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sourceScheduleImportId String                      // the import this was accepted from
-  resultScheduleImportId String   @unique             // the synthetic import this created
+  resultScheduleImportId String                       // the synthetic import this created
   resultScheduleImport   ScheduleImport @relation(fields: [resultScheduleImportId], references: [id], onDelete: Cascade)
   coarseExternalUid      Int                          // for locating the task in the export XML
   coarseWbsCode          String?
@@ -339,6 +339,7 @@ model CompletenessSplit {
   createdAt              DateTime @default(now())
 
   @@index([projectId])
+  @@index([resultScheduleImportId])
 }
 
 model TradeScopeDismissal {

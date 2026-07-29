@@ -221,9 +221,15 @@ export async function resolveExportBase(
   const splits: CompletenessSplit[] = [];
   let current = await prisma.scheduleImport.findUniqueOrThrow({ where: { id: latestImportId } });
   while (current.isSynthetic) {
-    const split = await prisma.completenessSplit.findUnique({ where: { resultScheduleImportId: current.id } });
-    if (!split) break;
-    splits.unshift(split);
+    // Many splits can share one synthetic import — a batch accept records one
+    // row per coarse activity it replaced. Ordered so the export applies them
+    // deterministically.
+    const batch = await prisma.completenessSplit.findMany({
+      where: { resultScheduleImportId: current.id },
+      orderBy: { coarseExternalUid: "asc" },
+    });
+    if (batch.length === 0) break;
+    splits.unshift(...batch);
     if (!current.derivedFromImportId) break;
     current = await prisma.scheduleImport.findUniqueOrThrow({ where: { id: current.derivedFromImportId } });
   }

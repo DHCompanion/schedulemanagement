@@ -83,7 +83,7 @@ describe.runIf(hasDb)("acceptSplit", () => {
     expect(rels.some((r) => r.predecessorExternalUid === finerB.externalUid && r.successorExternalUid === 3)).toBe(true);
     expect(rels.some((r) => r.predecessorExternalUid === 2 || r.successorExternalUid === 2)).toBe(false);
 
-    const split = await prisma.completenessSplit.findUnique({ where: { resultScheduleImportId: newImportId } });
+    const split = await prisma.completenessSplit.findFirst({ where: { resultScheduleImportId: newImportId } });
     expect(split?.sourceScheduleImportId).toBe(imp.id);
     expect(split?.coarseExternalUid).toBe(2);
     expect(split?.coarseName).toBe(coarse);
@@ -142,4 +142,32 @@ describe.runIf(hasDb)("acceptSplit", () => {
     }));
     expect(res.status).toBe(422);
   });
+
+  it("collects every split recorded against one synthetic import", async () => {
+    const project = await prisma.project.create({ data: { name: "Multi Split Base" } });
+    const base = await prisma.scheduleImport.create({
+      data: { projectId: project.id, sourceFormat: "msproject_xml", fileName: "b.xml", fileHash: `h-${project.id}` },
+    });
+    const synthetic = await prisma.scheduleImport.create({
+      data: {
+        projectId: project.id, sourceFormat: "msproject_xml", fileName: "b.xml", fileHash: `h-${project.id}`,
+        isSynthetic: true, derivedFromImportId: base.id,
+      },
+    });
+    for (const [i, name] of ["Coarse A", "Coarse B"].entries()) {
+      await prisma.completenessSplit.create({
+        data: {
+          projectId: project.id, sourceScheduleImportId: base.id, resultScheduleImportId: synthetic.id,
+          coarseExternalUid: 100 + i, coarseName: name, finerScopes: ["X", "Y"], mintedUids: [200 + i * 2, 201 + i * 2],
+        },
+      });
+    }
+
+    const { baseImport, splits } = await resolveExportBase(synthetic.id);
+    expect(baseImport.id).toBe(base.id);
+    expect(splits).toHaveLength(2);
+    expect(splits.map((s) => s.coarseName).sort()).toEqual(["Coarse A", "Coarse B"]);
+
+    await prisma.project.delete({ where: { id: project.id } });
+  }, 30000);
 });
