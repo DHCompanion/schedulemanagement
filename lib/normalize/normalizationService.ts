@@ -39,6 +39,14 @@ export async function getKnownScopes(): Promise<string[]> {
   return rows.map((r) => r.canonicalScope);
 }
 
+// The dictionary is global and keyed on the raw name, so one bad entry follows
+// every project and every future import. Undoing it has to be possible.
+export async function removeMapping(rawName: string): Promise<void> {
+  const normalizedName = normalizeName(rawName);
+  if (!normalizedName) return;
+  await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName } });
+}
+
 export async function confirmMapping(rawName: string, canonicalScope: string): Promise<void> {
   const normalizedName = normalizeName(rawName);
   const scope = canonicalScope.trim();

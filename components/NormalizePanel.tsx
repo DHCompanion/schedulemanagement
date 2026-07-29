@@ -10,29 +10,14 @@ export interface UnmappedRow {
   suggestions: string[];
 }
 
-export function NormalizePanel({
-  projectId,
-  rows,
-  knownScopes,
-  isAdmin,
-}: {
-  projectId: string;
-  rows: UnmappedRow[];
-  knownScopes: string[];
-  isAdmin: boolean;
-}) {
+export function NormalizePanel({ rows, knownScopes }: { rows: UnmappedRow[]; knownScopes: string[] }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>({});
-  const [splits, setSplits] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function set(rawName: string, scope: string) {
     setValues((v) => ({ ...v, [rawName]: scope }));
-  }
-
-  function setSplit(rawName: string, finerScopes: string) {
-    setSplits((s) => ({ ...s, [rawName]: finerScopes }));
   }
 
   function useAsIs(rawName: string) {
@@ -50,16 +35,7 @@ export function NormalizePanel({
   async function save() {
     setBusy(true);
     setError(null);
-    // A row with finer scopes typed but no Standard scope still needs a
-    // canonical scope to attach the split rule to — default it to the raw
-    // name (same as "Use as-is") instead of silently dropping the row.
-    const effectiveValues: Record<string, string> = { ...values };
-    for (const r of rows) {
-      if (!effectiveValues[r.rawName]?.trim() && splits[r.rawName]?.trim()) {
-        effectiveValues[r.rawName] = r.rawName;
-      }
-    }
-    const mappings = Object.entries(effectiveValues)
+    const mappings = Object.entries(values)
       .filter(([, s]) => s.trim())
       .map(([rawName, canonicalScope]) => ({ rawName, canonicalScope: canonicalScope.trim() }));
     const res = await fetch(appPath("/api/normalize"), {
@@ -71,17 +47,6 @@ export function NormalizePanel({
       setBusy(false);
       setError((await res.json())?.error?.message ?? "Save failed.");
       return;
-    }
-    for (const [rawName, finerRaw] of Object.entries(splits)) {
-      const coarseScope = effectiveValues[rawName]?.trim();
-      if (!coarseScope || !finerRaw.trim()) continue;
-      for (const finerScope of finerRaw.split(",").map((s) => s.trim()).filter(Boolean)) {
-        await fetch(appPath("/api/completeness/split-rules"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ coarseScope, finerScope }),
-        });
-      }
     }
     setBusy(false);
     router.refresh();
@@ -113,14 +78,6 @@ export function NormalizePanel({
               placeholder="Standard scope"
               className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
             />
-            {isAdmin && (
-              <input
-                value={splits[r.rawName] ?? ""}
-                onChange={(e) => setSplit(r.rawName, e.target.value)}
-                placeholder="Coarse? List finer scopes, comma-separated (e.g. Drywall Hang, Drywall Tape)"
-                className="mt-1 w-full rounded border border-slate-200 px-2 py-1 text-xs text-slate-600"
-              />
-            )}
           </li>
         ))}
       </ul>

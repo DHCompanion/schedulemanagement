@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { parseCookie } from "@/lib/auth";
+import { ADMIN_SESSION_COOKIE, isAdmin, isAdminRole, parseCookie } from "@/lib/auth";
 
 // An OS-launched session. Unlike the shared-password session (a constant token),
 // this cookie is signed and names exactly one project, so it both authenticates
@@ -93,6 +93,32 @@ export function scopeCookieOptions() {
 
 export function scopeFromRequest(req: Request, nowSeconds: number): Promise<ProjectScope | null> {
   return readScope(parseCookie(req, SCOPE_COOKIE), nowSeconds);
+}
+
+// Admin from either session kind: the standalone admin password, or an OS launch
+// whose handed-down access role is allowlisted. Takes raw cookie values so both
+// route handlers (plain Request) and server components (next/headers) can call
+// it — next/headers must not be imported here, this module also runs in edge
+// middleware.
+export async function isAdminFromCookies(
+  adminCookie: string | undefined,
+  scopeCookie: string | undefined,
+  nowSeconds: number
+): Promise<boolean> {
+  if (isAdmin(adminCookie)) return true;
+  return isAdminRole((await readScope(scopeCookie, nowSeconds))?.accessRole);
+}
+
+// Route handlers receive a plain Request, not a NextRequest, and next/headers'
+// cookies() requires Next's request-scoped context (absent when a test calls
+// a route's exported handler directly) — so admin checks in routes parse the
+// raw Cookie header instead.
+export function isAdminRequest(req: Request): Promise<boolean> {
+  return isAdminFromCookies(
+    parseCookie(req, ADMIN_SESSION_COOKIE),
+    parseCookie(req, SCOPE_COOKIE),
+    Math.floor(Date.now() / 1000)
+  );
 }
 
 // API routes carry the project in a body or path param, which middleware cannot

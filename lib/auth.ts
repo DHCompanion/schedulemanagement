@@ -28,6 +28,21 @@ export function isAdmin(cookieValue: string | undefined): boolean {
   return token.length > 0 && cookieValue === token;
 }
 
+// The other way in: Skiles Connect hands down the person's project access role
+// in the launch handoff, and an OS-launched session never sees the admin
+// password. ADMIN_ACCESS_ROLES is a comma-separated allowlist of those roles
+// (e.g. "Project Manager,Superintendent") so adding a role in the OS does not
+// need a code change here. Unset means no role grants admin.
+export function isAdminRole(accessRole: string | null | undefined): boolean {
+  const role = accessRole?.trim().toLowerCase();
+  if (!role) return false;
+  return (process.env.ADMIN_ACCESS_ROLES ?? "")
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(role);
+}
+
 // Scoped to the base path so that, once the tool is proxied under
 // sgconnect.dev/schedule-manager, its session cookie is never sent to the OS or
 // to any other tool sharing the domain.
@@ -48,12 +63,4 @@ export function parseCookie(req: Request, name: string): string | undefined {
     if (k === name) return decodeURIComponent(rest.join("="));
   }
   return undefined;
-}
-
-// Route handlers receive a plain Request, not a NextRequest, and next/headers'
-// cookies() requires Next's request-scoped context (absent when a test calls
-// a route's exported handler directly) — so admin checks in routes parse the
-// raw Cookie header instead.
-export function isAdminRequest(req: Request): boolean {
-  return isAdmin(parseCookie(req, ADMIN_SESSION_COOKIE));
 }

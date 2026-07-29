@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { getCompleteness } from "@/lib/completeness/completenessService";
+import { getSplitRules } from "@/lib/completeness/splitRuleService";
+import { ADMIN_SESSION_COOKIE } from "@/lib/auth";
+import { SCOPE_COOKIE, isAdminFromCookies } from "@/lib/scope";
 import { CompletenessIssuesTable } from "@/components/CompletenessIssuesTable";
+import { CoarsePanel } from "@/components/CoarsePanel";
+import { SplitRulesPanel, type SplitRuleRow } from "@/components/SplitRulesPanel";
 import { WizardBanner } from "@/components/WizardBanner";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +18,14 @@ export default async function CompletenessPage({ params, searchParams }: { param
   if (!project) notFound();
 
   const completeness = await getCompleteness(project.id);
+  const splitRulesMap = await getSplitRules();
+  const splitRules: SplitRuleRow[] = [...splitRulesMap.entries()].map(([coarseScope, finerScopes]) => ({ coarseScope, finerScopes }));
+  const jar = cookies();
+  const adminSession = await isAdminFromCookies(
+    jar.get(ADMIN_SESSION_COOKIE)?.value,
+    jar.get(SCOPE_COOKIE)?.value,
+    Math.floor(Date.now() / 1000)
+  );
 
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
@@ -20,8 +34,8 @@ export default async function CompletenessPage({ params, searchParams }: { param
       {searchParams.wizard === "1" && (
         <WizardBanner
           projectId={project.id}
-          step={2}
-          why="Review the coarse-scope issues you just flagged and decide what to do — split it in MS Project and re-import, or dismiss it."
+          step={1}
+          why="Flag any activity that lumps too much work together, before naming — a scope you are going to split is not worth naming twice."
         />
       )}
       {!completeness.hasImport ? (
@@ -36,8 +50,14 @@ export default async function CompletenessPage({ params, searchParams }: { param
           ) : (
             <CompletenessIssuesTable projectId={project.id} issues={completeness.issues} />
           )}
+          <div className="mt-8">
+            <CoarsePanel rows={completeness.names} isAdmin={adminSession} />
+          </div>
         </>
       )}
+      <div className="mt-8">
+        <SplitRulesPanel rules={splitRules} isAdmin={adminSession} />
+      </div>
     </main>
   );
 }

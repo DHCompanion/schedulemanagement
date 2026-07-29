@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import { ADMIN_SESSION_COOKIE } from "@/lib/auth";
+import { SCOPE_COOKIE, isAdminFromCookies } from "@/lib/scope";
 import { ActivityTable, type ActivityRow } from "@/components/ActivityTable";
+import { ResetProjectButton } from "@/components/ResetProjectButton";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getScheduleHealth } from "@/lib/health/healthService";
+import { getDictionary } from "@/lib/normalize/normalizationService";
+import { normalizeName } from "@/lib/normalize/normalizeName";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +31,23 @@ export default async function ProjectPage({ params }: { params: { id: string } }
 
   const currentProgress = resolveCurrentProgress(await getFinalizedEntries(project.id));
   const health = await getScheduleHealth(project.id);
+  const jar = cookies();
+  const adminSession = await isAdminFromCookies(
+    jar.get(ADMIN_SESSION_COOKIE)?.value,
+    jar.get(SCOPE_COOKIE)?.value,
+    Math.floor(Date.now() / 1000)
+  );
   const mpd = latest?.minutesPerDay ?? 480;
+  // The standard names confirmed in the Task Naming step are what this table
+  // shows; the schedule's own wording stays visible underneath so the row is
+  // still findable by what MS Project calls it.
+  const scopeDict = await getDictionary();
   const rows: ActivityRow[] = (latest?.activities ?? []).map((a) => ({
     id: a.id,
     externalId: a.externalId,
     wbsCode: a.wbsCode,
     name: a.name,
+    canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
     type: a.type,
     isCritical: a.isCritical,
     outlineLevel: a.outlineLevel,
@@ -96,6 +113,11 @@ export default async function ProjectPage({ params }: { params: { id: string } }
           )}
           <ActivityTable rows={rows} />
         </>
+      )}
+      {adminSession && (
+        <div className="mt-8 border-t border-slate-200 pt-4">
+          <ResetProjectButton projectId={project.id} projectName={project.name} />
+        </div>
       )}
     </main>
   );

@@ -8,6 +8,8 @@ export interface ActivityRow {
   externalId: number | null;
   wbsCode: string | null;
   name: string;
+  /** The standard name confirmed in Task Naming, when this activity has one. */
+  canonicalScope: string | null;
   type: string;
   isCritical: boolean;
   outlineLevel: number;
@@ -45,7 +47,11 @@ function fmtDate(s: string | null): string {
 function leafMatches(a: ActivityRow, q: string, filter: Filter): boolean {
   if (q.trim()) {
     const needle = q.trim().toLowerCase();
-    const hit = a.name.toLowerCase().includes(needle) || (a.wbsCode ?? "").includes(needle) || String(a.externalId ?? "").includes(needle);
+    const hit =
+      a.name.toLowerCase().includes(needle) ||
+      (a.canonicalScope ?? "").toLowerCase().includes(needle) ||
+      (a.wbsCode ?? "").includes(needle) ||
+      String(a.externalId ?? "").includes(needle);
     if (!hit) return false;
   }
   if (filter === "milestones" && a.type !== "milestone") return false;
@@ -126,7 +132,10 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
         <button onClick={() => setOpenId(openId === a.id ? null : a.id)} className="flex w-full items-start justify-between gap-3 text-left">
           <span>
             <span className="mr-2 text-xs text-slate-400">{a.wbsCode}</span>
-            <span className={a.isCritical ? "font-medium text-red-700" : "font-medium"}>{a.name}</span>
+            <span className={a.isCritical ? "font-medium text-red-700" : "font-medium"}>{a.canonicalScope ?? a.name}</span>
+            {a.canonicalScope && a.canonicalScope !== a.name && (
+              <span className="ml-2 text-xs text-slate-400">{a.name}</span>
+            )}
             {a.type === "milestone" && <span className="ml-2 text-xs text-indigo-600">◆ milestone</span>}
             {a.percentComplete === 100 && (
               <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">✓ Completed</span>

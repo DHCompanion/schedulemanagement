@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { appPath } from "@/lib/http";
 
+// Granularity before naming on purpose: splitting a coarse activity replaces it
+// with new activities that need naming themselves, so naming first would mean
+// naming the same work twice.
 const STEPS = [
   { path: "health", label: "Schedule Health" },
-  { path: "normalize", label: "Task Naming" },
   { path: "completeness", label: "Task Granularity" },
+  { path: "normalize", label: "Task Naming" },
 ] as const;
 
 export function WizardBanner({ projectId, step, why }: { projectId: string; step: 0 | 1 | 2; why: string }) {
