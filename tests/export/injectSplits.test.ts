@@ -4,6 +4,13 @@ import { injectSplits, type SplitForExport } from "@/lib/export/injectSplits";
 function doc() {
   return {
     Project: {
+      Assignments: {
+        Assignment: [
+          { UID: "10", TaskUID: "1", ResourceUID: "-65535" },
+          { UID: "11", TaskUID: "2", ResourceUID: "-65535" },
+          { UID: "12", TaskUID: "3", ResourceUID: "-65535" },
+        ],
+      },
       Tasks: {
         Task: [
           { UID: "1", Name: "Predecessor", WBS: "1", OutlineNumber: "1", OutlineLevel: "1" },
@@ -76,5 +83,64 @@ describe("injectSplits", () => {
     const split2: SplitForExport = { ...split, coarseExternalUid: 1, coarseWbsCode: "1", coarseOutlineNumber: "1", finerScopes: ["Mob A"], mintedUids: [201] };
     injectSplits(d, [split2, split]);
     expect(tasks(d).map((t) => t.UID)).toEqual(["201", "101", "102", "3"]);
+  });
+});
+
+// MSPDI's Task type is an xsd:sequence, so child element order is significant.
+// fast-xml-parser serializes object keys in insertion order, which makes the
+// order these keys are assigned in a wire-format contract, not a style choice.
+// Microsoft's documented order is: UID, ID, Name, Type, IsNull, ..., WBS,
+// OutlineNumber, OutlineLevel, ..., Start, Finish, Duration, ..., Milestone,
+// Summary, ..., PredecessorLink, ExtendedAttribute.
+describe("minted task element order", () => {
+  const MSPDI_TASK_ORDER = [
+    "UID", "ID", "Name", "Type", "IsNull", "CreateDate", "Contact", "WBS", "WBSLevel",
+    "OutlineNumber", "OutlineLevel", "Priority", "Start", "Finish", "Duration", "DurationFormat",
+    "Work", "ResumeValid", "EffortDriven", "Recurring", "OverAllocated", "Estimated",
+    "Milestone", "Summary", "Critical", "PredecessorLink", "ExtendedAttribute",
+  ];
+
+  it("emits minted task children in MSPDI schema sequence", () => {
+    const d = doc();
+    injectSplits(d, [split]);
+    const minted = tasks(d).filter((t) => t.UID === "101" || t.UID === "102");
+    expect(minted).toHaveLength(2);
+
+    for (const task of minted) {
+      const keys = Object.keys(task);
+      const ranks = keys.map((k) => {
+        const i = MSPDI_TASK_ORDER.indexOf(k);
+        expect(i, `"${k}" is not a known MSPDI Task element`).toBeGreaterThanOrEqual(0);
+        return i;
+      });
+      expect(ranks, `out of schema order for UID ${task.UID}: ${keys.join(", ")}`)
+        .toEqual([...ranks].sort((a, b) => a - b));
+    }
+  });
+});
+
+// MS Project drops orphaned assignments silently when a file is opened as a new
+// project, but validates them on append/merge — where they get remapped onto the
+// wrong rows and surface as "You cannot have the same resource assigned twice to
+// the same task". A split deletes the coarse task, so its assignment must go too.
+describe("assignments referencing a replaced task", () => {
+  it("removes the coarse task's assignment", () => {
+    const d = doc();
+    injectSplits(d, [split]);
+    const assignments = ((d.Project as any).Assignments.Assignment) as any[];
+    const taskUids = new Set(tasks(d).map((t) => String(t.UID)));
+
+    expect(assignments.map((a) => a.TaskUID)).not.toContain("2");
+    for (const a of assignments) {
+      expect(taskUids.has(String(a.TaskUID)), `assignment ${a.UID} points at missing task ${a.TaskUID}`).toBe(true);
+    }
+    // The untouched ones survive.
+    expect(assignments.map((a) => a.UID).sort()).toEqual(["10", "12"]);
+  });
+
+  it("does nothing when the document has no Assignments section", () => {
+    const d = doc();
+    delete (d.Project as any).Assignments;
+    expect(() => injectSplits(d, [split])).not.toThrow();
   });
 });
