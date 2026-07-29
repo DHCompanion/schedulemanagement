@@ -4,16 +4,15 @@ import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
 
 interface AcceptBody {
   projectId?: string;
-  canonicalActivityKey?: string;
   coarseScope?: string;
   acceptedBy?: string;
 }
 
 export async function POST(req: Request) {
   const body = (await req.json()) as AcceptBody;
-  if (!body.projectId || !body.canonicalActivityKey || !body.coarseScope) {
+  if (!body.projectId || !body.coarseScope) {
     return NextResponse.json(
-      { error: { message: "projectId, canonicalActivityKey, and coarseScope are required." } },
+      { error: { message: "projectId and coarseScope are required." } },
       { status: 422 },
     );
   }
@@ -25,13 +24,13 @@ export async function POST(req: Request) {
   if (denied) return denied;
 
   try {
-    const { newImportId } = await acceptSplit(
+    const { newImportId, splitCount } = await acceptSplit(
       body.projectId,
       body.coarseScope,
       body.acceptedBy,
       scope?.personId,
     );
-    return NextResponse.json({ ok: true, newImportId });
+    return NextResponse.json({ ok: true, newImportId, splitCount });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to accept.";
     return NextResponse.json({ error: { message } }, { status: 422 });

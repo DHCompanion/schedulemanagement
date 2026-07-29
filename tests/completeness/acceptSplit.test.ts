@@ -124,12 +124,13 @@ describe.runIf(hasDb)("acceptSplit", () => {
     const { POST } = await import("@/app/api/completeness/accept/route");
     const res = await POST(new Request("http://localhost/api/completeness/accept", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId: project.id, canonicalActivityKey: key, coarseScope: coarse }),
+      body: JSON.stringify({ projectId: project.id, coarseScope: coarse }),
     }));
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.ok).toBe(true);
     expect(data.newImportId).toBeTruthy();
+    expect(data.splitCount).toBeGreaterThan(0);
 
     await prisma.project.delete({ where: { id: project.id } });
   }, 30000);

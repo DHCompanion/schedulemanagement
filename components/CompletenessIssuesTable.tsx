@@ -39,9 +39,12 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
 
   async function accept(issue: CompletenessIssue) {
     const key = `${issue.canonicalActivityKey}::${issue.coarseScope}`;
+    const matching = issues.filter((i) => i.coarseScope === issue.coarseScope).length;
     const confirmed = window.confirm(
-      `Replace "${issue.name}" (WBS ${issue.wbsCode ?? "—"}) with ${issue.finerScopes.length} parallel activities — ` +
-        `${issue.finerScopes.join(", ")} — each inheriting its predecessors, successors, and duration. Continue?`,
+      `Replace ${matching} activit${matching === 1 ? "y" : "ies"} named "${issue.coarseScope}" with ` +
+        `${issue.finerScopes.length} parallel activities each — ${issue.finerScopes.join(", ")} — ` +
+        `${matching * issue.finerScopes.length} tasks in total, each inheriting its predecessors, ` +
+        `successors, and duration. Activities you dismissed are left alone. Continue?`,
     );
     if (!confirmed) return;
     setBusyKey(key);
@@ -49,7 +52,7 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
     const res = await fetch(appPath("/api/completeness/accept"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, canonicalActivityKey: issue.canonicalActivityKey, coarseScope: issue.coarseScope }),
+      body: JSON.stringify({ projectId, coarseScope: issue.coarseScope }),
     });
     setBusyKey(null);
     if (!res.ok) {
