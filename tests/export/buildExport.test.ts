@@ -107,7 +107,7 @@ describe.runIf(hasDb)("buildExport", () => {
     await saveEntries(draftId, [{ activityExternalUid: 1, canonicalActivityKey: "1|mobilize", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-16", percentComplete: 100, note: null }]);
     await finalizeUpdate(draftId);
 
-    await acceptSplit(project.id, `2|${coarse.toLowerCase()}`, coarse);
+    await acceptSplit(project.id, coarse);
 
     const out = await buildExport(project.id, xml, "minimal.xml");
     const doc = parseForExport(out.xml);

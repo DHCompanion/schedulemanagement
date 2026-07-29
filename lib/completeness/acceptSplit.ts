@@ -2,14 +2,14 @@ import { Prisma, type ScheduleImport, type CompletenessSplit } from "@prisma/cli
 import { prisma } from "@/lib/db";
 import { canonicalActivityKey as buildCanonicalActivityKey } from "@/lib/msp/canonicalKey";
 import { getSplitRules } from "@/lib/completeness/splitRuleService";
+import { getCompleteness } from "@/lib/completeness/completenessService";
 
 export async function acceptSplit(
   projectId: string,
-  canonicalActivityKey: string,
   coarseScope: string,
   acceptedBy?: string,
   personId?: number | null,
-): Promise<{ newImportId: string }> {
+): Promise<{ newImportId: string; splitCount: number }> {
   const latest = await prisma.scheduleImport.findFirst({
     where: { projectId },
     orderBy: { importedAt: "desc" },
@@ -17,19 +17,30 @@ export async function acceptSplit(
   });
   if (!latest) throw new Error("No imported schedule to split.");
 
-  const coarse = latest.activities.find((a) => a.canonicalActivityKey === canonicalActivityKey);
-  if (!coarse) throw new Error("Activity not found in the latest import.");
-
   const splitRules = await getSplitRules();
   const finerScopes = splitRules.get(coarseScope);
   if (!finerScopes || finerScopes.length === 0) throw new Error("No split rule found for this coarse scope.");
+
+  // Reuse the completeness read so dismissals are honoured by exactly the rule
+  // that flagged these in the first place — a second copy of that filter here
+  // would drift from it.
+  const { issues } = await getCompleteness(projectId);
+  const targetKeys = new Set(issues.filter((i) => i.coarseScope === coarseScope).map((i) => i.canonicalActivityKey));
+  const coarseActivities = latest.activities.filter((a) => targetKeys.has(a.canonicalActivityKey));
+  if (coarseActivities.length === 0) throw new Error("Nothing left to split for this coarse scope.");
+
+  const coarseIds = new Set(coarseActivities.map((a) => a.id));
+  const coarseUids = new Set(coarseActivities.map((a) => a.externalUid));
 
   const { _max } = await prisma.activity.aggregate({
     where: { scheduleImport: { projectId } },
     _max: { externalUid: true },
   });
-  const startUid = (_max.externalUid ?? 0) + 1;
-  const mintedUids = finerScopes.map((_, i) => startUid + i);
+  let nextUid = (_max.externalUid ?? 0) + 1;
+  const mintedByActivityId = new Map<string, number[]>();
+  for (const coarse of coarseActivities) {
+    mintedByActivityId.set(coarse.id, finerScopes.map(() => nextUid++));
+  }
 
   const newImportId = await prisma.$transaction(async (tx) => {
     const created = await tx.scheduleImport.create({
@@ -47,11 +58,11 @@ export async function acceptSplit(
         daysPerMonth: latest.daysPerMonth,
         isSynthetic: true,
         derivedFromImportId: latest.id,
-        notes: `Split "${coarse.name}" into: ${finerScopes.join(", ")}`,
+        notes: `Split ${coarseActivities.length} × "${coarseScope}" into: ${finerScopes.join(", ")}`,
       },
     });
 
-    const otherActivities = latest.activities.filter((a) => a.id !== coarse.id);
+    const otherActivities = latest.activities.filter((a) => !coarseIds.has(a.id));
     if (otherActivities.length) {
       await tx.activity.createMany({
         data: otherActivities.map((a) => ({
@@ -101,38 +112,8 @@ export async function acceptSplit(
       });
     }
 
-    await tx.activity.createMany({
-      data: finerScopes.map((scope, i) => {
-        const wbsCode = coarse.wbsCode ? `${coarse.wbsCode}.${i + 1}` : null;
-        return {
-          scheduleImportId: created.id,
-          externalUid: mintedUids[i],
-          externalId: mintedUids[i],
-          wbsCode,
-          outlineNumber: coarse.outlineNumber ? `${coarse.outlineNumber}.${i + 1}` : null,
-          outlineLevel: coarse.outlineLevel,
-          parentExternalUid: coarse.parentExternalUid,
-          name: scope,
-          canonicalActivityKey: buildCanonicalActivityKey(wbsCode, scope),
-          type: coarse.type,
-          isMilestone: coarse.isMilestone,
-          isSummary: false,
-          isProjectSummary: false,
-          isCritical: false,
-          isActive: true,
-          plannedStart: coarse.plannedStart,
-          plannedFinish: coarse.plannedFinish,
-          durationMinutes: coarse.durationMinutes,
-          durationDays: coarse.durationDays,
-          remainingDurationMinutes: coarse.durationMinutes,
-          percentComplete: 0,
-          calendarExternalUid: coarse.calendarExternalUid,
-        };
-      }),
-    });
-
     const otherRelationships = latest.relationships.filter(
-      (r) => r.predecessorExternalUid !== coarse.externalUid && r.successorExternalUid !== coarse.externalUid,
+      (r) => !coarseUids.has(r.predecessorExternalUid) && !coarseUids.has(r.successorExternalUid),
     );
     if (otherRelationships.length) {
       await tx.relationship.createMany({
@@ -149,47 +130,73 @@ export async function acceptSplit(
       });
     }
 
+    const finerRows: Prisma.ActivityCreateManyInput[] = [];
     const fanned: Prisma.RelationshipCreateManyInput[] = [];
-    for (const r of latest.relationships.filter((r) => r.predecessorExternalUid === coarse.externalUid)) {
-      for (const uid of mintedUids) {
-        fanned.push({
-          scheduleImportId: created.id,
-          predecessorExternalUid: uid,
-          successorExternalUid: r.successorExternalUid,
-          type: r.type,
-          rawType: r.rawType,
-          lagMinutes: r.lagMinutes,
-          rawLagFormat: r.rawLagFormat,
-          crossProject: r.crossProject,
-        });
-      }
-    }
-    for (const r of latest.relationships.filter((r) => r.successorExternalUid === coarse.externalUid)) {
-      for (const uid of mintedUids) {
-        fanned.push({
-          scheduleImportId: created.id,
-          predecessorExternalUid: r.predecessorExternalUid,
-          successorExternalUid: uid,
-          type: r.type,
-          rawType: r.rawType,
-          lagMinutes: r.lagMinutes,
-          rawLagFormat: r.rawLagFormat,
-          crossProject: r.crossProject,
-        });
-      }
-    }
-    if (fanned.length) await tx.relationship.createMany({ data: fanned });
+    const splitRows: Prisma.CompletenessSplitCreateManyInput[] = [];
 
-    await tx.scheduleImport.update({
-      where: { id: created.id },
-      data: {
-        activityCount: otherActivities.length + finerScopes.length,
-        relationshipCount: otherRelationships.length + fanned.length,
-      },
-    });
+    for (const coarse of coarseActivities) {
+      const mintedUids = mintedByActivityId.get(coarse.id)!;
 
-    await tx.completenessSplit.create({
-      data: {
+      finerRows.push(
+        ...finerScopes.map((scope, i) => {
+          const wbsCode = coarse.wbsCode ? `${coarse.wbsCode}.${i + 1}` : null;
+          return {
+            scheduleImportId: created.id,
+            externalUid: mintedUids[i],
+            externalId: mintedUids[i],
+            wbsCode,
+            outlineNumber: coarse.outlineNumber ? `${coarse.outlineNumber}.${i + 1}` : null,
+            outlineLevel: coarse.outlineLevel,
+            parentExternalUid: coarse.parentExternalUid,
+            name: scope,
+            canonicalActivityKey: buildCanonicalActivityKey(wbsCode, scope),
+            type: coarse.type,
+            isMilestone: coarse.isMilestone,
+            isSummary: false,
+            isProjectSummary: false,
+            isCritical: false,
+            isActive: true,
+            plannedStart: coarse.plannedStart,
+            plannedFinish: coarse.plannedFinish,
+            durationMinutes: coarse.durationMinutes,
+            durationDays: coarse.durationDays,
+            remainingDurationMinutes: coarse.durationMinutes,
+            percentComplete: 0,
+            calendarExternalUid: coarse.calendarExternalUid,
+          };
+        }),
+      );
+
+      for (const r of latest.relationships.filter((r) => r.predecessorExternalUid === coarse.externalUid)) {
+        for (const uid of mintedUids) {
+          fanned.push({
+            scheduleImportId: created.id,
+            predecessorExternalUid: uid,
+            successorExternalUid: r.successorExternalUid,
+            type: r.type,
+            rawType: r.rawType,
+            lagMinutes: r.lagMinutes,
+            rawLagFormat: r.rawLagFormat,
+            crossProject: r.crossProject,
+          });
+        }
+      }
+      for (const r of latest.relationships.filter((r) => r.successorExternalUid === coarse.externalUid)) {
+        for (const uid of mintedUids) {
+          fanned.push({
+            scheduleImportId: created.id,
+            predecessorExternalUid: r.predecessorExternalUid,
+            successorExternalUid: uid,
+            type: r.type,
+            rawType: r.rawType,
+            lagMinutes: r.lagMinutes,
+            rawLagFormat: r.rawLagFormat,
+            crossProject: r.crossProject,
+          });
+        }
+      }
+
+      splitRows.push({
         projectId,
         sourceScheduleImportId: latest.id,
         resultScheduleImportId: created.id,
@@ -205,13 +212,25 @@ export async function acceptSplit(
         mintedUids: mintedUids as Prisma.InputJsonValue,
         acceptedBy: acceptedBy ?? null,
         personId: personId ?? null,
+      });
+    }
+
+    await tx.activity.createMany({ data: finerRows });
+    if (fanned.length) await tx.relationship.createMany({ data: fanned });
+    await tx.completenessSplit.createMany({ data: splitRows });
+
+    await tx.scheduleImport.update({
+      where: { id: created.id },
+      data: {
+        activityCount: otherActivities.length + finerRows.length,
+        relationshipCount: otherRelationships.length + fanned.length,
       },
     });
 
     return created.id;
   });
 
-  return { newImportId };
+  return { newImportId, splitCount: coarseActivities.length };
 }
 
 /** Walk a (possibly synthetic) latest import back to its nearest real ancestor, collecting every CompletenessSplit along the way, oldest first. */

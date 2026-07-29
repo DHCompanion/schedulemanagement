@@ -27,7 +27,6 @@ export async function POST(req: Request) {
   try {
     const { newImportId } = await acceptSplit(
       body.projectId,
-      body.canonicalActivityKey,
       body.coarseScope,
       body.acceptedBy,
       scope?.personId,

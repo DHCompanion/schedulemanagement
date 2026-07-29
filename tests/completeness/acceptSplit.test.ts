@@ -55,7 +55,7 @@ describe.runIf(hasDb)("acceptSplit", () => {
       ],
     });
 
-    const result = await acceptSplit(project.id, coarseKey, coarse);
+    const result = await acceptSplit(project.id, coarse);
     newImportId = result.newImportId;
 
     const newImport = await prisma.scheduleImport.findUnique({
@@ -168,6 +168,45 @@ describe.runIf(hasDb)("acceptSplit", () => {
     expect(splits).toHaveLength(2);
     expect(splits.map((s) => s.coarseName).sort()).toEqual(["Coarse A", "Coarse B"]);
 
+    await prisma.project.delete({ where: { id: project.id } });
+  }, 30000);
+
+  it("splits every flagged instance in one import and leaves dismissed ones alone", async () => {
+    const coarse = `ZZ Batch ${Date.now()}`;
+    await prisma.scopeSplitRule.createMany({
+      data: [{ coarseScope: coarse, finerScope: "Part A" }, { coarseScope: coarse, finerScope: "Part B" }],
+    });
+    const project = await prisma.project.create({ data: { name: "Batch Split Test" } });
+    const imp = await prisma.scheduleImport.create({
+      data: { projectId: project.id, sourceFormat: "msproject_xml", fileName: "b.xml", fileHash: `h-${project.id}` },
+    });
+    for (let i = 1; i <= 3; i += 1) {
+      await prisma.activity.create({
+        data: {
+          scheduleImportId: imp.id, externalUid: i, externalId: i, wbsCode: `1.${i}`,
+          name: coarse, canonicalActivityKey: `1.${i}|${coarse.toLowerCase()}`, type: "task",
+        },
+      });
+    }
+    await prisma.completenessDismissal.create({
+      data: { projectId: project.id, canonicalActivityKey: `1.3|${coarse.toLowerCase()}`, coarseScope: coarse },
+    });
+
+    const { newImportId, splitCount } = await acceptSplit(project.id, coarse);
+    expect(splitCount).toBe(2);
+
+    const splits = await prisma.completenessSplit.findMany({ where: { resultScheduleImportId: newImportId } });
+    expect(splits).toHaveLength(2);
+
+    const result = await prisma.activity.findMany({ where: { scheduleImportId: newImportId } });
+    expect(result.filter((a) => a.name === "Part A")).toHaveLength(2);
+    expect(result.filter((a) => a.name === "Part B")).toHaveLength(2);
+    // The dismissed instance survives untouched.
+    expect(result.filter((a) => a.name === coarse)).toHaveLength(1);
+    // Minted UIDs never collide.
+    expect(new Set(result.map((a) => a.externalUid)).size).toBe(result.length);
+
+    await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
     await prisma.project.delete({ where: { id: project.id } });
   }, 30000);
 });
