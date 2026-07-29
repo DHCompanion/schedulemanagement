@@ -37,6 +37,7 @@ model Project {
   completenessDismissals CompletenessDismissal[]
   completenessSplits     CompletenessSplit[]
   tradeScopeDismissals   TradeScopeDismissal[]
+  tradeDriftDismissals   TradeDriftDismissal[]
   osTradePartners        OsTradePartner[]
 }
 
@@ -352,5 +353,23 @@ model TradeScopeDismissal {
   createdAt      DateTime @default(now())
 
   @@unique([projectId, canonicalScope])
+  @@index([projectId])
+}
+
+// A trade partner named in a re-imported MS Project file that disagrees with
+// this project's assignment, which someone chose to keep. Keyed on the file's
+// value so a *different* later edit flags again rather than inheriting this
+// decision.
+model TradeDriftDismissal {
+  id             String   @id @default(cuid())
+  projectId      String
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  osDisciplineId Int
+  fileValue      String
+  dismissedBy    String?
+  personId       Int?
+  createdAt      DateTime @default(now())
+
+  @@unique([projectId, osDisciplineId, fileValue])
   @@index([projectId])
 }
