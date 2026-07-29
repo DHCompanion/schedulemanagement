@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { appPath } from "@/lib/http";
+import type { TradeDriftRow } from "@/lib/trades/tradeDrift";
 
 export interface OsDisciplineOption { id: number; name: string; division: string; }
 export interface PartnerOption { osPartnerId: number; name: string; }
@@ -16,17 +17,18 @@ export interface AssignmentRow {
   partners: PartnerOption[];
 }
 
-type Tab = "assignment" | "unmapped" | "dismissed";
+type Tab = "assignment" | "unmapped" | "dismissed" | "drift";
 
 // Disciplines and companies are closed sets owned by Skiles Connect, so both are
 // <select>s. They were free-text inputs back when the vocabulary was whatever
 // anyone had typed before.
-export function TradesPanel({ projectId, disciplineRows, assignmentRows, disciplines, dismissedScopes }: {
+export function TradesPanel({ projectId, disciplineRows, assignmentRows, disciplines, dismissedScopes, driftRows }: {
   projectId: string;
   disciplineRows: DisciplineRow[];
   assignmentRows: AssignmentRow[];
   disciplines: OsDisciplineOption[];
   dismissedScopes: string[];
+  driftRows: TradeDriftRow[];
 }) {
   const router = useRouter();
   // Mapping scopes to disciplines is what fills the assignment tab, so start
@@ -128,6 +130,23 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
     router.refresh();
   }
 
+  async function resolveDrift(row: TradeDriftRow, action: "accept" | "keep") {
+    const key = `${row.osDisciplineId}::${row.fileValue}`;
+    setRowBusy(key);
+    setError(null);
+    const res = await fetch(appPath("/api/trades/drift"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, osDisciplineId: row.osDisciplineId, fileValue: row.fileValue, action }),
+    });
+    setRowBusy(null);
+    if (!res.ok) {
+      setError((await res.json())?.error?.message ?? "Could not resolve.");
+      return;
+    }
+    router.refresh();
+  }
+
   if (disciplines.length === 0) {
     return (
       <p className="rounded border border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">
@@ -148,6 +167,7 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
         {([
           ["unmapped", `Unmapped Activities (${disciplineRows.length})`],
           ["assignment", "Trade Assignment"],
+          ["drift", `Changed in MS Project (${driftRows.length})`],
           ["dismissed", `Dismissed (${dismissedScopes.length})`],
         ] as [Tab, string][]).map(([key, label]) => (
           <button
@@ -264,6 +284,52 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
             </>
           )}
           <button disabled={busy} onClick={save} className="self-start rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{busy ? "Saving…" : "Save"}</button>
+        </section>
+      )}
+
+      {tab === "drift" && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-slate-700">Changed in MS Project</h2>
+          <p className="text-xs text-slate-500">
+            The re-imported schedule names a different trade partner than this project has assigned. Accepting
+            reassigns the discipline; keeping this one leaves the assignment alone until the file says something new.
+          </p>
+          {driftRows.length === 0 ? (
+            <p className="text-sm text-slate-500">Nothing has changed in the file.</p>
+          ) : (
+            <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
+              {driftRows.map((r) => {
+                const key = `${r.osDisciplineId}::${r.fileValue}`;
+                const busy = rowBusy === key;
+                return (
+                  <li key={key} className="px-3 py-3">
+                    <div className="font-medium">{r.disciplineName}</div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      file: <span className="font-medium">{r.fileValue}</span> · here:{" "}
+                      <span className="font-medium">{r.toolValue ?? "unassigned"}</span> · {r.activityCount} activit
+                      {r.activityCount === 1 ? "y" : "ies"}
+                    </div>
+                    <div className="mt-2 flex gap-1">
+                      <button
+                        disabled={busy}
+                        onClick={() => resolveDrift(r, "accept")}
+                        className="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        {busy ? "Working…" : "Accept file"}
+                      </button>
+                      <button
+                        disabled={busy}
+                        onClick={() => resolveDrift(r, "keep")}
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
+                      >
+                        {busy ? "Working…" : "Keep this one"}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </section>
       )}
 

@@ -12,6 +12,7 @@ import {
   getDismissedScopes,
 } from "@/lib/trades/tradesService";
 import { applyTradeDictionaryWith } from "@/lib/trades/applyTradeDictionary";
+import { getTradeDrift } from "@/lib/trades/tradeDrift";
 import { TradesPanel, type DisciplineRow, type AssignmentRow } from "@/components/TradesPanel";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,7 @@ export default async function TradesPage(props: { params: Promise<{ id: string }
   const disciplines = await getProjectDisciplines(project.id);
   const assignments = await getProjectAssignments(project.id);
   const dismissedScopes = await getDismissedScopes(project.id);
+  const driftRows = await getTradeDrift(project.id);
 
   const dismissed = new Set(dismissedScopes);
   const reviewScopes = unmappedScopes.filter((scope) => !dismissed.has(scope));
@@ -86,6 +88,7 @@ export default async function TradesPage(props: { params: Promise<{ id: string }
           assignmentRows={assignmentRows}
           disciplines={disciplines}
           dismissedScopes={dismissedScopes}
+          driftRows={driftRows}
         />
       )}
     </main>
