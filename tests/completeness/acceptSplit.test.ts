@@ -209,4 +209,42 @@ describe.runIf(hasDb)("acceptSplit", () => {
     await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
     await prisma.project.delete({ where: { id: project.id } });
   }, 30000);
+
+  it("fans a relationship between two coarse activities in the same batch to the cross-product of both minted UID sets", async () => {
+    const coarse = `ZZ Cross ${Date.now()}`;
+    await prisma.scopeSplitRule.createMany({
+      data: [{ coarseScope: coarse, finerScope: "Part A" }, { coarseScope: coarse, finerScope: "Part B" }],
+    });
+    const project = await prisma.project.create({ data: { name: "Cross Product Split Test" } });
+    const imp = await prisma.scheduleImport.create({
+      data: { projectId: project.id, sourceFormat: "msproject_xml", fileName: "c.xml", fileHash: `h-${project.id}` },
+    });
+    await prisma.activity.createMany({
+      data: [
+        { scheduleImportId: imp.id, externalUid: 1, externalId: 1, wbsCode: "1", name: coarse, canonicalActivityKey: `1|${coarse.toLowerCase()}`, type: "task" },
+        { scheduleImportId: imp.id, externalUid: 2, externalId: 2, wbsCode: "2", name: coarse, canonicalActivityKey: `2|${coarse.toLowerCase()}`, type: "task" },
+      ],
+    });
+    // Both ends of this relationship are coarse activities in the same batch.
+    await prisma.relationship.create({
+      data: { scheduleImportId: imp.id, predecessorExternalUid: 1, successorExternalUid: 2, type: "FS" },
+    });
+
+    const { newImportId } = await acceptSplit(project.id, coarse);
+
+    const newImport = await prisma.scheduleImport.findUniqueOrThrow({
+      where: { id: newImportId },
+      include: { relationships: true },
+    });
+
+    // Neither original coarse externalUid survives in any relationship.
+    expect(newImport.relationships.some((r) => r.predecessorExternalUid === 1 || r.successorExternalUid === 1)).toBe(false);
+    expect(newImport.relationships.some((r) => r.predecessorExternalUid === 2 || r.successorExternalUid === 2)).toBe(false);
+    // 2 finer scopes on each side of the one relationship = the full cross-product.
+    expect(newImport.relationships).toHaveLength(4);
+    expect(newImport.relationshipCount).toBe(newImport.relationships.length);
+
+    await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
+    await prisma.project.delete({ where: { id: project.id } });
+  }, 30000);
 });

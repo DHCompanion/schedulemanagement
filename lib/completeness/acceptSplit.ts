@@ -130,8 +130,47 @@ export async function acceptSplit(
       });
     }
 
-    const finerRows: Prisma.ActivityCreateManyInput[] = [];
+    // A relationship with both ends in the batch must fan to the cross-product
+    // of the two minted UID sets — every one of the predecessor's replacements
+    // to every one of the successor's — not just one side, or the other end
+    // would still point at an activity that no longer exists in this import.
+    const mintedUidsByExternalUid = new Map<number, number[]>();
+    for (const coarse of coarseActivities) {
+      mintedUidsByExternalUid.set(coarse.externalUid, mintedByActivityId.get(coarse.id)!);
+    }
+
     const fanned: Prisma.RelationshipCreateManyInput[] = [];
+    for (const r of latest.relationships) {
+      const predMinted = mintedUidsByExternalUid.get(r.predecessorExternalUid);
+      const succMinted = mintedUidsByExternalUid.get(r.successorExternalUid);
+      if (!predMinted && !succMinted) continue; // neither end touched — already in otherRelationships
+
+      const base = {
+        scheduleImportId: created.id,
+        type: r.type,
+        rawType: r.rawType,
+        lagMinutes: r.lagMinutes,
+        rawLagFormat: r.rawLagFormat,
+        crossProject: r.crossProject,
+      };
+      if (predMinted && succMinted) {
+        for (const p of predMinted) {
+          for (const s of succMinted) {
+            fanned.push({ ...base, predecessorExternalUid: p, successorExternalUid: s });
+          }
+        }
+      } else if (predMinted) {
+        for (const p of predMinted) {
+          fanned.push({ ...base, predecessorExternalUid: p, successorExternalUid: r.successorExternalUid });
+        }
+      } else if (succMinted) {
+        for (const s of succMinted) {
+          fanned.push({ ...base, predecessorExternalUid: r.predecessorExternalUid, successorExternalUid: s });
+        }
+      }
+    }
+
+    const finerRows: Prisma.ActivityCreateManyInput[] = [];
     const splitRows: Prisma.CompletenessSplitCreateManyInput[] = [];
 
     for (const coarse of coarseActivities) {
@@ -166,35 +205,6 @@ export async function acceptSplit(
           };
         }),
       );
-
-      for (const r of latest.relationships.filter((r) => r.predecessorExternalUid === coarse.externalUid)) {
-        for (const uid of mintedUids) {
-          fanned.push({
-            scheduleImportId: created.id,
-            predecessorExternalUid: uid,
-            successorExternalUid: r.successorExternalUid,
-            type: r.type,
-            rawType: r.rawType,
-            lagMinutes: r.lagMinutes,
-            rawLagFormat: r.rawLagFormat,
-            crossProject: r.crossProject,
-          });
-        }
-      }
-      for (const r of latest.relationships.filter((r) => r.successorExternalUid === coarse.externalUid)) {
-        for (const uid of mintedUids) {
-          fanned.push({
-            scheduleImportId: created.id,
-            predecessorExternalUid: r.predecessorExternalUid,
-            successorExternalUid: uid,
-            type: r.type,
-            rawType: r.rawType,
-            lagMinutes: r.lagMinutes,
-            rawLagFormat: r.rawLagFormat,
-            crossProject: r.crossProject,
-          });
-        }
-      }
 
       splitRows.push({
         projectId,
