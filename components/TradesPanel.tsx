@@ -29,13 +29,20 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
   dismissedScopes: string[];
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("assignment");
+  // Mapping scopes to disciplines is what fills the assignment tab, so start
+  // there while anything is still unmapped — landing on an empty tab reads as
+  // broken.
+  const [tab, setTab] = useState<Tab>(disciplineRows.length > 0 ? "unmapped" : "assignment");
   const [disc, setDisc] = useState<Record<string, number>>({});
+  // Connect usually puts exactly one partner on a project per discipline, so an
+  // unassigned discipline with a single covering partner is already decided —
+  // pre-select it rather than present a one-item dropdown. Still only persisted
+  // by Save, so the choice is visible and overridable before it is written.
   const [comp, setComp] = useState<Record<number, number>>(() =>
     Object.fromEntries(
       assignmentRows
-        .filter((row) => row.currentPartnerId !== null)
-        .map((row) => [row.osDisciplineId, row.currentPartnerId as number])
+        .map((row) => [row.osDisciplineId, row.currentPartnerId ?? (row.partners.length === 1 ? row.partners[0].osPartnerId : null)])
+        .filter((entry): entry is [number, number] => entry[1] !== null)
     )
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -139,8 +146,8 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
 
       <div className="flex gap-1 border-b border-slate-200">
         {([
-          ["assignment", "Trade Assignment"],
           ["unmapped", `Unmapped Activities (${disciplineRows.length})`],
+          ["assignment", "Trade Assignment"],
           ["dismissed", `Dismissed (${dismissedScopes.length})`],
         ] as [Tab, string][]).map(([key, label]) => (
           <button
@@ -166,6 +173,11 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
                   {r.currentPartnerId !== null && !r.onRoster && (
                     <p className="mt-1 text-xs text-amber-700">
                       {r.currentPartnerName} is no longer on this project&apos;s roster in Skiles Connect.
+                    </p>
+                  )}
+                  {r.currentPartnerId === null && r.partners.length === 1 && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Only partner on this project covering this discipline — selected for you, Save to confirm.
                     </p>
                   )}
                   {r.partners.length === 0 ? (
