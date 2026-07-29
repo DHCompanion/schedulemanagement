@@ -8,6 +8,8 @@ import { toMspdiDate } from "@/lib/export/mspdiDate";
 import { applyDictionary } from "@/lib/normalize/normalizationService";
 import { resolveExportBase } from "@/lib/completeness/acceptSplit";
 import { injectSplits, type SplitForExport } from "@/lib/export/injectSplits";
+import { injectTrades, type TradeForExport } from "@/lib/export/injectTrades";
+import { resolveActivityTrades } from "@/lib/trades/activityTrades";
 
 export async function buildExport(
   projectId: string,
@@ -48,6 +50,18 @@ export async function buildExport(
     nameByUid.set(activity.externalUid, canonicalScope);
   }
 
+  // Who is doing the work, carried into the file as two columns so it survives
+  // the trip through MS Project — and so a later import can read it back.
+  const trades = await resolveActivityTrades(
+    projectId,
+    latest.activities.map((a) => ({ id: a.id, name: a.name })),
+  );
+  const tradeByUid = new Map<number, TradeForExport>();
+  for (const a of latest.activities) {
+    const trade = trades.get(a.id);
+    if (trade) tradeByUid.set(a.externalUid, trade);
+  }
+
   const doc = parseForExport(uploadedXml);
   const splitsForExport: SplitForExport[] = splits.map((s) => ({
     coarseExternalUid: s.coarseExternalUid,
@@ -63,6 +77,7 @@ export async function buildExport(
   injectSplits(doc, splitsForExport);
   injectActuals(doc, progressByUid);
   injectNames(doc, nameByUid);
+  injectTrades(doc, tradeByUid);
   const project = doc.Project as Record<string, unknown> | undefined;
   if (project && latestUpdate) project.StatusDate = toMspdiDate(latestUpdate.asOfDate);
   const xml = buildMspdi(doc);

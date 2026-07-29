@@ -6,6 +6,7 @@ import { commitImport } from "@/lib/import/commitImport";
 import { getOrCreateDraft, saveEntries, finalizeUpdate } from "@/lib/updates/updateService";
 import { buildExport } from "@/lib/export/buildExport";
 import { parseForExport } from "@/lib/export/serializeMspdi";
+import { parseMspXml } from "@/lib/msp/parseMspXml";
 import { acceptSplit } from "@/lib/completeness/acceptSplit";
 
 const xml = readFileSync(resolve(__dirname, "../fixtures/minimal.xml"), "utf8");
@@ -118,5 +119,83 @@ describe.runIf(hasDb)("buildExport", () => {
     await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
     await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: coarse.toLowerCase() } });
     await prisma.project.delete({ where: { id: project.id } });
+  }, 30000);
+
+  // The contract this proves is the alias, not the field id: the importer keys
+  // customFields by alias, and which Text slot a value lands in depends on which
+  // ones the customer's own file already occupies. Re-parsing with the real
+  // importer is the only way to prove the round-trip rather than assume it.
+  it("round-trips discipline and trade partner through the exported file", async () => {
+    const stamp = Date.now();
+    const elecScope = `ZZ Elec ${stamp}`;
+    const mobScope = `ZZ Mob ${stamp}`;
+    const project = await prisma.project.create({ data: { name: "Trade Export Test" } });
+
+    // The scope dictionary is global, and an earlier test in this file asserts
+    // "mobilize" is unmapped. Cleanup runs in a finally so a failed assertion
+    // here cannot leave that mapping behind and break a sibling test.
+    const cleanup = async () => {
+      await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: { in: ["electrical rough-in", "mobilize"] } } });
+      await prisma.tradeDictionaryEntry.deleteMany({ where: { canonicalScope: { in: [elecScope, mobScope] } } });
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => undefined);
+    };
+
+    try {
+    await commitImport({ projectId: project.id, fileName: "minimal.xml", xml });
+
+    for (const [normalizedName, canonicalScope] of [["electrical rough-in", elecScope], ["mobilize", mobScope]]) {
+      await prisma.scopeDictionaryEntry.upsert({
+        where: { normalizedName },
+        create: { normalizedName, canonicalScope },
+        update: { canonicalScope },
+      });
+    }
+    for (const [canonicalScope, osDisciplineId, disciplineName] of [
+      [elecScope, 26, "26A: ELECTRICAL"],
+      [mobScope, 1, "01A: GENERAL CONDITIONS"],
+    ] as [string, number, string][]) {
+      await prisma.tradeDictionaryEntry.upsert({
+        where: { canonicalScope },
+        create: { canonicalScope, osDisciplineId, disciplineName },
+        update: { osDisciplineId, disciplineName },
+      });
+      await prisma.osTradePartner.create({
+        data: {
+          projectId: project.id,
+          osPartnerId: 700 + osDisciplineId,
+          name: `Partner ${disciplineName}`,
+          disciplines: [{ id: osDisciplineId, name: disciplineName, division: "" }],
+        },
+      });
+      await prisma.projectTradeAssignment.create({
+        data: {
+          projectId: project.id,
+          osDisciplineId,
+          osPartnerId: 700 + osDisciplineId,
+          partnerName: `Partner ${disciplineName}`,
+        },
+      });
+    }
+
+    const { id: draftId } = await getOrCreateDraft(project.id, "2026-06-18", 1);
+    await saveEntries(draftId, [{ activityExternalUid: 1, canonicalActivityKey: "1|mobilize", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-16", percentComplete: 100, note: null }]);
+    await finalizeUpdate(draftId);
+
+    const { xml: out } = await buildExport(project.id, xml, "minimal.xml");
+    const reparsed = parseMspXml(out);
+
+    const electrical = reparsed.activities.find((a) => a.externalUid === 2)!;
+    expect(electrical.customFields["Discipline"]).toBe("26A: ELECTRICAL");
+    expect(electrical.customFields["Trade Partner"]).toBe("Partner 26A: ELECTRICAL");
+
+    // Mobilize already carries the fixture's own Text1 custom field. Ours must be
+    // added alongside it, not on top of it — the failure this guards against is
+    // silently overwriting a customer's existing column.
+    const mobilize = reparsed.activities.find((a) => a.externalUid === 1)!;
+    expect(mobilize.customFields["Trade Partner"]).toBe("Partner 01A: GENERAL CONDITIONS");
+    expect(mobilize.customFields["Phoenix ID"]).toBe("PX-1");
+    } finally {
+      await cleanup();
+    }
   }, 30000);
 });
