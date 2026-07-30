@@ -42,11 +42,15 @@ describe("imports preview route", () => {
   });
 
   it.runIf(hasDb)("writes nothing", async () => {
-    const before = await prisma.scheduleImport.count();
+    // Asserted against a filename only this test uses, not a global row count.
+    // Vitest runs test files in parallel against one shared database, and the
+    // other suites create and delete imports as they go — a global count races
+    // with them and fails in either direction.
+    const probe = `zz-preview-probe-${Date.now()}.xml`;
     const form = new FormData();
-    form.append("file", new File([xml], "minimal.xml", { type: "application/xml" }));
+    form.append("file", new File([xml], probe, { type: "application/xml" }));
     const { POST } = await import("@/app/api/imports/preview/route");
     await POST(post(form));
-    expect(await prisma.scheduleImport.count()).toBe(before);
+    expect(await prisma.scheduleImport.count({ where: { fileName: probe } })).toBe(0);
   }, 30000);
 });

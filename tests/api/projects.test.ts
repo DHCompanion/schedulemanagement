@@ -30,10 +30,12 @@ describe.runIf(hasDb)("projects route", () => {
 
   it("redirects with an error and creates nothing when the name is blank", async () => {
     const { POST } = await import("@/app/api/projects/route");
-    const before = await prisma.project.count();
     const res = await POST(post({ name: "   " }));
     expect(res.headers.get("location")).toContain("error=1");
-    expect(await prisma.project.count()).toBe(before);
+    // Asserted against the blank name itself, not a global row count. Vitest
+    // runs test files in parallel against one shared database, so a global
+    // count races with whatever the other suites are creating and deleting.
+    expect(await prisma.project.count({ where: { name: "" } })).toBe(0);
   }, 30000);
 
   it("turns blank optional fields into null rather than empty strings", async () => {
