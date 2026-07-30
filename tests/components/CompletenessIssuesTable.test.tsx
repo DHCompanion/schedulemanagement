@@ -33,6 +33,7 @@ describe("CompletenessIssuesTable", () => {
       body: { projectId: "p1", coarseScope: "MEP OH Rough-In" },
     });
     expect((calls[0].body as Record<string, unknown>).canonicalActivityKey).toBeUndefined();
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
   });
 
   it("states the real blast radius in the confirmation", async () => {
@@ -77,6 +78,20 @@ describe("CompletenessIssuesTable", () => {
       method: "POST",
       body: { projectId: "p1", canonicalActivityKey: "a|1", coarseScope: "MEP OH Rough-In" },
     });
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  });
+
+  // This handler deliberately does not check res.ok before refreshing — that is
+  // current behaviour being locked in here, not endorsed. If a later change adds
+  // error handling to dismiss(), this test should fail on purpose so the change
+  // updates the test intentionally instead of silently altering behaviour.
+  it("still refreshes and shows no error when dismiss's response is not ok", async () => {
+    stubFetch({ ok: false, body: { error: { message: "nope" } } });
+    render(<CompletenessIssuesTable projectId="p1" issues={issues} />);
+    fireEvent.click(screen.getAllByText("Dismiss")[0]);
+
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(screen.queryByText("nope")).toBeNull();
   });
 
   it("filters by coarse scope", () => {

@@ -35,6 +35,7 @@ describe("LookaheadUpdateForm", () => {
     const entries = (calls[0].body as { entries: Record<string, unknown>[] }).entries;
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ activityExternalUid: 7, canonicalActivityKey: "1.1|hang drywall" });
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
   });
 
   it("normalises completed_as_planned to complete before sending", async () => {

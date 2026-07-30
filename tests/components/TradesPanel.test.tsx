@@ -81,6 +81,16 @@ describe("TradesPanel", () => {
       method: "POST",
       body: { projectId: "p1", canonicalScope: "Pull Wire" },
     });
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  });
+
+  it("shows the error and does not refresh when dismiss fails", async () => {
+    stubFetch({ ok: false, body: { error: { message: "Dismiss failed." } } });
+    render(<TradesPanel {...base} disciplineRows={[{ canonicalScope: "Pull Wire", suggestions: [] }]} />);
+    fireEvent.click(screen.getByText("Dismiss"));
+
+    await waitFor(() => expect(screen.getByText("Dismiss failed.")).toBeTruthy());
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("restores a dismissed scope", async () => {
@@ -95,6 +105,7 @@ describe("TradesPanel", () => {
       method: "POST",
       body: { projectId: "p1", canonicalScope: "Pull Wire" },
     });
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
   });
 
   it("accepts a drift row's file value", async () => {
