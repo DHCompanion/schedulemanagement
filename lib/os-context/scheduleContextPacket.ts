@@ -1,6 +1,6 @@
-import { isLeafActive } from "@/lib/completeness/completenessService";
 import { prisma } from "@/lib/db";
 import { minutesToDays } from "@/lib/msp/duration";
+import { isLeafActive } from "@/lib/msp/types";
 import { applyDictionary } from "@/lib/normalize/normalizationService";
 import { getProjectAssignments, getTradeDictionary } from "@/lib/trades/tradesService";
 
@@ -110,9 +110,9 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
 
     bucket.activityCount += 1;
     if (activity.isCritical) bucket.criticalCount += 1;
-    bucket.firstStart = earlier(bucket.firstStart, activity.plannedStart);
-    bucket.lastFinish = later(bucket.lastFinish, activity.plannedFinish);
-    bucket.minFloatMinutes = smaller(bucket.minFloatMinutes, activity.totalSlackMinutes);
+    bucket.firstStart = minOf(bucket.firstStart, activity.plannedStart);
+    bucket.lastFinish = maxOf(bucket.lastFinish, activity.plannedFinish);
+    bucket.minFloatMinutes = minOf(bucket.minFloatMinutes, activity.totalSlackMinutes);
 
     buckets.set(assignment.osPartnerId, bucket);
   }
@@ -163,22 +163,14 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
   };
 }
 
-function earlier(current: Date | null, candidate: Date | null): Date | null {
-  if (!candidate) return current;
-  if (!current) return candidate;
-  return candidate < current ? candidate : current;
-}
-
-function later(current: Date | null, candidate: Date | null): Date | null {
-  if (!candidate) return current;
-  if (!current) return candidate;
-  return candidate > current ? candidate : current;
-}
-
-function smaller(current: number | null, candidate: number | null): number | null {
+function minOf<T extends Date | number>(current: T | null, candidate: T | null): T | null {
   if (candidate === null || candidate === undefined) return current;
-  if (current === null) return candidate;
-  return candidate < current ? candidate : current;
+  return current === null || candidate < current ? candidate : current;
+}
+
+function maxOf<T extends Date | number>(current: T | null, candidate: T | null): T | null {
+  if (candidate === null || candidate === undefined) return current;
+  return current === null || candidate > current ? candidate : current;
 }
 
 function roundDays(value: number | null): number | null {

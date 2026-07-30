@@ -4,13 +4,13 @@ import {
   summarizeHealth,
   summarizeProgress,
   computeEnvelope,
-  isLeafActive,
   type HealthActivity,
   type HealthIssue,
   type HealthSummary,
   type DateWindow,
   type ProgressSummary,
 } from "@/lib/health/dateChecks";
+import { isLeafActive } from "@/lib/msp/types";
 
 export interface ScheduleHealth {
   hasImport: boolean;

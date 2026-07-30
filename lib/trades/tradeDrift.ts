@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/db";
 import { resolveActivityTrades, type ActivityTrade } from "@/lib/trades/activityTrades";
 import { getProjectDisciplines } from "@/lib/trades/tradesService";
-import { isLeafActive } from "@/lib/completeness/completenessService";
+import { isLeafActive } from "@/lib/msp/types";
 
 // The alias the export writes and the importer reads back. Renaming it breaks
 // the round-trip silently — the column simply stops being found.
-export const TRADE_PARTNER_ALIAS = "Trade Partner";
+const TRADE_PARTNER_ALIAS = "Trade Partner";
 
 export interface TradeDriftRow {
   osDisciplineId: number;
@@ -20,7 +20,7 @@ export interface ActivityWithFields {
   customFields: Record<string, string>;
 }
 
-export const dismissalKey = (osDisciplineId: number, fileValue: string) => `${osDisciplineId}::${fileValue}`;
+const dismissalKey = (osDisciplineId: number, fileValue: string) => `${osDisciplineId}::${fileValue}`;
 
 /**
  * Where a re-imported file names a different trade partner than this project

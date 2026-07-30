@@ -1,6 +1,8 @@
 // Pure, deterministic date-sanity checks over a schedule's leaf activities.
 // No DB, no AI. Computed entirely at read time — imports are never mutated.
 
+import { isLeafActive } from "@/lib/msp/types";
+
 export type HealthSeverity = "error" | "warning";
 export type HealthCheck = "out_of_envelope" | "future_actual" | "missing_dates" | "percent_contradiction";
 
@@ -56,10 +58,6 @@ const IQR_MULTIPLIER = 3;
 
 function iso(date: Date): string {
   return date.toISOString().slice(0, 10);
-}
-
-export function isLeafActive(a: HealthActivity): boolean {
-  return a.type !== "summary" && a.type !== "project_summary" && a.isActive;
 }
 
 /** Linear-interpolated percentile of a sorted numeric array. */

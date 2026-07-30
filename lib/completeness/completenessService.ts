@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { getSplitRules } from "@/lib/completeness/splitRuleService";
 import { checkCompleteness, summarizeCompleteness, type CompletenessIssue, type CompletenessSummary } from "@/lib/completeness/completenessChecks";
+import { isLeafActive } from "@/lib/msp/types";
 
 /** A distinct activity name in the schedule, and whether it is already marked coarse. */
 export interface ScheduleName {
@@ -15,12 +16,6 @@ export interface ScheduleCompleteness {
   issues: CompletenessIssue[];
   summary: CompletenessSummary;
   names: ScheduleName[];
-}
-
-// Exported: the OS context packet rolls up the same population, and a second
-// copy of this rule would drift from this one.
-export function isLeafActive(a: { type: string; isActive: boolean }): boolean {
-  return a.type !== "summary" && a.type !== "project_summary" && a.isActive;
 }
 
 export async function getCompleteness(projectId: string): Promise<ScheduleCompleteness> {

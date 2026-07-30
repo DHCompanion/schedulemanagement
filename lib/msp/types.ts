@@ -97,6 +97,17 @@ export interface ParsedCalendar {
   raw: unknown;
 }
 
+/**
+ * A real activity: not a summary row, not the project summary, not deactivated.
+ *
+ * Lives here rather than beside either consumer because `completenessService`
+ * imports Prisma, and a predicate this small must stay importable from anywhere
+ * — including a client component, which cannot pull Prisma into its bundle.
+ */
+export function isLeafActive(a: { type: string; isActive: boolean }): boolean {
+  return a.type !== "summary" && a.type !== "project_summary" && a.isActive;
+}
+
 export interface ParsedSchedule {
   header: ParsedProjectHeader;
   fieldDefinitions: ParsedFieldDefinition[];
