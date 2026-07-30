@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { sendJson } from "@/lib/http";
 import type { TradeDriftRow } from "@/lib/trades/tradeDrift";
+import { BusyButton } from "@/components/BusyButton";
 
 export interface OsDisciplineOption { id: number; name: string; division: string; }
 export interface PartnerOption { osPartnerId: number; name: string; }
@@ -237,13 +238,12 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
                       <div className="flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="font-medium">{r.canonicalScope}</div>
-                          <button
-                            disabled={rowBusy === r.canonicalScope}
+                          <BusyButton
+                            busy={rowBusy === r.canonicalScope}
+                            label="Dismiss"
                             onClick={() => dismiss(r.canonicalScope)}
-                            className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
-                          >
-                            {rowBusy === r.canonicalScope ? "Working…" : "Dismiss"}
-                          </button>
+                            className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100"
+                          />
                         </div>
                         {r.suggestions.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
@@ -294,20 +294,18 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
                       {r.activityCount === 1 ? "y" : "ies"}
                     </div>
                     <div className="mt-2 flex gap-1">
-                      <button
-                        disabled={busy}
+                      <BusyButton
+                        busy={busy}
+                        label="Accept file"
                         onClick={() => resolveDrift(r, "accept")}
-                        className="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                      >
-                        {busy ? "Working…" : "Accept file"}
-                      </button>
-                      <button
-                        disabled={busy}
+                        className="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                      />
+                      <BusyButton
+                        busy={busy}
+                        label="Keep this one"
                         onClick={() => resolveDrift(r, "keep")}
-                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
-                      >
-                        {busy ? "Working…" : "Keep this one"}
-                      </button>
+                        className="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100"
+                      />
                     </div>
                   </li>
                 );
@@ -327,13 +325,12 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
               {dismissedScopes.map((scope) => (
                 <li key={scope} className="flex items-center justify-between gap-3 px-3 py-3">
                   <span className="font-medium">{scope}</span>
-                  <button
-                    disabled={rowBusy === scope}
+                  <BusyButton
+                    busy={rowBusy === scope}
+                    label="Restore"
                     onClick={() => restore(scope)}
-                    className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    {rowBusy === scope ? "Working…" : "Restore"}
-                  </button>
+                    className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100"
+                  />
                 </li>
               ))}
             </ul>

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CompletenessIssue } from "@/lib/completeness/completenessChecks";
 import { sendJson } from "@/lib/http";
+import { BusyButton } from "@/components/BusyButton";
 
 export function CompletenessIssuesTable({ projectId, issues }: { projectId: string; issues: CompletenessIssue[] }) {
   const router = useRouter();
@@ -85,20 +86,18 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
                   <span className="font-medium">{i.name}</span>
                 </span>
                 <span className="flex shrink-0 gap-1">
-                  <button
-                    disabled={busy}
+                  <BusyButton
+                    busy={busy}
+                    label="Accept"
                     onClick={() => accept(i)}
-                    className="whitespace-nowrap rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                  >
-                    {busy ? "Working…" : "Accept"}
-                  </button>
-                  <button
-                    disabled={busy}
+                    className="whitespace-nowrap rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
+                  />
+                  <BusyButton
+                    busy={busy}
+                    label="Dismiss"
                     onClick={() => dismiss(i)}
-                    className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    {busy ? "Working…" : "Dismiss"}
-                  </button>
+                    className="whitespace-nowrap rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100"
+                  />
                 </span>
               </div>
               <div className="mt-1 text-xs text-slate-600">
