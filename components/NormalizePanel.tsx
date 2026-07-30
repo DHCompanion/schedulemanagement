@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { appPath } from "@/lib/http";
+import { sendJson } from "@/lib/http";
 
 export interface UnmappedRow {
   rawName: string;
@@ -38,17 +38,12 @@ export function NormalizePanel({ rows, knownScopes }: { rows: UnmappedRow[]; kno
     const mappings = Object.entries(values)
       .filter(([, s]) => s.trim())
       .map(([rawName, canonicalScope]) => ({ rawName, canonicalScope: canonicalScope.trim() }));
-    const res = await fetch(appPath("/api/normalize"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mappings }),
-    });
-    if (!res.ok) {
-      setBusy(false);
-      setError((await res.json())?.error?.message ?? "Save failed.");
+    const err = await sendJson("/api/normalize", { mappings });
+    setBusy(false);
+    if (err) {
+      setError(err);
       return;
     }
-    setBusy(false);
     router.refresh();
   }
 

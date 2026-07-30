@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { appPath } from "@/lib/http";
+import { sendJson } from "@/lib/http";
 import type { TradeDriftRow } from "@/lib/trades/tradeDrift";
 
 export interface OsDisciplineOption { id: number; name: string; division: string; }
@@ -85,14 +85,10 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
     const assignments = Object.entries(comp)
       .filter(([, partnerId]) => Number.isInteger(partnerId))
       .map(([osDisciplineId, osPartnerId]) => ({ osDisciplineId: Number(osDisciplineId), osPartnerId }));
-    const res = await fetch(appPath("/api/trades"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, disciplines: disciplinePayload, assignments }),
-    });
+    const err = await sendJson("/api/trades", { projectId, disciplines: disciplinePayload, assignments });
     setBusy(false);
-    if (!res.ok) {
-      setError((await res.json())?.error?.message ?? "Save failed.");
+    if (err) {
+      setError(err);
       return;
     }
     router.refresh();
@@ -101,14 +97,10 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
   async function dismiss(scope: string) {
     setRowBusy(scope);
     setError(null);
-    const res = await fetch(appPath("/api/trades/dismiss"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, canonicalScope: scope }),
-    });
+    const err = await sendJson("/api/trades/dismiss", { projectId, canonicalScope: scope });
     setRowBusy(null);
-    if (!res.ok) {
-      setError((await res.json())?.error?.message ?? "Dismiss failed.");
+    if (err) {
+      setError(err);
       return;
     }
     router.refresh();
@@ -117,14 +109,10 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
   async function restore(scope: string) {
     setRowBusy(scope);
     setError(null);
-    const res = await fetch(appPath("/api/trades/restore"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, canonicalScope: scope }),
-    });
+    const err = await sendJson("/api/trades/restore", { projectId, canonicalScope: scope });
     setRowBusy(null);
-    if (!res.ok) {
-      setError((await res.json())?.error?.message ?? "Restore failed.");
+    if (err) {
+      setError(err);
       return;
     }
     router.refresh();
@@ -134,14 +122,10 @@ export function TradesPanel({ projectId, disciplineRows, assignmentRows, discipl
     const key = `${row.osDisciplineId}::${row.fileValue}`;
     setRowBusy(key);
     setError(null);
-    const res = await fetch(appPath("/api/trades/drift"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, osDisciplineId: row.osDisciplineId, fileValue: row.fileValue, action }),
-    });
+    const err = await sendJson("/api/trades/drift", { projectId, osDisciplineId: row.osDisciplineId, fileValue: row.fileValue, action });
     setRowBusy(null);
-    if (!res.ok) {
-      setError((await res.json())?.error?.message ?? "Could not resolve.");
+    if (err) {
+      setError(err);
       return;
     }
     router.refresh();

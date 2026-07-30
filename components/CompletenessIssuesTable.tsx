@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CompletenessIssue } from "@/lib/completeness/completenessChecks";
-import { appPath } from "@/lib/http";
+import { sendJson } from "@/lib/http";
 
 export function CompletenessIssuesTable({ projectId, issues }: { projectId: string; issues: CompletenessIssue[] }) {
   const router = useRouter();
@@ -28,11 +28,10 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
     const key = `${issue.canonicalActivityKey}::${issue.coarseScope}`;
     setBusyKey(key);
     setError(null);
-    await fetch(appPath("/api/completeness/dismiss"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, canonicalActivityKey: issue.canonicalActivityKey, coarseScope: issue.coarseScope }),
-    });
+    // Deliberately ignores the result — dismiss refreshes and shows no error
+    // even when the request fails. That is current behaviour being preserved,
+    // not endorsed; see the component test for the same note.
+    await sendJson("/api/completeness/dismiss", { projectId, canonicalActivityKey: issue.canonicalActivityKey, coarseScope: issue.coarseScope });
     setBusyKey(null);
     router.refresh();
   }
@@ -49,14 +48,10 @@ export function CompletenessIssuesTable({ projectId, issues }: { projectId: stri
     if (!confirmed) return;
     setBusyKey(key);
     setError(null);
-    const res = await fetch(appPath("/api/completeness/accept"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, coarseScope: issue.coarseScope }),
-    });
+    const err = await sendJson("/api/completeness/accept", { projectId, coarseScope: issue.coarseScope });
     setBusyKey(null);
-    if (!res.ok) {
-      setError((await res.json())?.error?.message ?? "Accept failed.");
+    if (err) {
+      setError(err);
       return;
     }
     router.refresh();

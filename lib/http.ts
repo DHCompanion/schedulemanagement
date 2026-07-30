@@ -44,3 +44,21 @@ export function osAppOrigins(): string[] {
     .map((entry) => entry.trim())
     .filter(Boolean);
 }
+
+// Every client write in this app has the same shape: POST or DELETE some JSON,
+// and on failure show the server's own message rather than a generic one. The
+// caller keeps its busy state and its fallback wording; this owns the transport.
+export async function sendJson(path: string, body: unknown, method = "POST"): Promise<string | null> {
+  const res = await fetch(appPath(path), {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) return null;
+  try {
+    return ((await res.json())?.error?.message as string | undefined) ?? "Request failed.";
+  } catch {
+    // A non-JSON error body must not mask the failure it came with.
+    return "Request failed.";
+  }
+}

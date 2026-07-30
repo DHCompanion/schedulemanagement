@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { appPath } from "@/lib/http";
+import { sendJson } from "@/lib/http";
 
 export interface CoarseNameRow {
   name: string;
@@ -31,15 +31,11 @@ export function CoarsePanel({ rows, isAdmin }: { rows: CoarseNameRow[]; isAdmin:
     const failures: string[] = [];
     for (const [name, raw] of Object.entries(drafts)) {
       for (const finerScope of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
-        const res = await fetch(appPath("/api/completeness/split-rules"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ coarseScope: name, finerScope }),
-        });
         // Checked, not fire-and-forget: an admin-only route rejecting a
         // non-admin session used to fail silently here, and the schedule came
         // back with zero coarse activities and no explanation.
-        if (!res.ok) failures.push((await res.json())?.error?.message ?? `Could not mark "${name}".`);
+        const err = await sendJson("/api/completeness/split-rules", { coarseScope: name, finerScope });
+        if (err) failures.push(err);
       }
     }
     setBusy(false);

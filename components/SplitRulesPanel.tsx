@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { appPath } from "@/lib/http";
+import { sendJson } from "@/lib/http";
 
 export interface SplitRuleRow {
   coarseScope: string;
@@ -17,14 +17,10 @@ export function SplitRulesPanel({ rules, isAdmin }: { rules: SplitRuleRow[]; isA
   async function remove(coarseScope: string, finerScope: string) {
     setBusy(true);
     setError(null);
-    const res = await fetch(appPath("/api/completeness/split-rules"), {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ coarseScope, finerScope }),
-    });
+    const err = await sendJson("/api/completeness/split-rules", { coarseScope, finerScope }, "DELETE");
     setBusy(false);
-    if (!res.ok) {
-      setError((await res.json())?.error?.message ?? "Remove failed.");
+    if (err) {
+      setError(err);
       return;
     }
     router.refresh();

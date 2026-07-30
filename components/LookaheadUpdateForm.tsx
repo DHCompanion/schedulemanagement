@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { appPath } from "@/lib/http";
+import { appPath, sendJson } from "@/lib/http";
 
 export interface LookaheadFormRow {
   externalUid: number;
@@ -50,12 +50,11 @@ export function LookaheadUpdateForm({
       percentComplete: r.percentComplete,
       note: r.note || null,
     }));
-    const res = await fetch(appPath(`/api/updates/${updateId}/entries`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entries }),
-    });
-    if (!res.ok) { setError("Failed to save."); setBusy(false); return; }
+    // sendJson's own transport is used here, but its returned message is not —
+    // this endpoint has never surfaced the server's wording (see the
+    // component test locking in "Failed to save." for any failure body).
+    const entriesErr = await sendJson(`/api/updates/${updateId}/entries`, { entries });
+    if (entriesErr) { setError("Failed to save."); setBusy(false); return; }
     if (finalize) {
       const fin = await fetch(appPath(`/api/updates/${updateId}/finalize`), { method: "POST" });
       if (!fin.ok) { setError("Failed to finalize."); setBusy(false); return; }

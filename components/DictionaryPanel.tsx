@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { appPath } from "@/lib/http";
+import { sendJson } from "@/lib/http";
 
 export interface MappedRow {
   rawName: string;
@@ -18,14 +18,10 @@ export function DictionaryPanel({ rows, isAdmin }: { rows: MappedRow[]; isAdmin:
   async function unmap(rawName: string) {
     setBusy(true);
     setError(null);
-    const res = await fetch(appPath("/api/normalize"), {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rawName }),
-    });
+    const err = await sendJson("/api/normalize", { rawName }, "DELETE");
     setBusy(false);
-    if (!res.ok) {
-      setError((await res.json())?.error?.message ?? "Unmap failed.");
+    if (err) {
+      setError(err);
       return;
     }
     router.refresh();
