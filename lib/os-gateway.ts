@@ -50,3 +50,38 @@ export type OsTradePartnerFeed = {
 export async function getTradePartners(token: string): Promise<OsTradePartnerFeed> {
   return (await call("/trade-partners", token)) as OsTradePartnerFeed;
 }
+
+// One row per trade partner, mirroring the grain of the packet this tool serves
+// in the other direction. The OS caps a packet at 25 items; a project runs 10-15
+// trade partners, so the whole project fits inside the cap.
+export type OsProcurementRiskItem = {
+  osPartnerId: number;
+  partnerName: string;
+  itemCount: number;
+  earliestRequiredOnSite: string | null;
+  leastAdvancedState: string;
+  openVarianceCount: number;
+  atRiskCount: number;
+};
+
+export type OsProcurementSummary = {
+  packetType: string;
+  projectId: number;
+  items: OsProcurementRiskItem[];
+  summary: Record<string, unknown>;
+  warnings: string[];
+};
+
+// OS-mediated read of the procurement tool's project summary. Neither tool calls
+// the other: the OS authorizes the request, calls procurement server-to-server,
+// and hands back the payload. An empty `items` with a warning is a normal answer.
+export async function getProcurementSummary(token: string, limit = 25): Promise<OsProcurementSummary> {
+  return (await call("/context-requests", token, {
+    method: "POST",
+    body: JSON.stringify({
+      target: "procurement-manager",
+      packetType: "procurement_project_summary",
+      limit,
+    }),
+  })) as OsProcurementSummary;
+}

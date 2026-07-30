@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { getProjectContext, getTradePartners } from "@/lib/os-gateway";
+import { getProjectContext, getTradePartners, getProcurementSummary } from "@/lib/os-gateway";
 
 afterEach(() => vi.unstubAllGlobals());
 beforeEach(() => { process.env.SKILES_OS_API_BASE_URL = "https://api.example.com/api"; });
@@ -35,5 +35,36 @@ describe("os-gateway", () => {
   it("throws with the status when the gateway rejects the token", async () => {
     stub(false);
     await expect(getProjectContext("expired")).rejects.toThrow(/401/);
+  });
+
+  it("posts a context request for the procurement packet", async () => {
+    const fetchMock = stub(true, {
+      packetType: "procurement_project_summary",
+      projectId: 9, items: [], summary: {}, warnings: [],
+    });
+    await getProcurementSummary("tok");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.example.com/api/tool-gateway/context-requests");
+    expect(init.method).toBe("POST");
+    expect(init.headers.Authorization).toBe("Bearer tok");
+  });
+
+  it("names the target and packet type, and sends no project or person", async () => {
+    const fetchMock = stub(true, { items: [] });
+    await getProcurementSummary("tok");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    // The OS derives project and person from the token; sending them is a contract violation.
+    expect(body).toEqual({
+      target: "procurement-manager",
+      packetType: "procurement_project_summary",
+      limit: 25,
+    });
+  });
+
+  it("returns an empty packet as a normal answer", async () => {
+    stub(true, { packetType: "procurement_project_summary", projectId: 9, items: [], summary: {}, warnings: ["No procurement project is linked to this Connect project yet."] });
+    const packet = await getProcurementSummary("tok");
+    expect(packet.items).toEqual([]);
+    expect(packet.warnings).toHaveLength(1);
   });
 });
