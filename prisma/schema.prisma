@@ -39,6 +39,7 @@ model Project {
   tradeScopeDismissals   TradeScopeDismissal[]
   tradeDriftDismissals   TradeDriftDismissal[]
   osTradePartners        OsTradePartner[]
+  osProcurementRisks     OsProcurementRisk[]
 }
 
 model ScheduleImport {
@@ -289,6 +290,28 @@ model OsTradePartner {
 
   @@unique([projectId, osPartnerId])
   @@index([projectId])
+}
+
+// Cached procurement status per trade partner, refreshed at launch from the OS
+// `procurement_project_summary` packet. Cached rather than fetched live because
+// the gateway token lives 15 minutes and is discarded after launch: an absent
+// pill must never be mistaken for "not at risk".
+// Every returned partner is stored, not only flagged ones — the presence of any
+// row is what lets the page distinguish "checked, nothing flagged" from "unknown".
+model OsProcurementRisk {
+  id                     String    @id @default(cuid())
+  projectId              String
+  project                Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  osPartnerId            Int
+  partnerName            String
+  itemCount              Int
+  atRiskCount            Int
+  openVarianceCount      Int
+  earliestRequiredOnSite DateTime?
+  leastAdvancedState     String
+  fetchedAt              DateTime  @default(now())
+
+  @@unique([projectId, osPartnerId])
 }
 
 model ScopeSplitRule {
