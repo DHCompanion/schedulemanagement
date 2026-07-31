@@ -22,6 +22,11 @@ async function call(path: string, token: string, init: RequestInit = {}): Promis
   const res = await fetch(`${base.replace(/\/+$/, "")}/tool-gateway${path}`, {
     ...init,
     cache: "no-store",
+    // Bound every gateway call. Launch awaits these sequentially before it can
+    // redirect the user into the tool; a hung upstream (the OS itself, or for
+    // procurement, the OS's own server-to-server hop) must not be able to stall
+    // that longer than the platform's own request timeout would anyway.
+    signal: AbortSignal.timeout(8000),
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...init.headers },
   });
   if (!res.ok) throw new Error(`tool-gateway ${path} -> ${res.status}`);
