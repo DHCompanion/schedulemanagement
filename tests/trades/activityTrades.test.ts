@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { resolveActivityTradesWith, isActivityAtRisk } from "@/lib/trades/activityTrades";
+import {
+  resolveActivityTradesWith,
+  isActivityAtRisk,
+  shouldShowProcurementRiskLine,
+  type ActivityTrade,
+} from "@/lib/trades/activityTrades";
 import type { OsDiscipline, ProjectAssignment } from "@/lib/trades/tradesService";
 
 const scopeDict = new Map([["hang drywall l2", "Hang Drywall"]]);
@@ -67,5 +72,22 @@ describe("isActivityAtRisk", () => {
 
   it("flags an activity with unknown progress", () => {
     expect(isActivityAtRisk(77, null, flagged)).toBe(true);
+  });
+});
+
+describe("shouldShowProcurementRiskLine", () => {
+  const resolved: ActivityTrade = { disciplineName: "09A: DRYWALL/ACOUSTICAL", partnerName: "Carrco", osPartnerId: 4 };
+  const unresolved: ActivityTrade = { disciplineName: "09A: DRYWALL/ACOUSTICAL", partnerName: null, osPartnerId: null };
+
+  it("shows the line when rows exist and at least one activity resolves to a partner", () => {
+    expect(shouldShowProcurementRiskLine(true, [unresolved, resolved])).toBe(true);
+  });
+
+  it("hides the line when rows exist but no activity resolves to a partner", () => {
+    expect(shouldShowProcurementRiskLine(true, [unresolved, unresolved])).toBe(false);
+  });
+
+  it("hides the line when there are no procurement rows at all", () => {
+    expect(shouldShowProcurementRiskLine(false, [resolved])).toBe(false);
   });
 });

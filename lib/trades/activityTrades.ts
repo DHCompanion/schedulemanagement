@@ -77,3 +77,24 @@ export function isActivityAtRisk(
   if (percentComplete === 100) return false;
   return flagged.has(osPartnerId);
 }
+
+/**
+ * Whether the "Procurement risk as of ..." freshness line may render.
+ *
+ * Cached procurement rows existing is not enough: the line implies "this
+ * project was checked", but if no activity's name -> scope -> discipline ->
+ * partner chain resolves (an unbuilt scope dictionary, no trade assignments
+ * yet), zero pills is not evidence of "nothing flagged" — it is evidence of
+ * nothing being checkable at all. The page must never claim it has an answer
+ * it does not have.
+ */
+export function shouldShowProcurementRiskLine(
+  hasProcurementRows: boolean,
+  trades: Iterable<ActivityTrade>,
+): boolean {
+  if (!hasProcurementRows) return false;
+  for (const trade of trades) {
+    if (trade.osPartnerId !== null) return true;
+  }
+  return false;
+}

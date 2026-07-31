@@ -11,7 +11,11 @@ import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getScheduleHealth } from "@/lib/health/healthService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
-import { isActivityAtRisk, resolveActivityTrades } from "@/lib/trades/activityTrades";
+import {
+  isActivityAtRisk,
+  resolveActivityTrades,
+  shouldShowProcurementRiskLine,
+} from "@/lib/trades/activityTrades";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +62,11 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
   const flaggedPartners = new Set(
     procurementRisk.filter((r) => r.atRiskCount > 0).map((r) => r.osPartnerId),
   );
-  const riskFetchedAt = procurementRisk[0]?.fetchedAt ?? null;
+  // The line must not claim "checked" when nothing could actually resolve to a
+  // partner — see shouldShowProcurementRiskLine.
+  const riskFetchedAt = shouldShowProcurementRiskLine(procurementRisk.length > 0, trades.values())
+    ? procurementRisk[0]?.fetchedAt ?? null
+    : null;
   const rows: ActivityRow[] = (latest?.activities ?? []).map((a) => {
     const percentComplete =
       currentProgress.get(a.canonicalActivityKey)?.percentComplete ?? a.percentComplete;

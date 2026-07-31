@@ -261,15 +261,22 @@ Under the existing import-detail block:
 Procurement risk as of 2026-07-30 09:14
 ```
 
-Rendered **only when cached rows exist**. This distinction is the whole reason
-step 2 stores unflagged partners too, and it needs no extra code:
+Rendered **only when cached rows exist AND at least one activity actually
+resolves to an `osPartnerId`** (`shouldShowProcurementRiskLine`,
+`lib/trades/activityTrades.ts`). Rows existing alone is not enough: on a
+project with an unbuilt scope dictionary or no trade assignments, every
+activity's chain is incomplete, so zero pills would be a display artifact, not
+a "checked, nothing flagged" answer. The rows-exist half is the whole reason
+step 2 stores unflagged partners too, and it needs no extra code; the
+chain-resolves half is the property this function exists to protect.
 
-| State | Rows | Page shows | Reads as |
-|---|---|---|---|
-| Never launched from Connect, or procurement unreachable | none | no pills, no line | unknown |
-| No procurement project linked, or no items | none (empty packet) | no pills, no line | unknown |
-| Procurement has data, nothing flagged | some | no pills, line present | checked, nothing flagged |
-| Procurement has data, partners flagged | some | pills, line present | act on these |
+| State | Rows | Chain resolves for any activity | Page shows | Reads as |
+|---|---|---|---|---|
+| Never launched from Connect, or procurement unreachable | none | — | no pills, no line | unknown |
+| No procurement project linked, or no items | none (empty packet) | — | no pills, no line | unknown |
+| Procurement has data, but no activity's name -> scope -> discipline -> partner chain resolves | some | no | no pills, no line | unknown |
+| Procurement has data, nothing flagged | some | yes | no pills, line present | checked, nothing flagged |
+| Procurement has data, partners flagged | some | yes | pills, line present | act on these |
 
 The page never claims "nothing is at risk" on the strength of an answer it does
 not have.
