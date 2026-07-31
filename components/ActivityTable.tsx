@@ -157,6 +157,11 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
             {a.percentComplete === 100 && (
               <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">✓ Completed</span>
             )}
+            {a.atRisk && (
+              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">
+                AT RISK
+              </span>
+            )}
           </span>
           <span className="whitespace-nowrap text-xs text-slate-500">
             {fmtDate(a.plannedStart)} → {fmtDate(a.plannedFinish)}
