@@ -80,13 +80,13 @@ export type OsProcurementSummary = {
 // OS-mediated read of the procurement tool's project summary. Neither tool calls
 // the other: the OS authorizes the request, calls procurement server-to-server,
 // and hands back the payload. An empty `items` with a warning is a normal answer.
-export async function getProcurementSummary(token: string, limit = 25): Promise<OsProcurementSummary> {
+export async function getProcurementSummary(token: string): Promise<OsProcurementSummary> {
   return (await call("/context-requests", token, {
     method: "POST",
     body: JSON.stringify({
       target: "procurement-manager",
       packetType: "procurement_project_summary",
-      limit,
+      limit: 25,
     }),
   })) as OsProcurementSummary;
 }
