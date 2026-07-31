@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { appUrl, osAppOrigins } from "@/lib/http";
-import { getProjectContext, getTradePartners } from "@/lib/os-gateway";
+import { getProcurementSummary, getProjectContext, getTradePartners } from "@/lib/os-gateway";
 import { SCOPE_COOKIE, scopeCookieOptions, signScope } from "@/lib/scope";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +53,7 @@ export async function GET(req: Request): Promise<NextResponse> {
   });
 
   await cacheTradePartners(token, project.id);
+  await cacheProcurementRisk(token, project.id);
 
   const scope = await signScope(
     {
@@ -89,6 +90,33 @@ async function cacheTradePartners(token: string, projectId: string): Promise<voi
           name: partner.name,
           doNotUse: partner.doNotUse,
           disciplines: partner.disciplines ?? [],
+        })),
+      }),
+    ]);
+  } catch {
+    // Keep whatever was cached previously.
+  }
+}
+
+// Launch is the only moment a valid gateway token is in hand, so procurement
+// status is fetched here and cached. Failure must not block entry: no cached
+// rows renders as "unknown" on the project page, which is the honest answer, and
+// the next launch retries.
+async function cacheProcurementRisk(token: string, projectId: string): Promise<void> {
+  try {
+    const packet = await getProcurementSummary(token);
+    await prisma.$transaction([
+      prisma.osProcurementRisk.deleteMany({ where: { projectId } }),
+      prisma.osProcurementRisk.createMany({
+        data: packet.items.map((item) => ({
+          projectId,
+          osPartnerId: item.osPartnerId,
+          partnerName: item.partnerName,
+          itemCount: item.itemCount,
+          atRiskCount: item.atRiskCount,
+          openVarianceCount: item.openVarianceCount,
+          earliestRequiredOnSite: item.earliestRequiredOnSite ? new Date(item.earliestRequiredOnSite) : null,
+          leastAdvancedState: item.leastAdvancedState,
         })),
       }),
     ]);

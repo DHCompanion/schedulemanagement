@@ -167,3 +167,98 @@ describe.runIf(!!process.env.DATABASE_URL)("OS launch binds a project", () => {
     expect(project?.name).toBe("Downtown Hospital Renovation (renamed)");
   });
 });
+
+function stubLaunchGateway(osProjectId: number, opts: { procurement: "ok" | "fail" }) {
+  const fetchMock = vi.fn(async (url: string) => {
+    const target = String(url);
+    if (target.includes("/context-requests")) {
+      if (opts.procurement === "fail") throw new Error("procurement unreachable");
+      return {
+        ok: true,
+        json: async () => ({
+          packetType: "procurement_project_summary",
+          projectId: osProjectId,
+          items: [
+            {
+              osPartnerId: 77, partnerName: "Amber Electrical Contractors, Inc.",
+              itemCount: 12, earliestRequiredOnSite: "2026-08-04T00:00:00.000Z",
+              leastAdvancedState: "submitted", openVarianceCount: 1, atRiskCount: 2,
+            },
+            {
+              osPartnerId: 91, partnerName: "Carrco Painting Contractors, Inc.",
+              itemCount: 4, earliestRequiredOnSite: null,
+              leastAdvancedState: "delivered", openVarianceCount: 0, atRiskCount: 0,
+            },
+          ],
+          summary: {}, warnings: [],
+        }),
+      };
+    }
+    if (target.includes("/trade-partners")) {
+      return { ok: true, json: async () => ({ projectId: osProjectId, tradePartners: [] }) };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        project: { id: osProjectId, name: "BSW Regional ED", client: "BSW" },
+        person: { id: 4, displayName: "A. Woodyard" },
+        access: { accessRole: "Superintendent" },
+      }),
+    };
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+describe.runIf(!!process.env.DATABASE_URL)("procurement risk cache", () => {
+  it("caches every partner returned, flagged or not", async () => {
+    stubLaunchGateway(4101, { procurement: "ok" });
+    await GET(launchRequest("?token=t"));
+
+    const project = await prisma.project.findUnique({ where: { osProjectId: 4101 } });
+    const rows = await prisma.osProcurementRisk.findMany({
+      where: { projectId: project!.id },
+      orderBy: { osPartnerId: "asc" },
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0].osPartnerId).toBe(77);
+    expect(rows[0].atRiskCount).toBe(2);
+    expect(rows[0].earliestRequiredOnSite?.toISOString()).toBe("2026-08-04T00:00:00.000Z");
+    // Unflagged partners are stored too: their presence is what proves the
+    // project was checked at all.
+    expect(rows[1].atRiskCount).toBe(0);
+    expect(rows[1].earliestRequiredOnSite).toBeNull();
+  });
+
+  it("completes the launch when procurement is unreachable", async () => {
+    stubLaunchGateway(4102, { procurement: "fail" });
+    const res = await GET(launchRequest("?token=t"));
+
+    expect(res.status).toBe(303);
+    expect(res.cookies.get(SCOPE_COOKIE)?.value).toBeTruthy();
+    const project = await prisma.project.findUnique({ where: { osProjectId: 4102 } });
+    expect(project).not.toBeNull();
+    expect(await prisma.osProcurementRisk.count({ where: { projectId: project!.id } })).toBe(0);
+  });
+
+  it("clears a stale cache when the packet comes back empty", async () => {
+    stubLaunchGateway(4103, { procurement: "ok" });
+    await GET(launchRequest("?token=t"));
+    const project = await prisma.project.findUnique({ where: { osProjectId: 4103 } });
+    expect(await prisma.osProcurementRisk.count({ where: { projectId: project!.id } })).toBe(2);
+
+    vi.unstubAllGlobals();
+    const emptyMock = vi.fn(async (url: string) => {
+      const target = String(url);
+      if (target.includes("/context-requests")) {
+        return { ok: true, json: async () => ({ packetType: "procurement_project_summary", projectId: 4103, items: [], summary: {}, warnings: ["No procurement project is linked to this Connect project yet."] }) };
+      }
+      if (target.includes("/trade-partners")) return { ok: true, json: async () => ({ projectId: 4103, tradePartners: [] }) };
+      return { ok: true, json: async () => ({ project: { id: 4103, name: "BSW Regional ED" }, person: { id: 4 }, access: { accessRole: "Superintendent" } }) };
+    });
+    vi.stubGlobal("fetch", emptyMock);
+
+    await GET(launchRequest("?token=t"));
+    expect(await prisma.osProcurementRisk.count({ where: { projectId: project!.id } })).toBe(0);
+  });
+});
