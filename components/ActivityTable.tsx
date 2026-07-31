@@ -13,6 +13,8 @@ export interface ActivityRow {
   /** Derived from the scope dictionary and this project's trade assignments. */
   disciplineName: string | null;
   partnerName: string | null;
+  /** Procurement flagged this activity's trade partner. Resolved server-side. */
+  atRisk: boolean;
   type: string;
   isCritical: boolean;
   outlineLevel: number;

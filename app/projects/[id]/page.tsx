@@ -11,7 +11,7 @@ import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getScheduleHealth } from "@/lib/health/healthService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
-import { resolveActivityTrades } from "@/lib/trades/activityTrades";
+import { isActivityAtRisk, resolveActivityTrades } from "@/lib/trades/activityTrades";
 
 export const dynamic = "force-dynamic";
 
@@ -48,24 +48,40 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
     project.id,
     (latest?.activities ?? []).map((a) => ({ id: a.id, name: a.name })),
   );
-  const rows: ActivityRow[] = (latest?.activities ?? []).map((a) => ({
-    id: a.id,
-    externalId: a.externalId,
-    wbsCode: a.wbsCode,
-    name: a.name,
-    canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
-    disciplineName: trades.get(a.id)?.disciplineName ?? null,
-    partnerName: trades.get(a.id)?.partnerName ?? null,
-    type: a.type,
-    isCritical: a.isCritical,
-    outlineLevel: a.outlineLevel,
-    plannedStart: a.plannedStart ? a.plannedStart.toISOString() : null,
-    plannedFinish: a.plannedFinish ? a.plannedFinish.toISOString() : null,
-    percentComplete: currentProgress.get(a.canonicalActivityKey)?.percentComplete ?? a.percentComplete,
-    totalSlackDays: toDays(a.totalSlackMinutes, mpd),
-    durationDays: a.durationDays,
-    customFields: (a.customFields as Record<string, string>) ?? {},
-  }));
+  // One query serves both the pill and the freshness line. Rows exist for every
+  // partner procurement returned, flagged or not, so their presence is what
+  // distinguishes "checked, nothing flagged" from "never checked".
+  const procurementRisk = await prisma.osProcurementRisk.findMany({
+    where: { projectId: project.id },
+    select: { osPartnerId: true, atRiskCount: true, fetchedAt: true },
+  });
+  const flaggedPartners = new Set(
+    procurementRisk.filter((r) => r.atRiskCount > 0).map((r) => r.osPartnerId),
+  );
+  const riskFetchedAt = procurementRisk[0]?.fetchedAt ?? null;
+  const rows: ActivityRow[] = (latest?.activities ?? []).map((a) => {
+    const percentComplete =
+      currentProgress.get(a.canonicalActivityKey)?.percentComplete ?? a.percentComplete;
+    return {
+      id: a.id,
+      externalId: a.externalId,
+      wbsCode: a.wbsCode,
+      name: a.name,
+      canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
+      disciplineName: trades.get(a.id)?.disciplineName ?? null,
+      partnerName: trades.get(a.id)?.partnerName ?? null,
+      atRisk: isActivityAtRisk(trades.get(a.id)?.osPartnerId ?? null, percentComplete, flaggedPartners),
+      type: a.type,
+      isCritical: a.isCritical,
+      outlineLevel: a.outlineLevel,
+      plannedStart: a.plannedStart ? a.plannedStart.toISOString() : null,
+      plannedFinish: a.plannedFinish ? a.plannedFinish.toISOString() : null,
+      percentComplete,
+      totalSlackDays: toDays(a.totalSlackMinutes, mpd),
+      durationDays: a.durationDays,
+      customFields: (a.customFields as Record<string, string>) ?? {},
+    };
+  });
 
   return (
     <main className="mx-auto max-w-4xl p-4 sm:p-6">
@@ -118,6 +134,11 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
               <div><span className="font-medium">{health.progress.remaining}</span> remaining</div>
               <div><span className="font-medium">{health.progress.percentComplete}%</span> complete</div>
             </Link>
+          )}
+          {riskFetchedAt && (
+            <p className="mb-2 text-xs text-slate-500">
+              Procurement risk as of {riskFetchedAt.toISOString().slice(0, 16).replace("T", " ")}
+            </p>
           )}
           <ActivityTable rows={rows} />
         </>
