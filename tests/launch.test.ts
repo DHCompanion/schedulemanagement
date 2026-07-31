@@ -211,6 +211,13 @@ function stubLaunchGateway(osProjectId: number, opts: { procurement: "ok" | "fai
 }
 
 describe.runIf(!!process.env.DATABASE_URL)("procurement risk cache", () => {
+  const osProjectIds = [4101, 4102, 4103];
+
+  afterAll(async () => {
+    await prisma.project.deleteMany({ where: { osProjectId: { in: osProjectIds } } });
+    await prisma.$disconnect();
+  });
+
   it("caches every partner returned, flagged or not", async () => {
     stubLaunchGateway(4101, { procurement: "ok" });
     await GET(launchRequest("?token=t"));
