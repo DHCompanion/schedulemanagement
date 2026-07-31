@@ -1,7 +1,8 @@
 # AT RISK pill on schedule activities, from procurement
 
 Date: 2026-07-30
-Status: approved, not yet implemented
+Status: implemented 2026-07-31 (commits eda0813..3af5084); end-to-end verification
+blocked on the procurement secret below
 
 A proof of concept for the second direction of the Procurement ↔ Schedule Manager
 cross-tool context: an `AT RISK` pill on a schedule activity whose trade partner
