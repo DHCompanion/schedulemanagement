@@ -7,7 +7,12 @@ import {
   type ProjectAssignment,
 } from "@/lib/trades/tradesService";
 
-export type ActivityTrade = { disciplineName: string; partnerName: string | null };
+export type ActivityTrade = {
+  disciplineName: string;
+  partnerName: string | null;
+  /** The OS trade partner id — the join key to any OS-sourced partner data. */
+  osPartnerId: number | null;
+};
 
 export interface NamedActivity {
   id: string;
@@ -35,9 +40,11 @@ export function resolveActivityTradesWith(
     if (!scope) continue;
     const discipline = tradeDict.get(scope);
     if (!discipline) continue;
+    const assignment = assignments.get(discipline.id);
     out.set(activity.id, {
       disciplineName: discipline.name,
-      partnerName: assignments.get(discipline.id)?.name ?? null,
+      partnerName: assignment?.name ?? null,
+      osPartnerId: assignment?.osPartnerId ?? null,
     });
   }
   return out;
@@ -54,4 +61,19 @@ export async function resolveActivityTrades(
     getProjectAssignments(projectId),
   ]);
   return resolveActivityTradesWith(activities, scopeDict, tradeDict, assignments);
+}
+
+/**
+ * Whether an activity wears the AT RISK pill: its partner is one procurement
+ * flagged, and the work is not already done. Completed work cannot be threatened
+ * by late material.
+ */
+export function isActivityAtRisk(
+  osPartnerId: number | null,
+  percentComplete: number | null,
+  flagged: Set<number>,
+): boolean {
+  if (osPartnerId === null) return false;
+  if (percentComplete === 100) return false;
+  return flagged.has(osPartnerId);
 }

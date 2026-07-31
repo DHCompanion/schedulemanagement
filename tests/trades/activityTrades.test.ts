@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveActivityTradesWith } from "@/lib/trades/activityTrades";
+import { resolveActivityTradesWith, isActivityAtRisk } from "@/lib/trades/activityTrades";
 import type { OsDiscipline, ProjectAssignment } from "@/lib/trades/tradesService";
 
 const scopeDict = new Map([["hang drywall l2", "Hang Drywall"]]);
@@ -16,6 +16,7 @@ describe("resolveActivityTradesWith", () => {
     expect(out.get("a1")).toEqual({
       disciplineName: "09A: DRYWALL/ACOUSTICAL",
       partnerName: "Carrco Painting Contractors, Inc.",
+      osPartnerId: 4,
     });
   });
 
@@ -31,11 +32,40 @@ describe("resolveActivityTradesWith", () => {
 
   it("returns the discipline with a null partner when none is assigned", () => {
     const out = resolveActivityTradesWith([{ id: "a1", name: "Hang Drywall L2" }], scopeDict, tradeDict, new Map());
-    expect(out.get("a1")).toEqual({ disciplineName: "09A: DRYWALL/ACOUSTICAL", partnerName: null });
+    expect(out.get("a1")).toEqual({
+      disciplineName: "09A: DRYWALL/ACOUSTICAL",
+      partnerName: null,
+      osPartnerId: null,
+    });
   });
 
   it("matches names case- and whitespace-insensitively", () => {
     const out = resolveActivityTradesWith([{ id: "a1", name: "  HANG   drywall l2 " }], scopeDict, tradeDict, assignments);
     expect(out.get("a1")?.partnerName).toBe("Carrco Painting Contractors, Inc.");
+  });
+});
+
+describe("isActivityAtRisk", () => {
+  const flagged = new Set([77]);
+
+  it("flags an activity whose partner procurement marked at risk", () => {
+    expect(isActivityAtRisk(77, 40, flagged)).toBe(true);
+  });
+
+  it("does not flag a partner procurement left alone", () => {
+    expect(isActivityAtRisk(91, 40, flagged)).toBe(false);
+  });
+
+  it("does not flag an activity with no assigned partner", () => {
+    expect(isActivityAtRisk(null, 40, flagged)).toBe(false);
+  });
+
+  it("suppresses the pill once the work is complete", () => {
+    // Finished work cannot be threatened by late material.
+    expect(isActivityAtRisk(77, 100, flagged)).toBe(false);
+  });
+
+  it("flags an activity with unknown progress", () => {
+    expect(isActivityAtRisk(77, null, flagged)).toBe(true);
   });
 });

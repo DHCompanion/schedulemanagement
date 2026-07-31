@@ -4,8 +4,8 @@ import type { ActivityTrade } from "@/lib/trades/activityTrades";
 
 const disciplineIdByName = new Map([["26A: ELECTRICAL", 26]]);
 const trades = new Map<string, ActivityTrade>([
-  ["a1", { disciplineName: "26A: ELECTRICAL", partnerName: "Amber Electrical" }],
-  ["a2", { disciplineName: "26A: ELECTRICAL", partnerName: "Amber Electrical" }],
+  ["a1", { disciplineName: "26A: ELECTRICAL", partnerName: "Amber Electrical", osPartnerId: 1 }],
+  ["a2", { disciplineName: "26A: ELECTRICAL", partnerName: "Amber Electrical", osPartnerId: 1 }],
 ]);
 const act = (id: string, partner?: string): ActivityWithFields => ({
   id,
@@ -82,7 +82,7 @@ describe("findTradeDrift", () => {
 
   it("flags a file value when the tool has no partner assigned", () => {
     const unassigned = new Map<string, ActivityTrade>([
-      ["a1", { disciplineName: "26A: ELECTRICAL", partnerName: null }],
+      ["a1", { disciplineName: "26A: ELECTRICAL", partnerName: null, osPartnerId: null }],
     ]);
     const rows = findTradeDrift([act("a1", "Facility Solutions")], unassigned, disciplineIdByName, new Set());
     expect(rows).toHaveLength(1);
