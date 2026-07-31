@@ -182,12 +182,16 @@ function stubLaunchGateway(osProjectId: number, opts: { procurement: "ok" | "fai
             {
               osPartnerId: 77, partnerName: "Amber Electrical Contractors, Inc.",
               itemCount: 12, earliestRequiredOnSite: "2026-08-04T00:00:00.000Z",
-              leastAdvancedState: "submitted", openVarianceCount: 1, atRiskCount: 2,
+              leastAdvancedState: "submitted",
+              behindCount: 3, submittalLateCount: 2, projectedLateCount: 1,
+              releasedAtRiskCount: 1, missingDatesCount: 0,
             },
             {
               osPartnerId: 91, partnerName: "Carrco Painting Contractors, Inc.",
               itemCount: 4, earliestRequiredOnSite: null,
-              leastAdvancedState: "delivered", openVarianceCount: 0, atRiskCount: 0,
+              leastAdvancedState: "delivered",
+              behindCount: 0, submittalLateCount: 0, projectedLateCount: 0,
+              releasedAtRiskCount: 0, missingDatesCount: 4,
             },
           ],
           summary: {}, warnings: [],
@@ -229,11 +233,15 @@ describe.runIf(!!process.env.DATABASE_URL)("procurement risk cache", () => {
     });
     expect(rows).toHaveLength(2);
     expect(rows[0].osPartnerId).toBe(77);
-    expect(rows[0].atRiskCount).toBe(2);
+    expect(rows[0].behindCount).toBe(3);
+    expect(rows[0].submittalLateCount).toBe(2);
+    expect(rows[0].projectedLateCount).toBe(1);
     expect(rows[0].earliestRequiredOnSite?.toISOString()).toBe("2026-08-04T00:00:00.000Z");
     // Unflagged partners are stored too: their presence is what proves the
-    // project was checked at all.
-    expect(rows[1].atRiskCount).toBe(0);
+    // project was checked at all. Carrco is not behind, but all four of its
+    // items lack the dates to assess — a different thing, and cached as such.
+    expect(rows[1].behindCount).toBe(0);
+    expect(rows[1].missingDatesCount).toBe(4);
     expect(rows[1].earliestRequiredOnSite).toBeNull();
   });
 

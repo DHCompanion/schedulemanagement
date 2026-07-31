@@ -57,16 +57,24 @@ export async function getTradePartners(token: string): Promise<OsTradePartnerFee
 }
 
 // One row per trade partner, mirroring the grain of the packet this tool serves
-// in the other direction. The OS caps a packet at 25 items; a project runs 10-15
-// trade partners, so the whole project fits inside the cap.
+// in the other direction. A packet "item" is a partner, not a procurement item —
+// the OS caps items at 25, and a project runs 10-15 trade partners, so the whole
+// project fits inside the cap. `itemCount` below is that partner's procurement
+// items, which is the overloaded half of the name.
+//
+// The counts are per-status tallies procurement derives; `behindCount` is
+// `submittalLateCount + projectedLateCount` and is what flags a partner here.
 export type OsProcurementRiskItem = {
   osPartnerId: number;
   partnerName: string;
   itemCount: number;
   earliestRequiredOnSite: string | null;
   leastAdvancedState: string;
-  openVarianceCount: number;
-  atRiskCount: number;
+  behindCount: number;
+  submittalLateCount: number;
+  projectedLateCount: number;
+  releasedAtRiskCount: number;
+  missingDatesCount: number;
 };
 
 export type OsProcurementSummary = {

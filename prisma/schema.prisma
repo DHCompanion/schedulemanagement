@@ -305,8 +305,14 @@ model OsProcurementRisk {
   osPartnerId            Int
   partnerName            String
   itemCount              Int
-  atRiskCount            Int
-  openVarianceCount      Int
+  // Per-status tallies from procurement's derived vocabulary. behindCount is
+  // submittalLateCount + projectedLateCount and is the one that flags a partner;
+  // the rest are cached for the panel that will display the wider packet.
+  behindCount            Int
+  submittalLateCount     Int
+  projectedLateCount     Int
+  releasedAtRiskCount    Int
+  missingDatesCount      Int
   earliestRequiredOnSite DateTime?
   leastAdvancedState     String
   fetchedAt              DateTime  @default(now())

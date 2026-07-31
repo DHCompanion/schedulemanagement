@@ -57,10 +57,12 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
   // distinguishes "checked, nothing flagged" from "never checked".
   const procurementRisk = await prisma.osProcurementRisk.findMany({
     where: { projectId: project.id },
-    select: { osPartnerId: true, atRiskCount: true, fetchedAt: true },
+    select: { osPartnerId: true, behindCount: true, fetchedAt: true },
   });
+  // "Behind" is procurement's own verdict: a submittal past its start-by date, or
+  // a projection landing after the material is required.
   const flaggedPartners = new Set(
-    procurementRisk.filter((r) => r.atRiskCount > 0).map((r) => r.osPartnerId),
+    procurementRisk.filter((r) => r.behindCount > 0).map((r) => r.osPartnerId),
   );
   // The line must not claim "checked" when nothing could actually resolve to a
   // partner — see shouldShowProcurementRiskLine.
