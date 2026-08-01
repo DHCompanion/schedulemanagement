@@ -52,17 +52,42 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
     project.id,
     (latest?.activities ?? []).map((a) => ({ id: a.id, name: a.name })),
   );
-  // One query serves both the pill and the freshness line. Rows exist for every
-  // partner procurement returned, flagged or not, so their presence is what
-  // distinguishes "checked, nothing flagged" from "never checked".
+  // One query serves the pill, the freshness line and the detail panel. Rows
+  // exist for every partner procurement returned, flagged or not, so their
+  // presence is what distinguishes "checked, nothing flagged" from "never
+  // checked". earliestRequiredOnSite is deliberately not selected: it is
+  // partner-wide and would invite an invalid comparison against one activity's
+  // own start date.
   const procurementRisk = await prisma.osProcurementRisk.findMany({
     where: { projectId: project.id },
-    select: { osPartnerId: true, behindCount: true, fetchedAt: true },
+    select: {
+      osPartnerId: true,
+      itemCount: true,
+      behindCount: true,
+      submittalLateCount: true,
+      projectedLateCount: true,
+      releasedAtRiskCount: true,
+      missingDatesCount: true,
+      fetchedAt: true,
+    },
   });
   // "Behind" is procurement's own verdict: a submittal past its start-by date, or
   // a projection landing after the material is required.
   const flaggedPartners = new Set(
     procurementRisk.filter((r) => r.behindCount > 0).map((r) => r.osPartnerId),
+  );
+  const procurementByPartner = new Map(
+    procurementRisk.map((r) => [
+      r.osPartnerId,
+      {
+        itemCount: r.itemCount,
+        behindCount: r.behindCount,
+        submittalLateCount: r.submittalLateCount,
+        projectedLateCount: r.projectedLateCount,
+        releasedAtRiskCount: r.releasedAtRiskCount,
+        missingDatesCount: r.missingDatesCount,
+      },
+    ]),
   );
   // The line must not claim "checked" when nothing could actually resolve to a
   // partner — see shouldShowProcurementRiskLine.
@@ -72,6 +97,7 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
   const rows: ActivityRow[] = (latest?.activities ?? []).map((a) => {
     const percentComplete =
       currentProgress.get(a.canonicalActivityKey)?.percentComplete ?? a.percentComplete;
+    const partnerId = trades.get(a.id)?.osPartnerId ?? null;
     return {
       id: a.id,
       externalId: a.externalId,
@@ -80,7 +106,8 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
       canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
       disciplineName: trades.get(a.id)?.disciplineName ?? null,
       partnerName: trades.get(a.id)?.partnerName ?? null,
-      atRisk: isActivityAtRisk(trades.get(a.id)?.osPartnerId ?? null, percentComplete, flaggedPartners),
+      atRisk: isActivityAtRisk(partnerId, percentComplete, flaggedPartners),
+      procurement: partnerId === null ? null : procurementByPartner.get(partnerId) ?? null,
       type: a.type,
       isCritical: a.isCritical,
       outlineLevel: a.outlineLevel,

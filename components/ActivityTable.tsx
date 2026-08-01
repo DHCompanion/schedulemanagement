@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { deriveSectionInfo, isHiddenByCollapse, assignSiblingIndices } from "@/lib/schedule/wbsGrouping";
+import { describeProcurement, type ActivityProcurement } from "@/lib/trades/activityTrades";
 
 export interface ActivityRow {
   id: string;
@@ -15,6 +16,8 @@ export interface ActivityRow {
   partnerName: string | null;
   /** Procurement flagged this activity's trade partner. Resolved server-side. */
   atRisk: boolean;
+  /** Procurement tallies for this activity's trade partner, null when unknown. */
+  procurement: ActivityProcurement | null;
   type: string;
   isCritical: boolean;
   outlineLevel: number;
@@ -175,6 +178,18 @@ export function ActivityTable({ rows }: { rows: ActivityRow[] }) {
             <div>Total float (days): {a.totalSlackDays?.toFixed(2) ?? "—"}</div>
             {a.disciplineName && <div>Discipline: {a.disciplineName}</div>}
             {a.partnerName && <div>Trade partner: {a.partnerName}</div>}
+            {(() => {
+              if (!a.procurement) return null;
+              const { headline, details } = describeProcurement(a.procurement);
+              return (
+                <div className="col-span-2">
+                  <div>This trade&apos;s procurement: {headline}</div>
+                  {details.map((d) => (
+                    <div key={d} className="pl-3 text-slate-500">{d}</div>
+                  ))}
+                </div>
+              );
+            })()}
             {Object.entries(a.customFields).map(([k, v]) => (
               <div key={k}>{k}: {v}</div>
             ))}
