@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { deriveSectionInfo, isHiddenByCollapse, assignSiblingIndices } from "@/lib/schedule/wbsGrouping";
-import { describeProcurement, type ActivityProcurement } from "@/lib/trades/activityTrades";
+import { describeProcurement, type ActivityProcurement } from "@/lib/procurement/display";
 
 export interface ActivityRow {
   id: string;

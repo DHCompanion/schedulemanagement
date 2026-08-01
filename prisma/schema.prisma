@@ -307,7 +307,10 @@ model OsProcurementRisk {
   itemCount              Int
   // Per-status tallies from procurement's derived vocabulary. behindCount is
   // submittalLateCount + projectedLateCount and is the one that flags a partner;
-  // the rest are cached for the panel that will display the wider packet.
+  // submittalLateCount, projectedLateCount, releasedAtRiskCount and
+  // missingDatesCount feed the AT RISK explanation line in each activity's
+  // expanded detail (lib/procurement/display.ts). leastAdvancedState has no
+  // consumer yet.
   behindCount            Int
   submittalLateCount     Int
   projectedLateCount     Int
