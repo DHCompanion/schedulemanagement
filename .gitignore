@@ -20,3 +20,6 @@ next-env.d.ts
 .env*
 # ...but the checked-in template must stay tracked (vercel link added .env*)
 !.env.example
+
+# Local-only sample schedule exports and scratch verification files
+/Example Files/
