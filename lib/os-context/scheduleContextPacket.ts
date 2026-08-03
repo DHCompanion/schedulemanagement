@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/db";
+import { computeForecast } from "@/lib/forecast/computeForecast";
+import { baselineProgress } from "@/lib/lookahead/computeLookahead";
+import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { minutesToDays } from "@/lib/msp/duration";
 import { isLeafActive } from "@/lib/msp/types";
 import { applyDictionary } from "@/lib/normalize/normalizationService";
+import { BUCKET_ORDER, groupIntoBuckets, type BucketKey } from "@/lib/schedule/weekBuckets";
 import { getProjectAssignments, getTradeDictionary } from "@/lib/trades/tradesService";
+import { getFinalizedEntries } from "@/lib/updates/updateService";
 
 // The only packet type this tool exposes. Declared in the OS registry as
 // schedule-manager's contextExposures entry; anything else is rejected.
@@ -26,6 +31,18 @@ export type ScheduleContextItem = {
   // The OS project id, not ours. The OS re-checks every item's projectId against
   // the session it authorized, so carrying it here is what lets that check work.
   projectId: number;
+};
+
+// One card per activity, grouped by the same week buckets the schedule body
+// shows (Task 1's groupIntoBuckets) — the OS week view and Connect's own view
+// read off the same forecast layer instead of drifting apart.
+export type WeekBucketCard = {
+  name: string;
+  partnerName: string | null;
+  driftDays: number;
+  expectedStart: string | null;
+  expectedFinish: string | null;
+  percentComplete: number | null;
 };
 
 export type ScheduleContextPacket = {
@@ -71,7 +88,7 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
   const latestImport = await prisma.scheduleImport.findFirst({
     orderBy: { importedAt: "desc" },
     where: { projectId: project.id },
-    include: { activities: true },
+    include: { activities: true, relationships: true },
   });
   if (!latestImport) {
     return empty("No schedule has been imported for this project yet.");
@@ -83,6 +100,17 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     getTradeDictionary(),
     getProjectAssignments(project.id),
   ]);
+  const scopeByActivityId = new Map(mapped.map((m) => [m.activity.id, m.canonicalScope]));
+
+  const progressByKey = resolveCurrentProgress(await getFinalizedEntries(project.id));
+  const dataDate = latestImport.statusDate ?? latestImport.importedAt;
+  const forecasts = computeForecast({
+    activities: latestImport.activities,
+    relationships: latestImport.relationships,
+    progressByKey,
+    statusDate: dataDate,
+    minutesPerDay: latestImport.minutesPerDay,
+  });
 
   const minutesPerDay = latestImport.minutesPerDay ?? DEFAULT_MINUTES_PER_DAY;
   const buckets = new Map<number, Bucket>();
@@ -137,6 +165,40 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     projectId: osProjectId,
   }));
 
+  // Same forecast layer as the schedule body's own week buckets (Task 1), but
+  // by activity rather than by trade: the OS week view wants "what's coming",
+  // not a per-partner roll-up, and items alone can't say that (25-item cap).
+  const CARD_CAP = 8;
+  const bucketInputs = leaves.map((a) => {
+    const f = forecasts.get(a.externalUid);
+    const p = progressByKey.get(a.canonicalActivityKey) ?? baselineProgress(a);
+    const scope = scopeByActivityId.get(a.id);
+    const discipline = scope ? tradeDictionary.get(scope) : undefined;
+    const partner = discipline ? assignments.get(discipline.id) : undefined;
+    return {
+      status: p.status,
+      expectedStart: (f?.expectedStart ?? a.plannedStart)?.toISOString() ?? null,
+      expectedFinish: (f?.expectedFinish ?? a.plannedFinish)?.toISOString() ?? null,
+      card: {
+        name: a.name,
+        partnerName: partner?.name ?? null,
+        driftDays: f?.driftDays ?? 0,
+        expectedStart: (f?.expectedStart ?? a.plannedStart)?.toISOString() ?? null,
+        expectedFinish: (f?.expectedFinish ?? a.plannedFinish)?.toISOString() ?? null,
+        percentComplete: p.percentComplete ?? a.percentComplete,
+      },
+    };
+  });
+  const grouped = groupIntoBuckets(bucketInputs, dataDate);
+  let bucketsTruncated = false;
+  const weekBuckets = Object.fromEntries(
+    BUCKET_ORDER.map((key: BucketKey) => {
+      const all = grouped[key];
+      if (key !== "done" && all.length > CARD_CAP) bucketsTruncated = true;
+      return [key, { count: all.length, cards: key === "done" ? [] : all.slice(0, CARD_CAP).map((b) => b.card) }];
+    }),
+  ) as Record<BucketKey, { count: number; cards: WeekBucketCard[] }>;
+
   const warnings: string[] = [];
   if (ordered.length > items.length) {
     warnings.push(`${ordered.length} trades have scheduled work; the ${items.length} starting soonest are included.`);
@@ -147,6 +209,9 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
   if (unassignedDisciplineCount > 0) {
     warnings.push(`${unassignedDisciplineCount} activities map to a trade with no partner assigned on this project.`);
   }
+  if (bucketsTruncated) {
+    warnings.push(`Week buckets list up to ${CARD_CAP} activities each; counts cover all.`);
+  }
 
   return {
     items,
@@ -154,10 +219,11 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     projectId: osProjectId,
     summary: {
       activityCount: leaves.length,
-      dataDate: (latestImport.statusDate ?? latestImport.importedAt).toISOString(),
+      dataDate: dataDate.toISOString(),
       importedAt: latestImport.importedAt.toISOString(),
       projectFinish: latestImport.projectFinish?.toISOString() ?? null,
       scheduledTradeCount: ordered.length,
+      weekBuckets,
     },
     warnings,
   };

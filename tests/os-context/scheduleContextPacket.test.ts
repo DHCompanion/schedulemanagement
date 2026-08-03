@@ -170,4 +170,54 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     expect(packet.items).toEqual([]);
     expect(packet.warnings[0]).toContain("linked");
   });
+
+  it("summarizes week buckets from the forecast layer", async () => {
+    // 830000 offset: 800000/810000/820000 are already used by the tests above
+    // (same stamp), and colliding on osProjectId's unique constraint would be
+    // a false-negative failure unrelated to weekBuckets.
+    const osProjectId = 830000 + (stamp % 1000);
+    const project = await prisma.project.create({
+      data: { name: `os-context buckets ${osProjectId}`, osProjectId },
+    });
+    createdProjectIds.push(project.id);
+    const imp = await prisma.scheduleImport.create({
+      data: {
+        projectId: project.id, sourceFormat: "msproject_xml", fileName: "s.xml", fileHash: `hb-${project.id}`,
+        statusDate: new Date("2026-08-07T17:00:00Z"), minutesPerDay: 480,
+      },
+    });
+    // Same chain fixture as tests/schedule/scheduleRows.test.ts: A 20% in
+    // progress at the Aug 7 status date (+4d), B FS-pushed to Fri Aug 14.
+    await prisma.activity.createMany({
+      data: [
+        {
+          scheduleImportId: imp.id, externalUid: 1, canonicalActivityKey: `1|zzbucket-a-${stamp}`, name: "A", type: "task",
+          plannedStart: new Date("2026-08-03T08:00:00Z"), plannedFinish: new Date("2026-08-07T17:00:00Z"),
+          durationDays: 5, percentComplete: 20, actualStart: new Date("2026-08-03T08:00:00Z"),
+        },
+        {
+          scheduleImportId: imp.id, externalUid: 2, canonicalActivityKey: `2|zzbucket-b-${stamp}`, name: "B", type: "task",
+          plannedStart: new Date("2026-08-10T08:00:00Z"), plannedFinish: new Date("2026-08-14T17:00:00Z"),
+          durationDays: 5,
+        },
+      ],
+    });
+    await prisma.relationship.create({
+      data: { scheduleImportId: imp.id, predecessorExternalUid: 1, successorExternalUid: 2, type: "FS", lagMinutes: 0 },
+    });
+
+    const packet = await buildScheduleContextPacket(osProjectId, 25);
+    const wb = packet.summary.weekBuckets as Record<
+      string,
+      { count: number; cards: { name: string; driftDays: number; partnerName: string | null }[] }
+    >;
+    expect(wb.thisWeek.count).toBe(1); // A is in progress -> this week
+    expect(wb.thisWeek.cards[0].name).toBe("A");
+    expect(wb.thisWeek.cards[0].driftDays).toBe(4);
+    // asOf Fri Aug 7 -> week0 = Mon Aug 3; B's expected start Fri Aug 14 lands in week0+1.
+    expect(wb.nextWeek.count).toBe(1);
+    expect(wb.nextWeek.cards[0].name).toBe("B");
+    expect(wb.nextWeek.cards[0].partnerName).toBeNull();
+    expect(wb.done).toEqual({ count: 0, cards: [] });
+  });
 });
