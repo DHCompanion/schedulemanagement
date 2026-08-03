@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { ActivityTable } from "@/components/ActivityTable";
+import { ScheduleBody } from "@/components/ScheduleBody";
 import { getScheduleHealth } from "@/lib/health/healthService";
 import { appPath } from "@/lib/http";
 import { getScheduleData } from "@/lib/schedule/scheduleRows";
@@ -11,8 +11,12 @@ import { ExportMenu } from "@/components/ExportMenu";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectPage(props: { params: Promise<{ id: string }> }) {
+export default async function ProjectPage(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string; filter?: string; sort?: string }>;
+}) {
   const params = await props.params;
+  const searchParams = await props.searchParams;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 
@@ -66,7 +70,14 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
               Procurement risk as of {schedule.riskFetchedAt.toISOString().slice(0, 16).replace("T", " ")}
             </p>
           )}
-          <ActivityTable rows={schedule.rows} />
+          <ScheduleBody
+            rows={schedule.rows}
+            projectId={project.id}
+            statusDate={schedule.statusDate}
+            view={searchParams.view === "6wk" || searchParams.view === "3wk" ? searchParams.view : "full"}
+            initialFilter={searchParams.filter ?? null}
+            initialSort={searchParams.sort ?? null}
+          />
         </>
       )}
     </main>

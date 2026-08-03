@@ -26,6 +26,8 @@ describe("StatStrip", () => {
     render(<StatStrip projectId="p1" driftDays={3} atRiskCount={4} percentComplete={62} lastUpdate={{ daysAgo: 6 }} />);
     expect(screen.getByText("+3d")).toBeTruthy();
     expect(screen.getByText("4")).toBeTruthy();
+    expect(screen.getByText("+3d").closest("a")!.getAttribute("href")).toBe("/projects/p1?sort=drift");
+    expect(screen.getByText("4").closest("a")!.getAttribute("href")).toBe("/projects/p1?filter=at_risk");
     expect(screen.getByText("62%").closest("a")!.getAttribute("href")).toBe("/projects/p1/health");
     expect(screen.getByText("6d ago").closest("a")!.getAttribute("href")).toBe("/projects/p1/updates");
   });

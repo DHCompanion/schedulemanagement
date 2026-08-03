@@ -8,23 +8,22 @@ export interface StatStripProps {
   lastUpdate: { daysAgo: number } | null;
 }
 
-// Drift and at-risk are plain stats for now — their link targets (body sorted
-// by drift / filtered to flagged) arrive with the phase 3 schedule body.
+// Every stat links into the body: drift sorts by slip, at-risk filters to flagged.
 export function StatStrip({ projectId, driftDays, atRiskCount, percentComplete, lastUpdate }: StatStripProps) {
   const stale = lastUpdate !== null && lastUpdate.daysAgo > 7;
   const box = "rounded border p-3 text-center";
   return (
     <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <div className={`${box} border-slate-200 bg-white`}>
+      <Link href={`/projects/${projectId}?sort=drift`} className={`${box} border-slate-200 bg-white hover:bg-slate-50`}>
         <div className={`text-xl font-bold ${driftDays > 0 ? "text-red-600" : "text-slate-900"}`}>
           {driftDays > 0 ? `+${driftDays}d` : "on plan"}
         </div>
         <div className="text-xs text-slate-500">projected drift</div>
-      </div>
-      <div className={`${box} border-slate-200 bg-white`}>
+      </Link>
+      <Link href={`/projects/${projectId}?filter=at_risk`} className={`${box} border-slate-200 bg-white hover:bg-slate-50`}>
         <div className={`text-xl font-bold ${atRiskCount > 0 ? "text-amber-700" : "text-slate-900"}`}>{atRiskCount}</div>
         <div className="text-xs text-slate-500">at risk</div>
-      </div>
+      </Link>
       <Link href={`/projects/${projectId}/health`} className={`${box} border-slate-200 bg-white hover:bg-slate-50`}>
         <div className="text-xl font-bold text-slate-900">{percentComplete}%</div>
         <div className="text-xs text-slate-500">complete</div>
