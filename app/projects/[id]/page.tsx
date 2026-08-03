@@ -1,11 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { ADMIN_SESSION_COOKIE } from "@/lib/auth";
-import { SCOPE_COOKIE, isAdminFromCookies } from "@/lib/scope";
 import { ActivityTable, type ActivityRow } from "@/components/ActivityTable";
-import { ResetProjectButton } from "@/components/ResetProjectButton";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getScheduleHealth } from "@/lib/health/healthService";
@@ -16,6 +11,12 @@ import {
   resolveActivityTrades,
   shouldShowProcurementRiskLine,
 } from "@/lib/trades/activityTrades";
+import { appPath } from "@/lib/http";
+import { getProjectForecast } from "@/lib/forecast/getProjectForecast";
+import { getDataHealthCounts } from "@/lib/health/dataHealthCounts";
+import { ProjectTabs } from "@/components/ProjectTabs";
+import { StatStrip } from "@/components/StatStrip";
+import { ExportMenu } from "@/components/ExportMenu";
 
 export const dynamic = "force-dynamic";
 
@@ -37,12 +38,6 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
 
   const currentProgress = resolveCurrentProgress(await getFinalizedEntries(project.id));
   const health = await getScheduleHealth(project.id);
-  const jar = await cookies();
-  const adminSession = await isAdminFromCookies(
-    jar.get(ADMIN_SESSION_COOKIE)?.value,
-    jar.get(SCOPE_COOKIE)?.value,
-    Math.floor(Date.now() / 1000)
-  );
   const mpd = latest?.minutesPerDay ?? 480;
   // The standard names confirmed in the Task Naming step are what this table
   // shows; the schedule's own wording stays visible underneath so the row is
@@ -120,58 +115,51 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
     };
   });
 
+  const forecast = await getProjectForecast(project.id);
+  const dataCounts = await getDataHealthCounts(project.id);
+  const lastFinalized = await prisma.progressUpdate.findFirst({
+    where: { projectId: project.id, state: "finalized" },
+    orderBy: { asOfDate: "desc" },
+    select: { asOfDate: true },
+  });
+  const lastUpdate = lastFinalized
+    ? { daysAgo: Math.max(0, Math.floor((Date.now() - lastFinalized.asOfDate.getTime()) / 86_400_000)) }
+    : null;
+  const atRiskCount = rows.filter((r) => r.atRisk).length;
+
   return (
     <main className="mx-auto max-w-4xl p-4 sm:p-6">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">{project.name}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/projects/${project.id}/normalize`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Task Naming
-          </Link>
-          <Link href={`/projects/${project.id}/completeness`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Task Granularity
-          </Link>
-          <Link href={`/projects/${project.id}/trades`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Trades
-          </Link>
-          <Link href={`/projects/${project.id}/updates`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Progress Update
-          </Link>
-          <Link href={`/projects/${project.id}/export`} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Export to MS Project
-          </Link>
-          <Link href={`/projects/${project.id}/import`} className="rounded-lg bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-800">
-            Import Schedule
-          </Link>
-        </div>
-      </div>
-      <div className="mb-4 flex flex-wrap gap-2 text-xs text-slate-600">
-        {project.client && <span className="rounded bg-slate-200 px-2 py-1">{project.client}</span>}
-        {project.sector && <span className="rounded bg-slate-200 px-2 py-1">{project.sector}</span>}
-        {project.sizeSqFt && <span className="rounded bg-slate-200 px-2 py-1">{project.sizeSqFt.toLocaleString()} sf</span>}
-      </div>
+      <ProjectTabs projectId={project.id} active="schedule" dataBadge={dataCounts.total} />
 
       {!latest ? (
-        <p className="text-slate-500">No schedule imported yet.</p>
+        <p className="text-slate-500">
+          No schedule imported yet — import one from the Data Health tab.
+        </p>
       ) : (
         <>
-          <div className={`rounded border border-slate-200 bg-white p-3 text-sm text-slate-600 ${health.hasImport ? "border-b-0" : "mb-4"}`}>
-            <div>File: {latest.fileName}</div>
-            <div>Imported: {latest.importedAt.toISOString().slice(0, 16).replace("T", " ")}</div>
-            <div>Status date: {latest.statusDate ? latest.statusDate.toISOString().slice(0, 10) : "—"}</div>
-            <div>{latest.isBaseline ? "Baseline import" : "Update import"} · {latest.activityCount} activities · {latest.relationshipCount} relationships</div>
+          <StatStrip
+            projectId={project.id}
+            driftDays={forecast?.project.driftDays ?? 0}
+            atRiskCount={atRiskCount}
+            percentComplete={health.hasImport ? health.progress.percentComplete : 0}
+            lastUpdate={lastUpdate}
+          />
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+              {project.client && <span className="rounded bg-slate-200 px-2 py-1">{project.client}</span>}
+              {project.sector && <span className="rounded bg-slate-200 px-2 py-1">{project.sector}</span>}
+              {project.sizeSqFt && <span className="rounded bg-slate-200 px-2 py-1">{project.sizeSqFt.toLocaleString()} sf</span>}
+            </div>
+            <div className="flex items-center gap-2">
+              <ExportMenu projectId={project.id} />
+              <form action={appPath("/api/updates")} method="post">
+                <input type="hidden" name="projectId" value={project.id} />
+                <button className="rounded-lg bg-cyan-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-cyan-800">
+                  Update progress
+                </button>
+              </form>
+            </div>
           </div>
-          {health.hasImport && (
-            <Link
-              href={`/projects/${project.id}/health`}
-              className="mb-4 flex flex-wrap gap-4 rounded border border-t-0 border-slate-200 bg-white p-3 text-sm text-slate-600 hover:bg-slate-50"
-            >
-              <div><span className="font-medium">{health.progress.total}</span> total</div>
-              <div><span className="font-medium">{health.progress.completed}</span> completed</div>
-              <div><span className="font-medium">{health.progress.remaining}</span> remaining</div>
-              <div><span className="font-medium">{health.progress.percentComplete}%</span> complete</div>
-            </Link>
-          )}
           {riskFetchedAt && (
             <p className="mb-2 text-xs text-slate-500">
               Procurement risk as of {riskFetchedAt.toISOString().slice(0, 16).replace("T", " ")}
@@ -179,11 +167,6 @@ export default async function ProjectPage(props: { params: Promise<{ id: string 
           )}
           <ActivityTable rows={rows} />
         </>
-      )}
-      {adminSession && (
-        <div className="mt-8 border-t border-slate-200 pt-4">
-          <ResetProjectButton projectId={project.id} projectName={project.name} />
-        </div>
       )}
     </main>
   );
