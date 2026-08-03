@@ -5,7 +5,10 @@ import { appPath } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-export default async function UpdatesPage(props: { params: Promise<{ id: string }> }) {
+export default async function UpdatesPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
@@ -22,6 +25,12 @@ export default async function UpdatesPage(props: { params: Promise<{ id: string 
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link href={`/projects/${project.id}`} className="text-sm text-slate-500">← {project.name}</Link>
       <h1 className="mb-4 mt-1 text-xl font-semibold">Progress Update</h1>
+
+      {searchParams.error === "1" && (
+        <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          Couldn&apos;t start the update — try again, or adjust the dates below.
+        </p>
+      )}
 
       {!latest ? (
         <p className="text-slate-500">Import a schedule before starting weekly updates.</p>

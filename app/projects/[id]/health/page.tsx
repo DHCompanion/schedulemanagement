@@ -14,7 +14,10 @@ const SECTIONS: { check: HealthCheck; title: string }[] = [
   { check: "percent_contradiction", title: "Percent contradictions" },
 ];
 
-export default async function HealthPage(props: { params: Promise<{ id: string }> }) {
+export default async function HealthPage(
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ wizard?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const params = await props.params;
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
@@ -25,6 +28,18 @@ export default async function HealthPage(props: { params: Promise<{ id: string }
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link href={`/projects/${project.id}`} className="text-sm text-slate-500">← {project.name}</Link>
       <h1 className="mb-1 mt-1 text-xl font-semibold">Schedule Health</h1>
+      {searchParams.wizard === "1" && !project.onboardingCompletedAt && (
+        <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm">
+          <div className="mb-1 font-medium text-blue-900">First-time setup — step 1 of 2: Schedule Health</div>
+          <p className="mb-2 text-blue-800">
+            Check the imported dates look sane before cleaning anything — bad dates here mean a
+            bad schedule everywhere else in this tool.
+          </p>
+          <Link href={`/projects/${project.id}/data?wizard=1`} className="inline-block rounded bg-blue-900 px-3 py-1.5 text-xs font-medium text-white">
+            Next: Data Health
+          </Link>
+        </div>
+      )}
       {!health.hasImport ? (
         <p className="text-slate-500">Import a schedule first.</p>
       ) : (

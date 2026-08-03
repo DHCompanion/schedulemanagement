@@ -144,17 +144,22 @@ export default async function DataHealthPage(
 
       {searchParams.wizard === "1" && !project.onboardingCompletedAt && (
         <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm">
-          <div className="mb-1 font-medium text-blue-900">First-time setup</div>
+          <div className="mb-1 font-medium text-blue-900">First-time setup — step 2 of 2: Data Health</div>
           <p className="mb-2 text-blue-800">
             Work through the sections below in order — split coarse activities first (a scope you are
             going to split is not worth naming twice), then confirm standard names, then assign trades.
             Finish when every section reads clean.
           </p>
-          <form action={appPath(`/api/projects/${project.id}/complete-onboarding`)} method="POST">
-            <button type="submit" className="rounded bg-blue-900 px-3 py-1.5 text-xs font-medium text-white">
-              Finish setup
-            </button>
-          </form>
+          <div className="flex gap-2">
+            <Link href={`/projects/${project.id}/health?wizard=1`} className="rounded border border-blue-300 px-3 py-1.5 text-xs font-medium text-blue-900">
+              Back: Schedule Health
+            </Link>
+            <form action={appPath(`/api/projects/${project.id}/complete-onboarding`)} method="POST">
+              <button type="submit" className="rounded bg-blue-900 px-3 py-1.5 text-xs font-medium text-white">
+                Finish setup
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
