@@ -40,6 +40,20 @@ describe("addWorkingDays", () => {
     expect(r.getUTCDay()).toBe(1);
     expect(r.getUTCHours()).toBe(5);
   });
+  it("steps a negative whole day backward", () => {
+    const r = addWorkingDays(new Date("2026-08-12T17:00:00Z"), -1); // Wed → Tue
+    expect(r.toISOString()).toBe("2026-08-11T17:00:00.000Z");
+  });
+  it("steps a negative whole day backward over the weekend", () => {
+    const r = addWorkingDays(new Date("2026-08-10T08:00:00Z"), -1); // Mon → Fri
+    expect(r.toISOString()).toBe("2026-08-07T08:00:00.000Z");
+  });
+  it("rolls a negative fractional landing backward off the weekend", () => {
+    const r = addWorkingDays(new Date("2026-08-10T08:00:00Z"), -0.5); // Mon 08:00 - 12h = Sun 20:00 → Fri 20:00
+    expect(r.getUTCDay()).toBe(5);
+    expect(r.getUTCHours()).toBe(20);
+    expect(r.toISOString()).toBe("2026-08-07T20:00:00.000Z");
+  });
 });
 
 describe("workingDaysBetween", () => {

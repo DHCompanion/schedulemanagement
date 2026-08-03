@@ -235,6 +235,45 @@ describe("computeForecast relationship pushes", () => {
     expect(out.get(3)!.pushedByUid).toBe(2);
   });
 
+  it("a negative-lag (MSP lead) absorbs a small predecessor slip", () => {
+    // 2-day lead (lagMinutes -960 at 480 mpd). A finishes 1 day late (Mon Aug 10);
+    // candidate = addWorkingDays(Aug 10, 1 - 2) = addWorkingDays(Aug 10, -1) = Fri Aug 7,
+    // before B's planned start → push 0.
+    const p = prog("1|a", {
+      status: "complete",
+      actualStart: new Date("2026-08-03T08:00:00Z"),
+      actualFinish: new Date("2026-08-10T17:00:00Z"),
+      percentComplete: 100,
+    });
+    const out = computeForecast({
+      activities: chain(), relationships: [rel(1, 2, "FS", -960)], progressByKey: p,
+      statusDate, minutesPerDay: 480,
+    });
+    const b = out.get(2)!;
+    expect(b.driftDays).toBe(0);
+    expect(b.pushedByUid).toBeNull();
+    expect(b.expectedStart!.toISOString()).toBe("2026-08-10T08:00:00.000Z");
+  });
+
+  it("a negative-lag (MSP lead) nets out a bigger predecessor slip", () => {
+    // Same 2-day lead. A finishes 3 days late (Wed Aug 12);
+    // candidate = addWorkingDays(Aug 12, -1) = Tue Aug 11 → 1 working day past planned Mon Aug 10.
+    const p = prog("1|a", {
+      status: "complete",
+      actualStart: new Date("2026-08-03T08:00:00Z"),
+      actualFinish: new Date("2026-08-12T17:00:00Z"),
+      percentComplete: 100,
+    });
+    const out = computeForecast({
+      activities: chain(), relationships: [rel(1, 2, "FS", -960)], progressByKey: p,
+      statusDate, minutesPerDay: 480,
+    });
+    const b = out.get(2)!;
+    expect(b.driftDays).toBe(1);
+    expect(b.pushedByUid).toBe(1);
+    expect(b.expectedStart!.toISOString()).toBe("2026-08-11T08:00:00.000Z");
+  });
+
   it("a relationship cycle does not hang and members fall back to planned dates", () => {
     const out = computeForecast({
       activities: chain(), relationships: [rel(1, 2), rel(2, 1)], progressByKey: new Map(), statusDate,

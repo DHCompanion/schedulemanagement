@@ -10,21 +10,35 @@ function rollForwardToWeekday(t: number): number {
   return t;
 }
 
+function rollBackToWeekday(t: number): number {
+  while (isWeekend(new Date(t))) t -= DAY_MS;
+  return t;
+}
+
 /**
- * Advance `days` working days (fractional allowed, must be >= 0) skipping
+ * Advance `days` working days (fractional allowed, may be negative) skipping
  * Sat/Sun in UTC. A start on a weekend rolls forward to Monday first, keeping
- * its time of day. Fractional remainders advance clock time and roll off any
- * weekend they land on.
+ * its time of day. Positive fractional remainders advance clock time and roll
+ * off any weekend they land on; negative `days` step backward instead — whole
+ * days one working day at a time (landing on a weekend rolls back to Friday),
+ * and a negative fractional remainder subtracts clock time and rolls backward
+ * off any weekend it lands on. MSP leads (negative LinkLag) rely on this to
+ * move a successor's candidate start earlier without inflating drift.
  */
 export function addWorkingDays(start: Date, days: number): Date {
   let t = rollForwardToWeekday(start.getTime());
-  let whole = Math.floor(days);
+  let whole = Math.trunc(days);
   const frac = days - whole;
   while (whole > 0) {
     t = rollForwardToWeekday(t + DAY_MS);
     whole--;
   }
+  while (whole < 0) {
+    t = rollBackToWeekday(t - DAY_MS);
+    whole++;
+  }
   if (frac > 0) t = rollForwardToWeekday(t + frac * DAY_MS);
+  else if (frac < 0) t = rollBackToWeekday(t + frac * DAY_MS);
   return new Date(t);
 }
 
