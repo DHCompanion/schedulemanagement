@@ -51,4 +51,9 @@ describe("ScheduleBody", () => {
     expect(screen.getByText("3 wk").closest("a")!.getAttribute("href")).toBe("/projects/p1?view=3wk");
     expect(screen.getByText("Full").closest("a")!.getAttribute("href")).toBe("/projects/p1?view=full");
   });
+  it("keeps the correct section name under a non-wbs sort", () => {
+    render(<ScheduleBody rows={rows} projectId="p1" statusDate="2026-08-05T00:00:00.000Z" view="full" initialFilter={null} initialSort="drift" />);
+    fireEvent.click(screen.getByText("Overhead MEP"));
+    expect(screen.getByText(/Section: Rough-In/)).toBeTruthy();
+  });
 });

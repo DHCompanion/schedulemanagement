@@ -111,12 +111,26 @@ export function ScheduleBody({
     return r;
   }, [rows, sort]);
 
+  // deriveSectionInfo's stack algorithm needs document/outline order (parent
+  // immediately precedes its descendants) — independent of the active sort,
+  // which may be start/slack/drift and would scramble the ancestor chains.
+  const outlineOrdered = useMemo(
+    () =>
+      [...rows]
+        .filter((a) => a.type !== "project_summary")
+        .sort((a, b) => (a.wbsCode ?? "").localeCompare(b.wbsCode ?? "", undefined, { numeric: true })),
+    [rows],
+  );
+  const info = useMemo(
+    () => deriveSectionInfo(outlineOrdered.map((a) => ({ id: a.id, outlineLevel: a.outlineLevel }))),
+    [outlineOrdered],
+  );
+  const byId = useMemo(() => new Map(outlineOrdered.map((a) => [a.id, a])), [outlineOrdered]);
+
   // Grouped outline pipeline (ported from the retired outline table), extended
   // with the nearest-section name/palette each leaf carries for rails and cards.
   const { items, leafCount } = useMemo(() => {
     const candidates = sortedRows.filter((a) => a.type !== "project_summary");
-    const info = deriveSectionInfo(candidates.map((a) => ({ id: a.id, outlineLevel: a.outlineLevel })));
-    const byId = new Map(candidates.map((a) => [a.id, a]));
     const matchedLeafIds = new Set(
       candidates
         .filter((a) => a.type !== "summary" && leafMatches(a, q, filter, discipline) && inWindow(a))
@@ -163,7 +177,7 @@ export function ScheduleBody({
       });
     }
     return { items: result, leafCount: matchedLeafIds.size };
-  }, [grouped, sortedRows, q, filter, discipline, collapsed, inWindow]);
+  }, [grouped, sortedRows, q, filter, discipline, collapsed, inWindow, info, byId]);
 
   const bucketRows: BucketRow[] = useMemo(
     () =>
