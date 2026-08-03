@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeForecast,
+  projectDrift,
   type ForecastActivity,
   type ForecastInput,
   type ForecastRelationship,
@@ -240,5 +241,40 @@ describe("computeForecast relationship pushes", () => {
     });
     expect(out.get(1)!.driftDays).toBe(0);
     expect(out.get(2)!.driftDays).toBe(0);
+  });
+});
+
+describe("projectDrift", () => {
+  it("is the drift of the latest-finishing incomplete activity", () => {
+    const acts = chain();
+    const p = prog("1|a", { status: "in_progress", percentComplete: 20 });
+    const out = computeForecast({ activities: acts, relationships: [rel(1, 2)], progressByKey: p, statusDate: lateStatus });
+    expect(projectDrift(acts, out, p)).toEqual({ driftDays: 4, activityUid: 2 });
+  });
+
+  it("ignores completed activities even when they finished latest", () => {
+    const acts = [
+      fa({ externalUid: 1, canonicalActivityKey: "1|a" }),
+      fa({
+        externalUid: 2, canonicalActivityKey: "2|b",
+        plannedStart: new Date("2026-07-06T08:00:00Z"),
+        plannedFinish: new Date("2026-07-10T17:00:00Z"),
+      }),
+    ];
+    const p = prog("1|a", {
+      status: "complete",
+      actualStart: new Date("2026-08-03T08:00:00Z"),
+      actualFinish: new Date("2026-08-20T17:00:00Z"), // way late, but done
+      percentComplete: 100,
+    });
+    const pd = projectDrift(acts, computeForecast({ activities: acts, relationships: [], progressByKey: p, statusDate }), p);
+    expect(pd.activityUid).toBe(2);
+    expect(pd.driftDays).toBe(0);
+  });
+
+  it("is zero with no incomplete activities", () => {
+    const acts = [fa({ externalUid: 1, canonicalActivityKey: "1|a", actualFinish: new Date("2026-08-07T17:00:00Z"), percentComplete: 100 })];
+    const pd = projectDrift(acts, computeForecast({ activities: acts, relationships: [], progressByKey: new Map(), statusDate }), new Map());
+    expect(pd).toEqual({ driftDays: 0, activityUid: null });
   });
 });

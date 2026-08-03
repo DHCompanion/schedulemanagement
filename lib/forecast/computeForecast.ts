@@ -176,3 +176,28 @@ export function computeForecast(input: ForecastInput): Map<number, ActivityForec
   }
   return out;
 }
+
+export interface ProjectDrift {
+  driftDays: number;
+  activityUid: number | null;
+}
+
+/** Spec: project drift = drift of the latest-finishing incomplete activity. */
+export function projectDrift(
+  activities: ForecastActivity[],
+  forecasts: Map<number, ActivityForecast>,
+  progressByKey: Map<string, ActivityProgress>,
+): ProjectDrift {
+  let latest: { uid: number; finish: Date; drift: number } | null = null;
+  for (const a of activities) {
+    if (!isLeaf(a)) continue;
+    const p = progressByKey.get(a.canonicalActivityKey) ?? baselineProgress(a);
+    if (p.status === "complete") continue;
+    const f = forecasts.get(a.externalUid);
+    if (!f?.expectedFinish) continue;
+    if (!latest || f.expectedFinish > latest.finish) {
+      latest = { uid: a.externalUid, finish: f.expectedFinish, drift: f.driftDays };
+    }
+  }
+  return latest ? { driftDays: latest.drift, activityUid: latest.uid } : { driftDays: 0, activityUid: null };
+}
