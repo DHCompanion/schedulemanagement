@@ -44,7 +44,9 @@ export function defaultProgress(): ActivityProgress {
 }
 
 /** Starting progress derived from the imported base schedule's own actuals. */
-export function baselineProgress(a: LookaheadActivity): ActivityProgress {
+export function baselineProgress(
+  a: Pick<LookaheadActivity, "actualStart" | "actualFinish" | "percentComplete">,
+): ActivityProgress {
   let status: ProgressStatus = "not_started";
   if (a.actualFinish || a.percentComplete === 100) status = "complete";
   else if (a.actualStart || (a.percentComplete ?? 0) > 0) status = "in_progress";
