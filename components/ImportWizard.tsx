@@ -53,7 +53,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
       return;
     }
     const data: { startWizard?: boolean } = await res.json();
-    router.push(data.startWizard ? `/projects/${projectId}/health?wizard=1` : `/projects/${projectId}`);
+    router.push(data.startWizard ? `/projects/${projectId}/data?wizard=1` : `/projects/${projectId}`);
     router.refresh();
   }
 
