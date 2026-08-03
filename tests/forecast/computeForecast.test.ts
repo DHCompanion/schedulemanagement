@@ -3,6 +3,7 @@ import {
   computeForecast,
   type ForecastActivity,
   type ForecastInput,
+  type ForecastRelationship,
 } from "@/lib/forecast/computeForecast";
 import type { ActivityProgress } from "@/lib/lookahead/computeLookahead";
 
@@ -106,5 +107,138 @@ describe("computeForecast status rules", () => {
     const f = run([fa({ plannedStart: null, plannedFinish: null, durationDays: null })]).get(1)!;
     expect(f.expectedStart).toBeNull();
     expect(f.driftDays).toBe(0);
+  });
+});
+
+const rel = (pred: number, succ: number, type = "FS", lagMinutes: number | null = 0): ForecastRelationship =>
+  ({ predecessorExternalUid: pred, successorExternalUid: succ, type, lagMinutes });
+
+const lateStatus = new Date("2026-08-07T17:00:00Z");
+const chain = () => [
+  fa({ externalUid: 1, canonicalActivityKey: "1|a" }),
+  fa({
+    externalUid: 2, canonicalActivityKey: "2|b",
+    plannedStart: new Date("2026-08-10T08:00:00Z"),
+    plannedFinish: new Date("2026-08-14T17:00:00Z"),
+  }),
+];
+
+describe("computeForecast relationship pushes", () => {
+  it("a predecessor slip pushes an FS successor by the same working days", () => {
+    const p = prog("1|a", { status: "in_progress", percentComplete: 20 }); // A: +4d, finish Thu Aug 13
+    const out = computeForecast({
+      activities: chain(), relationships: [rel(1, 2)], progressByKey: p, statusDate: lateStatus,
+    });
+    const b = out.get(2)!;
+    expect(b.expectedStart!.toISOString()).toBe("2026-08-14T08:00:00.000Z");  // next working date, planned time kept
+    expect(b.expectedFinish!.toISOString()).toBe("2026-08-20T17:00:00.000Z"); // planned finish + 4 working days
+    expect(b.driftDays).toBe(4);
+    expect(b.pushedByUid).toBe(1);
+  });
+
+  it("an on-plan predecessor does not push", () => {
+    const out = computeForecast({
+      activities: chain(), relationships: [rel(1, 2)], progressByKey: new Map(), statusDate,
+    });
+    expect(out.get(2)!.driftDays).toBe(0);
+    expect(out.get(2)!.pushedByUid).toBeNull();
+  });
+
+  it("an early-finishing predecessor never pulls a successor earlier than planned", () => {
+    const p = prog("1|a", {
+      status: "complete",
+      actualStart: new Date("2026-08-03T08:00:00Z"),
+      actualFinish: new Date("2026-08-04T17:00:00Z"), // 3 days early
+      percentComplete: 100,
+    });
+    const out = computeForecast({ activities: chain(), relationships: [rel(1, 2)], progressByKey: p, statusDate });
+    expect(out.get(2)!.expectedStart!.toISOString()).toBe("2026-08-10T08:00:00.000Z");
+  });
+
+  it("FS lag is honored in working days via minutesPerDay", () => {
+    // A completes Mon Aug 10 (1 day late); lag 960 min = 2 days at 480 mpd →
+    // earliest B start = next working date (Tue) + 2 = Thu Aug 13 → 3-day push.
+    const p = prog("1|a", {
+      status: "complete",
+      actualStart: new Date("2026-08-03T08:00:00Z"),
+      actualFinish: new Date("2026-08-10T17:00:00Z"),
+      percentComplete: 100,
+    });
+    const out = computeForecast({
+      activities: chain(), relationships: [rel(1, 2, "FS", 960)], progressByKey: p,
+      statusDate, minutesPerDay: 480,
+    });
+    expect(out.get(2)!.expectedStart!.toISOString()).toBe("2026-08-13T08:00:00.000Z");
+    expect(out.get(2)!.driftDays).toBe(3);
+  });
+
+  it("SS ties starts through a chain and attributes the push", () => {
+    // C slips +4d (FS) into A; B is SS-tied to A so B's start moves with A's.
+    const acts = [
+      fa({ externalUid: 3, canonicalActivityKey: "3|c" }), // C: Mon Aug 3 – Fri Aug 7
+      fa({
+        externalUid: 1, canonicalActivityKey: "1|a",
+        plannedStart: new Date("2026-08-10T08:00:00Z"),
+        plannedFinish: new Date("2026-08-14T17:00:00Z"),
+      }),
+      fa({
+        externalUid: 2, canonicalActivityKey: "2|b",
+        plannedStart: new Date("2026-08-10T08:00:00Z"),
+        plannedFinish: new Date("2026-08-12T17:00:00Z"),
+        durationDays: 3,
+      }),
+    ];
+    const p = prog("3|c", { status: "in_progress", percentComplete: 20 });
+    const out = computeForecast({
+      activities: acts, relationships: [rel(3, 1, "FS"), rel(1, 2, "SS")], progressByKey: p,
+      statusDate: lateStatus,
+    });
+    expect(out.get(2)!.expectedStart!.getTime()).toBe(out.get(1)!.expectedStart!.getTime());
+    expect(out.get(2)!.pushedByUid).toBe(1);
+  });
+
+  it("a started successor is never pushed (out-of-sequence)", () => {
+    const p = new Map([
+      ...prog("1|a", { status: "in_progress", percentComplete: 20 }),
+      ...prog("2|b", { status: "in_progress", percentComplete: 50, actualStart: new Date("2026-08-05T08:00:00Z") }),
+    ]);
+    const out = computeForecast({
+      activities: chain(), relationships: [rel(1, 2)], progressByKey: p, statusDate: lateStatus,
+    });
+    expect(out.get(2)!.expectedStart!.toISOString()).toBe("2026-08-05T08:00:00.000Z");
+    expect(out.get(2)!.pushedByUid).toBeNull();
+  });
+
+  it("FF and SF edges do not push in v1", () => {
+    const p = prog("1|a", { status: "in_progress", percentComplete: 20 });
+    const out = computeForecast({
+      activities: chain(), relationships: [rel(1, 2, "FF")], progressByKey: p, statusDate: lateStatus,
+    });
+    expect(out.get(2)!.driftDays).toBe(0);
+  });
+
+  it("drift propagates undiminished through a multi-hop chain", () => {
+    const acts = [
+      ...chain(),
+      fa({
+        externalUid: 3, canonicalActivityKey: "3|c",
+        plannedStart: new Date("2026-08-17T08:00:00Z"),
+        plannedFinish: new Date("2026-08-21T17:00:00Z"),
+      }),
+    ];
+    const p = prog("1|a", { status: "in_progress", percentComplete: 20 });
+    const out = computeForecast({
+      activities: acts, relationships: [rel(1, 2), rel(2, 3)], progressByKey: p, statusDate: lateStatus,
+    });
+    expect(out.get(3)!.driftDays).toBe(4);
+    expect(out.get(3)!.pushedByUid).toBe(2);
+  });
+
+  it("a relationship cycle does not hang and members fall back to planned dates", () => {
+    const out = computeForecast({
+      activities: chain(), relationships: [rel(1, 2), rel(2, 1)], progressByKey: new Map(), statusDate,
+    });
+    expect(out.get(1)!.driftDays).toBe(0);
+    expect(out.get(2)!.driftDays).toBe(0);
   });
 });
