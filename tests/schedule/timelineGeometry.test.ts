@@ -76,12 +76,14 @@ describe("axis", () => {
     expect(ticks[0].leftPct).toBeCloseTo((0.5 / 21) * 100, 5); // centered over the day cell
     expect(weekendBands(win).length).toBe(3); // one Sat-Sun band per week
   });
-  it("labels every other day in a 6-week window", () => {
+  it("labels week ranges centered over the week blocks in a 6-week window", () => {
     const win = { startMs: Date.parse("2026-08-03T00:00:00Z"), endMs: Date.parse("2026-09-14T00:00:00Z") }; // 42 days
     const ticks = axisTicks(win);
-    expect(ticks.length).toBe(21);
-    expect(ticks[0].label).toBe("8/3");
-    expect(ticks[1].label).toBe("8/5");
+    expect(ticks.length).toBe(6);
+    expect(ticks[0].label).toBe("8/3-8/9");
+    expect(ticks[1].label).toBe("8/10-8/16");
+    expect(ticks[5].label).toBe("9/7-9/13");
+    expect(ticks[0].leftPct).toBeCloseTo((3.5 / 42) * 100, 5); // centered in the week block
   });
   it("falls back to weekly Monday ticks between 45 and 120 days", () => {
     const win = { startMs: Date.parse("2026-08-03T00:00:00Z"), endMs: Date.parse("2026-10-12T00:00:00Z") }; // 70 days

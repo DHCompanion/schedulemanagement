@@ -64,16 +64,16 @@ function mmdd(t: number): string {
 }
 
 /**
- * Axis labels, all m/d. Windowed views label the days themselves (every day
- * up to ~3.5 weeks, every other day up to 45 days), centered over the day
- * cell; longer spans fall back to weekly Mondays, then monthly 1sts.
+ * Axis labels, all m/d. Up to ~3.5 weeks every day gets its own label,
+ * centered over the day cell; up to 45 days each week gets a m/d-m/d range
+ * centered over the week block; longer spans fall back to weekly Mondays,
+ * then monthly 1sts.
  */
 export function axisTicks(win: TimelineWindow): { leftPct: number; label: string }[] {
   const total = win.endMs - win.startMs;
   const days = total / DAY_MS;
   const ticks: { leftPct: number; label: string }[] = [];
-  if (days <= DAILY_MAX_DAYS) {
-    const step = days <= 24 ? 1 : 2;
+  if (days <= 24) {
     const d = new Date(win.startMs);
     let cursor = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
     if (cursor < win.startMs) cursor += DAY_MS;
@@ -82,7 +82,23 @@ export function axisTicks(win: TimelineWindow): { leftPct: number; label: string
       if (center < win.endMs) {
         ticks.push({ leftPct: ((center - win.startMs) / total) * 100, label: mmdd(cursor) });
       }
-      cursor += step * DAY_MS;
+      cursor += DAY_MS;
+    }
+    return ticks;
+  }
+  if (days <= DAILY_MAX_DAYS) {
+    // Week blocks: "8/3-8/9" centered over each week's visible portion.
+    let cursor = mondayOfWeek(new Date(win.startMs)).getTime();
+    while (cursor < win.endMs) {
+      const segStart = Math.max(cursor, win.startMs);
+      const segEnd = Math.min(cursor + WEEK_MS, win.endMs);
+      if (segEnd - segStart >= 2 * DAY_MS) {
+        ticks.push({
+          leftPct: (((segStart + segEnd) / 2 - win.startMs) / total) * 100,
+          label: `${mmdd(cursor)}-${mmdd(cursor + 6 * DAY_MS)}`,
+        });
+      }
+      cursor += WEEK_MS;
     }
     return ticks;
   }
