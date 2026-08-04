@@ -1,4 +1,4 @@
-import { mondayOfWeek, fmtShortDate } from "./weekBuckets";
+import { mondayOfWeek } from "./weekBuckets";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
@@ -56,15 +56,42 @@ export function pointPct(iso: string | null, win: TimelineWindow): number | null
   return ((t - win.startMs) / (win.endMs - win.startMs)) * 100;
 }
 
+const DAILY_MAX_DAYS = 45; // beyond this, per-day labels and gridlines are noise
+
+function mmdd(t: number): string {
+  const d = new Date(t);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
+/**
+ * Axis labels, all m/d. Windowed views label the days themselves (every day
+ * up to ~3.5 weeks, every other day up to 45 days), centered over the day
+ * cell; longer spans fall back to weekly Mondays, then monthly 1sts.
+ */
 export function axisTicks(win: TimelineWindow): { leftPct: number; label: string }[] {
   const total = win.endMs - win.startMs;
+  const days = total / DAY_MS;
   const ticks: { leftPct: number; label: string }[] = [];
-  if (total / DAY_MS > DETAIL_MAX_DAYS) {
+  if (days <= DAILY_MAX_DAYS) {
+    const step = days <= 24 ? 1 : 2;
+    const d = new Date(win.startMs);
+    let cursor = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    if (cursor < win.startMs) cursor += DAY_MS;
+    while (cursor < win.endMs) {
+      const center = cursor + DAY_MS / 2;
+      if (center < win.endMs) {
+        ticks.push({ leftPct: ((center - win.startMs) / total) * 100, label: mmdd(cursor) });
+      }
+      cursor += step * DAY_MS;
+    }
+    return ticks;
+  }
+  if (days > DETAIL_MAX_DAYS) {
     // Monthly: the 1st of each month inside the window.
     const d = new Date(win.startMs);
     let cursor = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
     while (cursor < win.endMs) {
-      ticks.push({ leftPct: ((cursor - win.startMs) / total) * 100, label: fmtShortDate(new Date(cursor).toISOString()) });
+      ticks.push({ leftPct: ((cursor - win.startMs) / total) * 100, label: mmdd(cursor) });
       const c = new Date(cursor);
       cursor = Date.UTC(c.getUTCFullYear(), c.getUTCMonth() + 1, 1);
     }
@@ -73,7 +100,7 @@ export function axisTicks(win: TimelineWindow): { leftPct: number; label: string
   let cursor = mondayOfWeek(new Date(win.startMs)).getTime();
   if (cursor < win.startMs) cursor += WEEK_MS;
   while (cursor < win.endMs) {
-    ticks.push({ leftPct: ((cursor - win.startMs) / total) * 100, label: fmtShortDate(new Date(cursor).toISOString()) });
+    ticks.push({ leftPct: ((cursor - win.startMs) / total) * 100, label: mmdd(cursor) });
     cursor += WEEK_MS;
   }
   return ticks;
@@ -85,7 +112,7 @@ export function axisTicks(win: TimelineWindow): { leftPct: number; label: string
  */
 export function gridLines(win: TimelineWindow): { leftPct: number; isMajor: boolean }[] {
   const total = win.endMs - win.startMs;
-  if (total / DAY_MS > 45) {
+  if (total / DAY_MS > DAILY_MAX_DAYS) {
     return axisTicks(win).map((t) => ({ leftPct: t.leftPct, isMajor: true }));
   }
   const lines: { leftPct: number; isMajor: boolean }[] = [];

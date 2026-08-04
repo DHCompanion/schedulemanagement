@@ -67,15 +67,31 @@ describe("gridLines", () => {
 });
 
 describe("axis", () => {
-  it("weekly Monday ticks and weekend bands inside a short window", () => {
+  it("labels every day m/d, centered over the day, in a 3-week window", () => {
     const win = { startMs: Date.parse("2026-08-03T00:00:00Z"), endMs: Date.parse("2026-08-24T00:00:00Z") };
     const ticks = axisTicks(win);
-    expect(ticks.map((t) => t.label)).toEqual(["Aug 3", "Aug 10", "Aug 17"]);
+    expect(ticks.length).toBe(21);
+    expect(ticks[0].label).toBe("8/3");
+    expect(ticks[20].label).toBe("8/23");
+    expect(ticks[0].leftPct).toBeCloseTo((0.5 / 21) * 100, 5); // centered over the day cell
     expect(weekendBands(win).length).toBe(3); // one Sat-Sun band per week
+  });
+  it("labels every other day in a 6-week window", () => {
+    const win = { startMs: Date.parse("2026-08-03T00:00:00Z"), endMs: Date.parse("2026-09-14T00:00:00Z") }; // 42 days
+    const ticks = axisTicks(win);
+    expect(ticks.length).toBe(21);
+    expect(ticks[0].label).toBe("8/3");
+    expect(ticks[1].label).toBe("8/5");
+  });
+  it("falls back to weekly Monday ticks between 45 and 120 days", () => {
+    const win = { startMs: Date.parse("2026-08-03T00:00:00Z"), endMs: Date.parse("2026-10-12T00:00:00Z") }; // 70 days
+    const ticks = axisTicks(win);
+    expect(ticks[0].label).toBe("8/3");
+    expect(ticks[1].label).toBe("8/10");
   });
   it("switches to monthly ticks and drops weekend bands past 120 days", () => {
     const win = { startMs: Date.parse("2026-01-01T00:00:00Z"), endMs: Date.parse("2026-12-31T00:00:00Z") };
-    expect(axisTicks(win).map((t) => t.label)).toContain("Feb 1");
+    expect(axisTicks(win).map((t) => t.label)).toContain("2/1");
     expect(weekendBands(win)).toEqual([]);
   });
 });
