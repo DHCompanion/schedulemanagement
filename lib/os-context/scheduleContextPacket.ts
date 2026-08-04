@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { computeForecast } from "@/lib/forecast/computeForecast";
+import { resolveForecastStatusDate } from "@/lib/forecast/resolveStatusDate";
 import { baselineProgress } from "@/lib/lookahead/computeLookahead";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { minutesToDays } from "@/lib/msp/duration";
@@ -103,7 +104,7 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
   const scopeByActivityId = new Map(mapped.map((m) => [m.activity.id, m.canonicalScope]));
 
   const progressByKey = resolveCurrentProgress(await getFinalizedEntries(project.id));
-  const dataDate = latestImport.statusDate ?? latestImport.importedAt;
+  const dataDate = await resolveForecastStatusDate(project.id, latestImport);
   const forecasts = computeForecast({
     activities: latestImport.activities,
     relationships: latestImport.relationships,

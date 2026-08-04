@@ -27,7 +27,7 @@ describe("ScheduleBody", () => {
   it("renders the grouped timeline with section header and activity count", () => {
     render(<ScheduleBody rows={rows} projectId="p1" statusDate="2026-08-05T00:00:00.000Z" view="full" initialFilter={null} initialSort={null} />);
     expect(screen.getByText("Rough-In")).toBeTruthy();
-    expect(screen.getByText("2 activities")).toBeTruthy();
+    expect(screen.getByText(/Showing 2 activities/)).toBeTruthy();
   });
   it("filters to at-risk from the initialFilter URL param", () => {
     render(<ScheduleBody rows={rows} projectId="p1" statusDate="2026-08-05T00:00:00.000Z" view="full" initialFilter="at_risk" initialSort={null} />);

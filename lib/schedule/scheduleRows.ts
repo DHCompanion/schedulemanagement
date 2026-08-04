@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { computeForecast, projectDrift } from "@/lib/forecast/computeForecast";
+import { resolveForecastStatusDate } from "@/lib/forecast/resolveStatusDate";
 import { baselineProgress } from "@/lib/lookahead/computeLookahead";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
@@ -40,12 +41,7 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
   if (!latest) return null;
 
   const progressByKey = resolveCurrentProgress(await getFinalizedEntries(projectId));
-  const latestUpdate = await prisma.progressUpdate.findFirst({
-    where: { projectId, state: "finalized" },
-    orderBy: { asOfDate: "desc" },
-    select: { asOfDate: true },
-  });
-  const statusDate = latestUpdate?.asOfDate ?? latest.statusDate ?? latest.importedAt;
+  const statusDate = await resolveForecastStatusDate(projectId, latest);
 
   const forecasts = computeForecast({
     activities: latest.activities,
@@ -120,8 +116,8 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       outlineLevel: a.outlineLevel,
       plannedStart: a.plannedStart ? a.plannedStart.toISOString() : null,
       plannedFinish: a.plannedFinish ? a.plannedFinish.toISOString() : null,
-      expectedStart: f?.expectedStart ? f.expectedStart.toISOString() : null,
-      expectedFinish: f?.expectedFinish ? f.expectedFinish.toISOString() : null,
+      expectedStart: f?.expectedStart ? f.expectedStart.toISOString() : a.plannedStart?.toISOString() ?? null,
+      expectedFinish: f?.expectedFinish ? f.expectedFinish.toISOString() : a.plannedFinish?.toISOString() ?? null,
       driftDays: f?.driftDays ?? 0,
       pushedByName: f?.pushedByUid != null ? nameByUid.get(f.pushedByUid) ?? null : null,
       status,

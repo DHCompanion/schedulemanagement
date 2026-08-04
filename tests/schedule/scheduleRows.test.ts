@@ -34,6 +34,11 @@ describe.runIf(hasDb)("getScheduleData", () => {
           wbsCode: "1.2", plannedStart: new Date("2026-08-10T08:00:00Z"), plannedFinish: new Date("2026-08-14T17:00:00Z"),
           durationDays: 5,
         },
+        {
+          scheduleImportId: imp.id, externalUid: 3, canonicalActivityKey: "3|c", name: "Deferred Scope", type: "task",
+          wbsCode: "1.3", plannedStart: new Date("2026-08-17T08:00:00Z"), plannedFinish: new Date("2026-08-21T17:00:00Z"),
+          durationDays: 5, isActive: false,
+        },
       ],
     });
     await prisma.relationship.create({
@@ -42,7 +47,7 @@ describe.runIf(hasDb)("getScheduleData", () => {
 
     const data = await getScheduleData(project.id);
     expect(data).not.toBeNull();
-    const [a, b] = data!.rows;
+    const [a, b, c] = data!.rows;
     expect(a.status).toBe("in_progress");
     expect(a.driftDays).toBe(4);
     expect(b.status).toBe("not_started");
@@ -52,5 +57,7 @@ describe.runIf(hasDb)("getScheduleData", () => {
     expect(data!.projectDriftDays).toBe(4);
     expect(data!.atRiskCount).toBe(0);
     expect(data!.statusDate.slice(0, 10)).toBe("2026-08-07");
+    // Inactive activities get no forecast entry; expectedStart falls back to planned.
+    expect(c.expectedStart).toBe("2026-08-17T08:00:00.000Z");
   });
 });

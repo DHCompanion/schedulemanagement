@@ -20,6 +20,8 @@ export default async function ProjectPage(props: {
   const project = await prisma.project.findUnique({ where: { id: params.id } });
   if (!project) notFound();
 
+  const view = searchParams.view === "6wk" || searchParams.view === "3wk" ? searchParams.view : "full";
+
   const schedule = await getScheduleData(project.id);
   const health = await getScheduleHealth(project.id);
   const dataCounts = await getDataHealthCounts(project.id);
@@ -71,10 +73,11 @@ export default async function ProjectPage(props: {
             </p>
           )}
           <ScheduleBody
+            key={`${view}|${searchParams.filter ?? ""}|${searchParams.sort ?? ""}`}
             rows={schedule.rows}
             projectId={project.id}
             statusDate={schedule.statusDate}
-            view={searchParams.view === "6wk" || searchParams.view === "3wk" ? searchParams.view : "full"}
+            view={view}
             initialFilter={searchParams.filter ?? null}
             initialSort={searchParams.sort ?? null}
           />
