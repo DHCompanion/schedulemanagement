@@ -53,6 +53,9 @@ function Card({ row, openId, onToggleOpen }: { row: BucketRow; openId: string | 
               {row.partnerName ? ` · ${row.partnerName}` : ""}
             </span>
           )}
+          {row.type !== "milestone" && row.durationDays !== null && (
+            <span>{Number.isInteger(row.durationDays) ? `${row.durationDays}d` : `${row.durationDays.toFixed(1)}d`}</span>
+          )}
           {row.percentComplete !== null && row.percentComplete > 0 && <span>{row.percentComplete}% done</span>}
           {row.atRisk && (
             <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800">AT RISK</span>

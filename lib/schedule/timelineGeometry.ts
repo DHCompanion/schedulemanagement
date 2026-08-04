@@ -79,6 +79,26 @@ export function axisTicks(win: TimelineWindow): { leftPct: number; label: string
   return ticks;
 }
 
+/**
+ * Vertical gridline positions: one per UTC midnight when the window is 45
+ * days or tighter (Mondays major), else the weekly/monthly tick positions.
+ */
+export function gridLines(win: TimelineWindow): { leftPct: number; isMajor: boolean }[] {
+  const total = win.endMs - win.startMs;
+  if (total / DAY_MS > 45) {
+    return axisTicks(win).map((t) => ({ leftPct: t.leftPct, isMajor: true }));
+  }
+  const lines: { leftPct: number; isMajor: boolean }[] = [];
+  const d = new Date(win.startMs);
+  let cursor = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  if (cursor <= win.startMs) cursor += DAY_MS;
+  while (cursor < win.endMs) {
+    lines.push({ leftPct: ((cursor - win.startMs) / total) * 100, isMajor: new Date(cursor).getUTCDay() === 1 });
+    cursor += DAY_MS;
+  }
+  return lines;
+}
+
 export function weekendBands(win: TimelineWindow): { leftPct: number; widthPct: number }[] {
   const total = win.endMs - win.startMs;
   if (total / DAY_MS > DETAIL_MAX_DAYS) return [];

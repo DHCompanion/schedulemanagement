@@ -1,7 +1,7 @@
 "use client";
 
 import type { ScheduleRow } from "@/lib/schedule/types";
-import { spanPct, pointPct, axisTicks, weekendBands, type TimelineWindow } from "@/lib/schedule/timelineGeometry";
+import { spanPct, pointPct, axisTicks, weekendBands, gridLines, type TimelineWindow } from "@/lib/schedule/timelineGeometry";
 import { paletteEntry } from "./sectionPalette";
 import { ActivityDetail } from "./ActivityDetail";
 
@@ -13,6 +13,10 @@ export interface TimelineItem {
 }
 
 const LEFT_COL = "38%";
+
+function fmtDur(days: number): string {
+  return Number.isInteger(days) ? `${days}d` : `${days.toFixed(1)}d`;
+}
 
 export function TimelineView({
   items,
@@ -33,6 +37,7 @@ export function TimelineView({
 }) {
   const ticks = axisTicks(win);
   const bands = weekendBands(win);
+  const grid = gridLines(win);
   const todayPct = pointPct(todayIso, win);
 
   return (
@@ -41,6 +46,14 @@ export function TimelineView({
       <div className="pointer-events-none absolute inset-y-0 right-0" style={{ left: LEFT_COL }}>
         {bands.map((b, i) => (
           <div key={i} className="absolute inset-y-0 bg-slate-100/70" style={{ left: `${b.leftPct}%`, width: `${b.widthPct}%` }} />
+        ))}
+        {grid.map((g, i) => (
+          <div
+            key={`g${i}`}
+            data-grid={g.isMajor ? "major" : "day"}
+            className={`absolute inset-y-0 w-px ${g.isMajor ? "bg-slate-300" : "bg-slate-200/80"}`}
+            style={{ left: `${g.leftPct}%` }}
+          />
         ))}
         {todayPct !== null && (
           <div className="absolute inset-y-0 z-10 w-px bg-cyan-600" style={{ left: `${todayPct}%` }} />
@@ -103,6 +116,9 @@ export function TimelineView({
                   <span className={a.isCritical ? "font-medium text-red-700" : "font-medium"}>{a.canonicalScope ?? a.name}</span>
                   {a.canonicalScope && a.canonicalScope !== a.name && (
                     <span className="ml-2 text-xs text-slate-400">{a.name}</span>
+                  )}
+                  {!isMilestone && a.durationDays !== null && (
+                    <span className="ml-2 whitespace-nowrap text-xs text-slate-400">{fmtDur(a.durationDays)}</span>
                   )}
                   {isMilestone && <span className="ml-2 text-xs text-indigo-600">◆</span>}
                   {a.percentComplete === 100 && (

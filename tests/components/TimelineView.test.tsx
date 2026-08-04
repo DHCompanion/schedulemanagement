@@ -31,6 +31,8 @@ describe("TimelineView", () => {
     expect(container.querySelector('[data-bar="planned"]')).toBeTruthy();
     expect(container.querySelector('[data-bar="expected"]')).toBeTruthy();
     expect(screen.getByText("+3d").className).toContain("text-red-600");
+    expect(screen.getByText("5d")).toBeTruthy(); // duration shown in the left column
+    expect(container.querySelectorAll('[data-grid="day"]').length).toBeGreaterThan(0); // day gridlines in a 28-day window
   });
   it("prefers the canonical name and keeps the raw name muted; AT RISK pill carries over", () => {
     render(

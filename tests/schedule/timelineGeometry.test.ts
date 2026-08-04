@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveWindow, spanPct, pointPct, axisTicks, weekendBands } from "@/lib/schedule/timelineGeometry";
+import { resolveWindow, spanPct, pointPct, axisTicks, weekendBands, gridLines } from "@/lib/schedule/timelineGeometry";
 
 const today = new Date("2026-08-05T12:00:00Z"); // Wed; week starts Mon Aug 3
 
@@ -48,6 +48,21 @@ describe("pointPct", () => {
     expect(pointPct("2026-08-10T00:00:00Z", win)).toBeCloseTo(50, 5);
     expect(pointPct("2026-09-01T00:00:00Z", win)).toBeNull();
     expect(pointPct(null, win)).toBeNull();
+  });
+});
+
+describe("gridLines", () => {
+  it("draws one line per UTC midnight in a windowed view, Mondays major", () => {
+    const win = { startMs: Date.parse("2026-08-03T00:00:00Z"), endMs: Date.parse("2026-08-24T00:00:00Z") }; // 3wk from a Monday
+    const lines = gridLines(win);
+    expect(lines.length).toBe(20); // Aug 4 .. Aug 23 midnights
+    expect(lines.filter((l) => l.isMajor).length).toBe(2); // Mon Aug 10, Mon Aug 17
+  });
+  it("falls back to tick positions past 45 days", () => {
+    const win = { startMs: Date.parse("2026-01-01T00:00:00Z"), endMs: Date.parse("2026-06-30T00:00:00Z") };
+    const lines = gridLines(win);
+    expect(lines.length).toBe(axisTicks(win).length);
+    expect(lines.every((l) => l.isMajor)).toBe(true);
   });
 });
 
