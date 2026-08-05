@@ -59,7 +59,9 @@ export function LookaheadSheet({ view, projectName }: { view: LookaheadView; pro
           <div className="ms">
             {view.milestones.map((m) => (
               <span key={`${m.name}|${m.expected ?? ""}`} className={`ms-chip${m.beyondWindow ? " beyond" : ""}`}>
-                {m.name} · ◇ {m.planned ? fmtDay(m.planned) : "—"} → ◆ {m.expected ? fmtDay(m.expected) : "—"}
+                {m.name} ·<span className="mark planned" />
+                {m.planned ? fmtDay(m.planned) : "—"} –<span className="mark expected" />
+                {m.expected ? fmtDay(m.expected) : "—"}
                 {m.driftDays > 0 && <span className="ms-drift"> +{m.driftDays}d</span>}
               </span>
             ))}
@@ -116,14 +118,10 @@ export function LookaheadSheet({ view, projectName }: { view: LookaheadView; pro
                     )}
                     {r.ghostPct !== null && <div data-ghost="planned" className="ghost" style={{ left: `${r.ghostPct}%` }} />}
                     {r.plannedPointPct !== null && (
-                      <span className="dia planned" style={{ left: `${r.plannedPointPct}%` }}>
-                        ◇
-                      </span>
+                      <span data-diamond="planned" className="dia planned" style={{ left: `${r.plannedPointPct}%` }} />
                     )}
                     {r.expectedPointPct !== null && (
-                      <span className="dia expected" style={{ left: `${r.expectedPointPct}%` }}>
-                        ◆
-                      </span>
+                      <span data-diamond="expected" className="dia expected" style={{ left: `${r.expectedPointPct}%` }} />
                     )}
                     {r.bar && r.driftDays > 0 && (
                       <span className="drift" style={{ left: `${Math.min(r.bar.leftPct + r.bar.widthPct, 96)}%` }}>

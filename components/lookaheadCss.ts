@@ -48,9 +48,14 @@ export function lookaheadCss(size: "tabloid" | "letter"): string {
 .bar-fill { height: 100%; background: #155e75; }
 .ghost { position: absolute; top: 3px; width: 1px; height: 12px; background: #94a3b8; }
 .drift { position: absolute; top: 3px; font-size: 9px; font-weight: 700; color: #dc2626; transform: translateX(3px); }
-.dia { position: absolute; top: 2px; transform: translateX(-50%); font-size: 11px; }
-.dia.planned { color: #94a3b8; }
-.dia.expected { color: #4338ca; }
+/* Diamonds are drawn, not typed: the headless font bundle has no ◇/◆ glyph, so
+   a character would silently vanish from the PDF. */
+.dia { position: absolute; top: 5px; width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg); }
+.dia.planned { border: 1px solid #94a3b8; background: #fff; }
+.dia.expected { background: #4338ca; }
+.mark { display: inline-block; width: 7px; height: 7px; transform: rotate(45deg); margin: 0 3px 0 1px; }
+.mark.planned { border: 1px solid #94a3b8; }
+.mark.expected { background: #4338ca; }
 .empty { padding: 16px; text-align: center; color: #64748b; }
 .foot { margin-top: 10px; font-size: 9px; color: #64748b; text-align: right; }
 @media print { .no-print { display: none !important; } }

@@ -14,6 +14,10 @@ const nextConfig = {
   // <form action>. lib/http.ts prefixes those and needs the value in the browser
   // bundle, so inline it here from the single server-side variable.
   env: { NEXT_PUBLIC_BASE_PATH: basePath },
+  // The Chromium binary behind the lookahead PDF and its launcher must stay out
+  // of the server bundle: webpack cannot bundle a brotli-packed executable, and
+  // Playwright resolves it from disk at runtime.
+  serverExternalPackages: ["playwright-core", "@sparticuz/chromium"],
 };
 
 export default nextConfig;

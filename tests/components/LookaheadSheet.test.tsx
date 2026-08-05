@@ -43,7 +43,28 @@ describe("LookaheadSheet", () => {
     expect(screen.getByText("42%")).toBeTruthy();
     expect(screen.getByText("7")).toBeTruthy();
     expect(screen.getByText("TDIndustries behind on 3 items — Overhead MEP at risk.")).toBeTruthy();
-    expect(screen.getByText(/◇ Aug 10 → ◆ Aug 13/)).toBeTruthy();
+    const chip = document.querySelector<HTMLElement>(".ms-chip")!;
+    expect(chip.textContent).toContain("Aug 10");
+    expect(chip.textContent).toContain("Aug 13");
+    // The diamonds are drawn, not typed — the PDF font has no ◇/◆ glyph.
+    expect(chip.querySelector(".mark.planned")).toBeTruthy();
+    expect(chip.querySelector(".mark.expected")).toBeTruthy();
+  });
+
+  it("draws milestone diamonds on the grid rather than typing a glyph", () => {
+    const base = view();
+    const { container } = render(
+      <LookaheadSheet
+        projectName="P"
+        view={{
+          ...base,
+          bands: [{ ...base.bands[0], rows: [{ ...base.bands[0].rows[0], isMilestone: true, bar: null, ghostPct: null, plannedPointPct: 30, expectedPointPct: 45 }] }],
+        }}
+      />,
+    );
+    expect(container.querySelector<HTMLElement>("[data-diamond='planned']")!.style.left).toBe("30%");
+    expect(container.querySelector<HTMLElement>("[data-diamond='expected']")!.style.left).toBe("45%");
+    expect(container.textContent).not.toContain("◆");
   });
 
   it("bands rows by trade with the partner names and the band color", () => {
