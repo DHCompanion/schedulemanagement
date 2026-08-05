@@ -48,4 +48,11 @@ describe("ExportMenu", () => {
     render(<ExportMenu projectId="p1" />);
     expect(screen.getByText("MS Project XML").closest("a")!.getAttribute("href")).toBe("/projects/p1/export");
   });
+  it("offers both lookahead windows alongside the XML export", () => {
+    const { container } = render(<ExportMenu projectId="p1" />);
+    const hrefs = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/projects/p1/lookahead?weeks=3");
+    expect(hrefs).toContain("/projects/p1/lookahead?weeks=6");
+    expect(hrefs).toContain("/projects/p1/export");
+  });
 });
