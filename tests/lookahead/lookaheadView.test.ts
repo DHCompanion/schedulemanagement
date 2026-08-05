@@ -57,6 +57,8 @@ describe("banding", () => {
     const v = build([
       row(),
       row({ id: "s", type: "summary", name: "Level 2" }),
+      // The project summary is named for the source file — never a grid row.
+      row({ id: "ps", type: "project_summary", name: "C:\\schedules\\ED v1.xml" }),
       row({ id: "far", name: "Punch", expectedStart: "2026-12-01T08:00:00.000Z", expectedFinish: "2026-12-05T17:00:00.000Z" }),
     ]);
     expect(v.bands.flatMap((b) => b.rows).map((r) => r.id)).toEqual(["a1"]);

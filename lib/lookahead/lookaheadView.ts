@@ -112,7 +112,7 @@ export function buildLookaheadView(input: {
 
   const inWindow: { row: ScheduleRow; grid: LookaheadGridRow }[] = [];
   for (const r of rows) {
-    if (r.type === "summary") continue;
+    if (r.type === "summary" || r.type === "project_summary") continue;
     const isMilestone = r.type === "milestone";
     const expectedPointPct = isMilestone ? pointPct(r.expectedFinish ?? r.expectedStart, win) : null;
     const bar = isMilestone ? null : spanPct(r.expectedStart, r.expectedFinish, win);

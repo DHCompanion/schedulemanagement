@@ -34,7 +34,9 @@ export default async function ProjectLayout({
 
   return (
     <>
-      <header className="border-b border-slate-200 bg-white">
+      {/* print:hidden — the lookahead route prints as the meeting handout, and
+          the app banner is not part of it. */}
+      <header className="border-b border-slate-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
           <div className="flex min-w-0 items-baseline gap-3">
             <Link href={`/projects/${id}`} className="truncate font-semibold text-slate-900">

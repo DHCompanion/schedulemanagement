@@ -22,7 +22,9 @@ export function lookaheadCss(size: "tabloid" | "letter"): string {
 .stat-l { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: .04em; }
 .box { border: 1px solid #cbd5e1; border-radius: 4px; padding: 8px 10px; margin-bottom: 10px; }
 .box h2 { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-bottom: 4px; }
-.box ul { padding-left: 16px; }
+/* list-style is restated because the app's Tailwind preflight strips it on
+   screen, and the PDF document (no preflight) would then differ. */
+.box ul { padding-left: 16px; list-style: disc; }
 .box li { margin: 1px 0; }
 .ms { display: flex; flex-wrap: wrap; gap: 6px; }
 .ms-chip { border: 1px solid #cbd5e1; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
