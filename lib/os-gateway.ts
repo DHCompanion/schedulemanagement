@@ -11,7 +11,9 @@
 
 export type OsProjectContext = {
   project: { id: number; name: string; projectNumber?: string | null; client?: string | null; status?: string | null };
-  person: { id: number; displayName?: string | null; roleTitle?: string | null };
+  // roleProfile is the person's org-wide role, unlike access.accessRole which is
+  // per project — the only field in this payload that can carry "OS admin".
+  person: { id: number; displayName?: string | null; roleTitle?: string | null; roleProfile?: string | null };
   access: { accessRole?: string | null };
   session: { toolSlug: string; personId: number; projectId: number; osCapabilities: string[]; expiresAt: string };
 };

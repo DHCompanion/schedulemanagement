@@ -7,6 +7,7 @@ beforeEach(() => {
   process.env.APP_ADMIN_PASSWORD = "adminsecret456";
   process.env.APP_SESSION_TOKEN = "token-abc";
   process.env.ADMIN_ACCESS_ROLES = "Project Manager,Superintendent";
+  process.env.ADMIN_ROLE_PROFILES = "";
 });
 
 describe("auth", () => {
@@ -55,6 +56,24 @@ describe("auth", () => {
     process.env.ADMIN_ACCESS_ROLES = "";
     expect(isAdminRole("Project Manager")).toBe(false);
   });
+  it("matches an allowlisted org-wide role profile whatever the project role is", () => {
+    process.env.ADMIN_ROLE_PROFILES = "Admin,Super Admin";
+    expect(isAdminRole("project team", "Super Admin")).toBe(true);
+    expect(isAdminRole(null, "  admin ")).toBe(true);
+    expect(isAdminRole("project team", "Field Engineer")).toBe(false);
+    expect(isAdminRole("project team", null)).toBe(false);
+    expect(isAdminRole("project team", undefined)).toBe(false);
+  });
+  it("keeps the two allowlists apart — a project role never matches the profile list", () => {
+    process.env.ADMIN_ACCESS_ROLES = "";
+    process.env.ADMIN_ROLE_PROFILES = "Project Manager";
+    expect(isAdminRole("Project Manager")).toBe(false);
+    expect(isAdminRole(null, "Project Manager")).toBe(true);
+  });
+  it("grants no profile admin when that allowlist is unset", () => {
+    process.env.ADMIN_ROLE_PROFILES = "";
+    expect(isAdminRole("project team", "Super Admin")).toBe(false);
+  });
   it("treats an OS-launched session with an allowlisted role as admin", async () => {
     const now = Math.floor(Date.now() / 1000);
     const scoped = async (accessRole: string | null) =>
@@ -68,6 +87,24 @@ describe("auth", () => {
       });
     expect(await isAdminRequest(await scoped("Project Manager"))).toBe(true);
     expect(await isAdminRequest(await scoped("project team"))).toBe(false);
+    expect(await isAdminRequest(await scoped(null))).toBe(false);
+  });
+  it("carries the role profile in the scope cookie so an OS admin is admin on any project", async () => {
+    process.env.ADMIN_ACCESS_ROLES = "";
+    process.env.ADMIN_ROLE_PROFILES = "Super Admin";
+    const now = Math.floor(Date.now() / 1000);
+    const scoped = async (roleProfile: string | null) =>
+      new Request("http://localhost/x", {
+        headers: {
+          Cookie: `${SCOPE_COOKIE}=${await signScope(
+            { projectId: "p1", osProjectId: 1, personId: 4, accessRole: "project team", roleProfile },
+            now,
+          )}`,
+        },
+      });
+    expect(await isAdminRequest(await scoped("Super Admin"))).toBe(true);
+    expect(await isAdminRequest(await scoped("Field Engineer"))).toBe(false);
+    // A cookie minted before this existed carries no profile and must not crash.
     expect(await isAdminRequest(await scoped(null))).toBe(false);
   });
 });

@@ -62,6 +62,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       personId,
       personName: context.person?.displayName ?? null,
       accessRole: context.access?.accessRole ?? null,
+      roleProfile: context.person?.roleProfile ?? null,
     },
     Math.floor(Date.now() / 1000)
   );

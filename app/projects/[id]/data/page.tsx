@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { appPath } from "@/lib/http";
 import { ADMIN_SESSION_COOKIE } from "@/lib/auth";
-import { SCOPE_COOKIE, isAdminFromCookies } from "@/lib/scope";
+import { SCOPE_COOKIE, isAdminFromCookies, readScope } from "@/lib/scope";
 import { applyDictionary, getKnownScopes, getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { suggestScopes } from "@/lib/normalize/suggestScopes";
@@ -62,11 +62,16 @@ export default async function DataHealthPage(
   const leaves = (latest?.activities ?? []).filter((a) => a.type !== "summary" && a.type !== "project_summary");
 
   const jar = await cookies();
+  const nowSeconds = Math.floor(Date.now() / 1000);
   const adminSession = await isAdminFromCookies(
     jar.get(ADMIN_SESSION_COOKIE)?.value,
     jar.get(SCOPE_COOKIE)?.value,
-    Math.floor(Date.now() / 1000)
+    nowSeconds
   );
+  // The two role strings Connect handed down, shown verbatim: the allowlists that
+  // grant tool admin (ADMIN_ACCESS_ROLES / ADMIN_ROLE_PROFILES) have to be set to
+  // values the OS actually sends, and this is the only place to read them.
+  const scope = await readScope(jar.get(SCOPE_COOKIE)?.value, nowSeconds);
 
   // --- Task Naming (moved verbatim from normalize/page.tsx) ---
   const { mapped, unmappedNames } = await applyDictionary(leaves);
@@ -232,6 +237,15 @@ export default async function DataHealthPage(
         <div className="mt-8 border-t border-slate-200 pt-4">
           <ResetProjectButton projectId={project.id} projectName={project.name} />
         </div>
+      )}
+
+      {scope && (
+        <p className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-400">
+          Signed in from Connect as {scope.personName ?? `person ${scope.personId}`} · project role{" "}
+          <span className="font-mono">{scope.accessRole ?? "—"}</span> · role profile{" "}
+          <span className="font-mono">{scope.roleProfile ?? "—"}</span> · tool admin:{" "}
+          {adminSession ? "yes" : "no"}
+        </p>
       )}
     </main>
   );

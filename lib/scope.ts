@@ -21,7 +21,10 @@ export type ProjectScope = {
   personId: number;
   /** Optional: absent from cookies minted before the banner existed. */
   personName?: string | null;
+  /** This person's role ON THIS PROJECT. */
   accessRole: string | null;
+  /** Who they are org-wide. Optional: absent from cookies minted before admin-by-profile. */
+  roleProfile?: string | null;
   exp: number;
 };
 
@@ -106,7 +109,8 @@ export async function isAdminFromCookies(
   nowSeconds: number
 ): Promise<boolean> {
   if (isAdmin(adminCookie)) return true;
-  return isAdminRole((await readScope(scopeCookie, nowSeconds))?.accessRole);
+  const scope = await readScope(scopeCookie, nowSeconds);
+  return isAdminRole(scope?.accessRole, scope?.roleProfile);
 }
 
 // Route handlers receive a plain Request, not a NextRequest, and next/headers'

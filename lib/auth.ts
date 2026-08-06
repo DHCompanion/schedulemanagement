@@ -28,19 +28,33 @@ export function isAdmin(cookieValue: string | undefined): boolean {
   return token.length > 0 && cookieValue === token;
 }
 
-// The other way in: Skiles Connect hands down the person's project access role
-// in the launch handoff, and an OS-launched session never sees the admin
-// password. ADMIN_ACCESS_ROLES is a comma-separated allowlist of those roles
-// (e.g. "Project Manager,Superintendent") so adding a role in the OS does not
-// need a code change here. Unset means no role grants admin.
-export function isAdminRole(accessRole: string | null | undefined): boolean {
-  const role = accessRole?.trim().toLowerCase();
-  if (!role) return false;
-  return (process.env.ADMIN_ACCESS_ROLES ?? "")
+function inAllowlist(value: string | null | undefined, allowlist: string | undefined): boolean {
+  const needle = value?.trim().toLowerCase();
+  if (!needle) return false;
+  return (allowlist ?? "")
     .split(",")
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean)
-    .includes(role);
+    .includes(needle);
+}
+
+// The other way in: Skiles Connect hands down two different kinds of role at
+// launch, and an OS-launched session never sees the admin password.
+//
+//   accessRole  — what this person is ON THIS PROJECT ("Superintendent").
+//                 Allowlisted by ADMIN_ACCESS_ROLES.
+//   roleProfile — who they are org-wide, the same on every project. This is the
+//                 only field that can say "OS admin", so it gets its own list,
+//                 ADMIN_ROLE_PROFILES: a match there makes them tool admin on
+//                 every project they open, which a per-project list cannot mean.
+//
+// Both are comma-separated so adding a role in the OS is a config change, not a
+// deploy. Unset means that field grants nothing.
+export function isAdminRole(accessRole: string | null | undefined, roleProfile?: string | null): boolean {
+  return (
+    inAllowlist(accessRole, process.env.ADMIN_ACCESS_ROLES) ||
+    inAllowlist(roleProfile, process.env.ADMIN_ROLE_PROFILES)
+  );
 }
 
 // Scoped to the base path so that, once the tool is proxied under

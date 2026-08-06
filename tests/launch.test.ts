@@ -24,7 +24,7 @@ function stubGatewayContext(osProjectId: number, name: string) {
     ok: true,
     json: async () => ({
       project: { id: osProjectId, name, client: "BSW" },
-      person: { id: 4, displayName: "A. Woodyard" },
+      person: { id: 4, displayName: "A. Woodyard", roleProfile: "Super Admin" },
       access: { accessRole: "Superintendent" },
     }),
   });
@@ -151,8 +151,12 @@ describe.runIf(!!process.env.DATABASE_URL)("OS launch binds a project", () => {
     );
 
     const scope = await readScope(res.cookies.get(SCOPE_COOKIE)?.value, Math.floor(Date.now() / 1000));
-    // personName rides along so the project banner can name who is signed in.
-    expect(scope).toMatchObject({ projectId: project?.id, osProjectId, personId: 4, personName: "A. Woodyard" });
+    // personName rides along so the project banner can name who is signed in;
+    // roleProfile rides along so an OS admin is admin on every project.
+    expect(scope).toMatchObject({
+      projectId: project?.id, osProjectId, personId: 4,
+      personName: "A. Woodyard", accessRole: "Superintendent", roleProfile: "Super Admin",
+    });
     // The shared-password session is cleared: an unscoped session sitting
     // alongside a scoped one would defeat the scoping.
     expect(res.cookies.get(SESSION_COOKIE)?.value).toBe("");
