@@ -61,8 +61,9 @@ export async function GET(req: Request): Promise<NextResponse> {
       osProjectId,
       personId,
       personName: context.person?.displayName ?? null,
-      accessRole: context.access?.accessRole ?? null,
-      roleProfile: context.person?.roleProfile ?? null,
+      // Backwards-tolerant: an older OS build that hasn't shipped toolLevel yet
+      // omits it — least privilege, never admin, until the next launch retries.
+      toolLevel: context.access?.toolLevel ?? "viewer",
     },
     Math.floor(Date.now() / 1000)
   );

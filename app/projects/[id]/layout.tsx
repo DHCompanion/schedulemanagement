@@ -27,7 +27,7 @@ export default async function ProjectLayout({
   if (!project) notFound();
 
   const scope = await readScope((await cookies()).get(SCOPE_COOKIE)?.value, Math.floor(Date.now() / 1000));
-  const person = scope?.personName ?? scope?.accessRole ?? null;
+  const person = scope?.personName ?? null;
   // Launched from Connect: the way out is back to the Tools page, not this
   // tool's project list — which a scoped session cannot see anyway.
   const connectHref = scope ? `${osAppOrigins()[0] ?? ""}/tools` : null;

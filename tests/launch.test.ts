@@ -24,8 +24,8 @@ function stubGatewayContext(osProjectId: number, name: string) {
     ok: true,
     json: async () => ({
       project: { id: osProjectId, name, client: "BSW" },
-      person: { id: 4, displayName: "A. Woodyard", roleProfile: "Super Admin" },
-      access: { accessRole: "Superintendent" },
+      person: { id: 4, displayName: "A. Woodyard" },
+      access: { toolLevel: "admin" },
     }),
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -152,10 +152,10 @@ describe.runIf(!!process.env.DATABASE_URL)("OS launch binds a project", () => {
 
     const scope = await readScope(res.cookies.get(SCOPE_COOKIE)?.value, Math.floor(Date.now() / 1000));
     // personName rides along so the project banner can name who is signed in;
-    // roleProfile rides along so an OS admin is admin on every project.
+    // toolLevel is the OS's single already-resolved authority signal.
     expect(scope).toMatchObject({
       projectId: project?.id, osProjectId, personId: 4,
-      personName: "A. Woodyard", accessRole: "Superintendent", roleProfile: "Super Admin",
+      personName: "A. Woodyard", toolLevel: "admin",
     });
     // The shared-password session is cleared: an unscoped session sitting
     // alongside a scoped one would defeat the scoping.
@@ -169,6 +169,25 @@ describe.runIf(!!process.env.DATABASE_URL)("OS launch binds a project", () => {
     expect(await prisma.project.count({ where: { osProjectId } })).toBe(1);
     const project = await prisma.project.findUnique({ where: { osProjectId } });
     expect(project?.name).toBe("Downtown Hospital Renovation (renamed)");
+  });
+
+  it("scopes to viewer, never admin, when an older OS build omits toolLevel", async () => {
+    const olderOsProjectId = 987655;
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        project: { id: olderOsProjectId, name: "Legacy OS Build", client: "BSW" },
+        person: { id: 4, displayName: "A. Woodyard" },
+        access: {},
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await GET(launchRequest(`?token=t&returnUrl=${OS_ORIGIN}/tools`));
+    const scope = await readScope(res.cookies.get(SCOPE_COOKIE)?.value, Math.floor(Date.now() / 1000));
+    expect(scope?.toolLevel).toBe("viewer");
+
+    await prisma.project.deleteMany({ where: { osProjectId: olderOsProjectId } });
   });
 });
 
@@ -210,7 +229,7 @@ function stubLaunchGateway(osProjectId: number, opts: { procurement: "ok" | "fai
       json: async () => ({
         project: { id: osProjectId, name: "BSW Regional ED", client: "BSW" },
         person: { id: 4, displayName: "A. Woodyard" },
-        access: { accessRole: "Superintendent" },
+        access: { toolLevel: "user" },
       }),
     };
   });
@@ -273,7 +292,7 @@ describe.runIf(!!process.env.DATABASE_URL)("procurement risk cache", () => {
         return { ok: true, json: async () => ({ packetType: "procurement_project_summary", projectId: 4103, items: [], summary: {}, warnings: ["No procurement project is linked to this Connect project yet."] }) };
       }
       if (target.includes("/trade-partners")) return { ok: true, json: async () => ({ projectId: 4103, tradePartners: [] }) };
-      return { ok: true, json: async () => ({ project: { id: 4103, name: "BSW Regional ED" }, person: { id: 4 }, access: { accessRole: "Superintendent" } }) };
+      return { ok: true, json: async () => ({ project: { id: 4103, name: "BSW Regional ED" }, person: { id: 4 }, access: { toolLevel: "user" } }) };
     });
     vi.stubGlobal("fetch", emptyMock);
 

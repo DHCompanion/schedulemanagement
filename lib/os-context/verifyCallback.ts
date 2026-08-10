@@ -11,7 +11,7 @@ export const CALLBACK_SIGNATURE_HEADER = "x-os-callback-signature";
 const SECRET_ENV = "SCHEDULE_MANAGER_CONTEXT_SECRET";
 
 export type ContextCallbackPayload = {
-  accessRole: string;
+  toolLevel: "admin" | "user" | "viewer";
   expiresAt: string;
   issuedAt: string;
   limit: number;
@@ -87,7 +87,10 @@ function readPayload(value: unknown): ContextCallbackPayload | null {
   if (typeof body.issuedAt !== "string") return null;
 
   return {
-    accessRole: typeof body.accessRole === "string" ? body.accessRole : "",
+    toolLevel:
+      body.toolLevel === "admin" || body.toolLevel === "user" || body.toolLevel === "viewer"
+        ? body.toolLevel
+        : "viewer",
     expiresAt: body.expiresAt,
     issuedAt: body.issuedAt,
     limit: body.limit as number,

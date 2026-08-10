@@ -74,8 +74,8 @@ Authorization: Bearer <token>
 
 This returns (scoped to your project):
 - `project.id`, `project.name`, `project.projectNumber`, `project.location`, `project.client`, `project.status`
-- `person.id`, `person.displayName`, `person.roleTitle`, `person.roleProfile`
-- `access.accessRole` (e.g., "Superintendent", "Project Manager", "project team")
+- `person.id`, `person.displayName`
+- `access.toolLevel` (`"admin"` | `"user"` | `"viewer"`) — the OS's single, already-resolved authority signal
 - `session` metadata (toolSlug, personId, projectId, osCapabilities, expiresAt)
 
 ### 4. Linking Your Records to the OS

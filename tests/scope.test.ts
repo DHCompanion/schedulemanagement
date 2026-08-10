@@ -8,7 +8,7 @@ import {
 } from "@/lib/scope";
 
 const NOW = 1_800_000_000;
-const SCOPE = { projectId: "proj-local-1", osProjectId: 42, personId: 4, accessRole: "Superintendent" };
+const SCOPE = { projectId: "proj-local-1", osProjectId: 42, personId: 4, toolLevel: "user" as const };
 
 function requestWithScope(cookieValue: string): Request {
   return new Request("https://tool.test/api/trades", {

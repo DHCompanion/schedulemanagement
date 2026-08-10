@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE, isAdmin, isAdminRole, parseCookie } from "@/lib/auth";
+import { ADMIN_SESSION_COOKIE, isAdmin, isToolAdmin, parseCookie, type ToolLevel } from "@/lib/auth";
 
 // An OS-launched session. Unlike the shared-password session (a constant token),
 // this cookie is signed and names exactly one project, so it both authenticates
@@ -21,10 +21,12 @@ export type ProjectScope = {
   personId: number;
   /** Optional: absent from cookies minted before the banner existed. */
   personName?: string | null;
-  /** This person's role ON THIS PROJECT. */
-  accessRole: string | null;
-  /** Who they are org-wide. Optional: absent from cookies minted before admin-by-profile. */
-  roleProfile?: string | null;
+  /**
+   * The OS's single authority signal for this person on this project.
+   * Optional: absent on a cookie minted before this field existed (or when
+   * the OS omitted it) — treat a missing value as "viewer", never admin.
+   */
+  toolLevel?: ToolLevel;
   exp: number;
 };
 
@@ -98,11 +100,11 @@ export function scopeFromRequest(req: Request, nowSeconds: number): Promise<Proj
   return readScope(parseCookie(req, SCOPE_COOKIE), nowSeconds);
 }
 
-// Admin from either session kind: the standalone admin password, or an OS launch
-// whose handed-down access role is allowlisted. Takes raw cookie values so both
-// route handlers (plain Request) and server components (next/headers) can call
-// it — next/headers must not be imported here, this module also runs in edge
-// middleware.
+// Admin from either session kind: the standalone admin password, or an OS
+// launch whose handed-down toolLevel is "admin". Takes raw cookie values so
+// both route handlers (plain Request) and server components (next/headers)
+// can call it — next/headers must not be imported here, this module also
+// runs in edge middleware.
 export async function isAdminFromCookies(
   adminCookie: string | undefined,
   scopeCookie: string | undefined,
@@ -110,7 +112,7 @@ export async function isAdminFromCookies(
 ): Promise<boolean> {
   if (isAdmin(adminCookie)) return true;
   const scope = await readScope(scopeCookie, nowSeconds);
-  return isAdminRole(scope?.accessRole, scope?.roleProfile);
+  return isToolAdmin(scope?.toolLevel);
 }
 
 // Route handlers receive a plain Request, not a NextRequest, and next/headers'
