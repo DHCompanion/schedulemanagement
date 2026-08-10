@@ -23,7 +23,7 @@ const valid = (over: Record<string, unknown> = {}) => ({
   requestingTool: "procurement-manager",
   projectId: 999999,
   personId: 4,
-  accessRole: "Project Manager",
+  toolLevel: "user",
   limit: 25,
   issuedAt: new Date(Date.now() - 1000).toISOString(),
   expiresAt: new Date(Date.now() + 300000).toISOString(),

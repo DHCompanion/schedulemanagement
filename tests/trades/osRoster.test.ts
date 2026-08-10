@@ -20,7 +20,7 @@ function stubGateway(partners: unknown, options: { partnersFail?: boolean } = {}
           json: async () => ({
             project: { id: OS_PROJECT_ID, name: "Roster Test" },
             person: { id: 7 },
-            access: { accessRole: "Superintendent" },
+            access: { toolLevel: "user" },
           }),
         };
       }

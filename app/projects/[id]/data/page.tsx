@@ -68,9 +68,8 @@ export default async function DataHealthPage(
     jar.get(SCOPE_COOKIE)?.value,
     nowSeconds
   );
-  // The two role strings Connect handed down, shown verbatim: the allowlists that
-  // grant tool admin (ADMIN_ACCESS_ROLES / ADMIN_ROLE_PROFILES) have to be set to
-  // values the OS actually sends, and this is the only place to read them.
+  // The toolLevel Connect handed down, shown verbatim, so a launched session
+  // can confirm what the OS resolved without guessing at the footer below.
   const scope = await readScope(jar.get(SCOPE_COOKIE)?.value, nowSeconds);
 
   // --- Task Naming (moved verbatim from normalize/page.tsx) ---
@@ -241,9 +240,8 @@ export default async function DataHealthPage(
 
       {scope && (
         <p className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-400">
-          Signed in from Connect as {scope.personName ?? `person ${scope.personId}`} · project role{" "}
-          <span className="font-mono">{scope.accessRole ?? "—"}</span> · role profile{" "}
-          <span className="font-mono">{scope.roleProfile ?? "—"}</span> · tool admin:{" "}
+          Signed in from Connect as {scope.personName ?? `person ${scope.personId}`} · tool level{" "}
+          <span className="font-mono">{scope.toolLevel ?? "—"}</span> · tool admin:{" "}
           {adminSession ? "yes" : "no"}
         </p>
       )}

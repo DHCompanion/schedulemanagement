@@ -195,7 +195,7 @@ x-os-callback-signature: <base64url HMAC-SHA256 of the RAW body>
   "requestingTool": "schedule-manager",
   "projectId": 9,
   "personId": 4,
-  "accessRole": "Project Manager",
+  "toolLevel": "user",
   "limit": 25,
   "issuedAt": "2026-07-29T12:00:00.000Z",
   "expiresAt": "2026-07-29T12:05:00.000Z" }

@@ -11,7 +11,7 @@ process.env.APP_SESSION_TOKEN ||= "linkage-test-secret";
 
 async function scopedRequest(projectId: string, body: unknown): Promise<Request> {
   const scope = await signScope(
-    { projectId, osProjectId: 555111, personId: PERSON_ID, accessRole: "Superintendent" },
+    { projectId, osProjectId: 555111, personId: PERSON_ID, toolLevel: "user" },
     Math.floor(Date.now() / 1000)
   );
   return new Request("https://tool.test/api", {

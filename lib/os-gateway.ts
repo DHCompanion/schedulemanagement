@@ -11,10 +11,11 @@
 
 export type OsProjectContext = {
   project: { id: number; name: string; projectNumber?: string | null; client?: string | null; status?: string | null };
-  // roleProfile is the person's org-wide role, unlike access.accessRole which is
-  // per project — the only field in this payload that can carry "OS admin".
-  person: { id: number; displayName?: string | null; roleTitle?: string | null; roleProfile?: string | null };
-  access: { accessRole?: string | null };
+  person: { id: number; displayName?: string | null };
+  // toolLevel is the OS's single, already-resolved authority signal for this
+  // person on this project — admin | user | viewer. Absent means an older OS
+  // build; treat that as viewer, never admin.
+  access: { toolLevel?: "admin" | "user" | "viewer" };
   session: { toolSlug: string; personId: number; projectId: number; osCapabilities: string[]; expiresAt: string };
 };
 

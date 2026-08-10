@@ -1,6 +1,11 @@
 export const SESSION_COOKIE = "sms_session";
 export const ADMIN_SESSION_COOKIE = "sms_admin";
 
+// The OS's single authority signal, already collapsed from per-project role +
+// org-wide profile. `none` never reaches a launched tool (the OS refuses the
+// launch), so this tool only ever sees the three below.
+export type ToolLevel = "admin" | "user" | "viewer";
+
 export function checkPassword(input: string): boolean {
   const expected = process.env.APP_PASSWORD ?? "";
   return expected.length > 0 && input === expected;
@@ -28,33 +33,12 @@ export function isAdmin(cookieValue: string | undefined): boolean {
   return token.length > 0 && cookieValue === token;
 }
 
-function inAllowlist(value: string | null | undefined, allowlist: string | undefined): boolean {
-  const needle = value?.trim().toLowerCase();
-  if (!needle) return false;
-  return (allowlist ?? "")
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean)
-    .includes(needle);
-}
-
-// The other way in: Skiles Connect hands down two different kinds of role at
-// launch, and an OS-launched session never sees the admin password.
-//
-//   accessRole  — what this person is ON THIS PROJECT ("Superintendent").
-//                 Allowlisted by ADMIN_ACCESS_ROLES.
-//   roleProfile — who they are org-wide, the same on every project. This is the
-//                 only field that can say "OS admin", so it gets its own list,
-//                 ADMIN_ROLE_PROFILES: a match there makes them tool admin on
-//                 every project they open, which a per-project list cannot mean.
-//
-// Both are comma-separated so adding a role in the OS is a config change, not a
-// deploy. Unset means that field grants nothing.
-export function isAdminRole(accessRole: string | null | undefined, roleProfile?: string | null): boolean {
-  return (
-    inAllowlist(accessRole, process.env.ADMIN_ACCESS_ROLES) ||
-    inAllowlist(roleProfile, process.env.ADMIN_ROLE_PROFILES)
-  );
+// The other way in: an OS-launched session never sees the admin password, so
+// admin there is the OS's own toolLevel — a single signal the OS already
+// resolved from project access + org-wide role. Anything but "admin"
+// (including absent, e.g. a pre-toolLevel cookie) is not admin.
+export function isToolAdmin(toolLevel: ToolLevel | null | undefined): boolean {
+  return toolLevel === "admin";
 }
 
 // Scoped to the base path so that, once the tool is proxied under

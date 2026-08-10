@@ -7,7 +7,7 @@ const NOW = new Date("2026-07-28T14:00:30.000Z");
 
 function body(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    accessRole: "superintendent",
+    toolLevel: "user",
     expiresAt: "2026-07-28T14:01:00.000Z",
     issuedAt: "2026-07-28T14:00:00.000Z",
     limit: 10,
@@ -39,6 +39,13 @@ describe("verifyContextCallback", () => {
     expect(result.ok).toBe(true);
     expect(result.ok === true && result.payload.projectId).toBe(42);
     expect(result.ok === true && result.payload.requestingTool).toBe("procurement-manager");
+  });
+
+  it("defaults toolLevel to viewer, never admin, when an older OS build omits it", () => {
+    const raw = body({ toolLevel: undefined });
+    const result = verifyContextCallback(raw, sign(raw), NOW);
+
+    expect(result.ok === true && result.payload.toolLevel).toBe("viewer");
   });
 
   it("rejects a signature made with a different secret", () => {
