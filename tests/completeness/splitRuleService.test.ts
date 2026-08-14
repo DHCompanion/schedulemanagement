@@ -1,12 +1,14 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
 import { getSplitRules, addSplitRule, removeSplitRule } from "@/lib/completeness/splitRuleService";
+import { SESSION_COOKIE } from "@/lib/auth";
+import { signSession } from "@/lib/scope";
 
 const hasDb = !!process.env.DATABASE_URL;
 
 describe.runIf(hasDb)("splitRuleService", () => {
   const coarse = `ZZ Test Coarse ${Date.now()}`;
-  process.env.APP_SESSION_TOKEN = process.env.APP_SESSION_TOKEN || "token-abc";
+  process.env.SESSION_SIGNING_SECRET = process.env.SESSION_SIGNING_SECRET || "token-abc".padEnd(32, "x");
 
   afterAll(async () => {
     await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
@@ -34,7 +36,8 @@ describe.runIf(hasDb)("splitRuleService", () => {
   it("route adds and removes a rule", async () => {
     const { POST, DELETE } = await import("@/app/api/completeness/split-rules/route");
     const body = JSON.stringify({ coarseScope: coarse, finerScope: "Route Finer" });
-    const adminHeaders = { "Content-Type": "application/json", Cookie: `sms_admin=${process.env.APP_SESSION_TOKEN}` };
+    const adminCookie = `${SESSION_COOKIE}=${await signSession(true, Math.floor(Date.now() / 1000))}`;
+    const adminHeaders = { "Content-Type": "application/json", Cookie: adminCookie };
 
     const postRes = await POST(new Request("http://localhost/api/completeness/split-rules", {
       method: "POST", headers: adminHeaders, body,
@@ -51,9 +54,10 @@ describe.runIf(hasDb)("splitRuleService", () => {
 
   it("route rejects a missing coarseScope", async () => {
     const { POST } = await import("@/app/api/completeness/split-rules/route");
+    const adminCookie = `${SESSION_COOKIE}=${await signSession(true, Math.floor(Date.now() / 1000))}`;
     const res = await POST(new Request("http://localhost/api/completeness/split-rules", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: `sms_admin=${process.env.APP_SESSION_TOKEN}` },
+      headers: { "Content-Type": "application/json", Cookie: adminCookie },
       body: JSON.stringify({ finerScope: "x" }),
     }));
     expect(res.status).toBe(422);

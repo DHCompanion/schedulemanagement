@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readUploadedXml } from "@/lib/http";
 import { buildExport } from "@/lib/export/buildExport";
 import { denyIfOutOfScope } from "@/lib/scope";
 
@@ -12,7 +13,11 @@ export async function POST(req: Request) {
 
   const denied = await denyIfOutOfScope(req, projectId);
   if (denied) return denied;
-  const xml = await file.text();
+  const upload = await readUploadedXml(file);
+  if ("error" in upload) {
+    return NextResponse.json({ error: { message: upload.error } }, { status: 413 });
+  }
+  const { xml } = upload;
   try {
     const out = await buildExport(projectId, xml, file.name);
     return new Response(out.xml, {

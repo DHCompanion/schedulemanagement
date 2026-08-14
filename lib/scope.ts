@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { ADMIN_SESSION_COOKIE, isAdmin, isToolAdmin, parseCookie, type ToolLevel } from "@/lib/auth";
+import { SESSION_COOKIE, isToolAdmin, parseCookie, type ToolLevel } from "@/lib/auth";
 
-// An OS-launched session. Unlike the shared-password session (a constant token),
-// this cookie is signed and names exactly one project, so it both authenticates
-// the user AND scopes them.
+// An OS-launched session. Both session kinds are signed cookies; this one also
+// names exactly one project, so it both authenticates the user AND scopes them.
 //
 // The two session kinds are deliberately separate cookies. If a launch instead
 // set the shared session cookie plus a scope cookie, deleting the scope cookie
@@ -34,9 +33,17 @@ const encoder = new TextEncoder();
 
 // Web Crypto, not node:crypto — this has to verify in edge middleware as well as
 // in Node route handlers.
+//
+// SESSION_SIGNING_SECRET exists only on the server and is never emitted to a
+// client in any form. It used to be APP_SESSION_TOKEN, which was ALSO handed out
+// as the literal value of the session cookie — so anyone holding a session cookie
+// held the key that forges arbitrary scope cookies (any projectId, any personId,
+// toolLevel "admin"). One secret must not guard two trust levels.
 async function signingKey(): Promise<CryptoKey> {
-  const secret = process.env.APP_SESSION_TOKEN ?? "";
-  if (!secret) throw new Error("APP_SESSION_TOKEN is not set; cannot sign a scope cookie");
+  const secret = process.env.SESSION_SIGNING_SECRET ?? "";
+  if (secret.length < 32) {
+    throw new Error("SESSION_SIGNING_SECRET must be set and at least 32 characters");
+  }
   return crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
     "sign",
     "verify",
@@ -58,14 +65,16 @@ function fromBase64Url(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-export async function signScope(scope: Omit<ProjectScope, "exp">, nowSeconds: number): Promise<string> {
-  const payload: ProjectScope = { ...scope, exp: nowSeconds + SCOPE_TTL_SECONDS };
+// Both cookie kinds are the same shape: base64url(JSON payload) "." HMAC of it.
+async function sign(payload: object): Promise<string> {
   const body = toBase64Url(encoder.encode(JSON.stringify(payload)));
   const signature = await crypto.subtle.sign("HMAC", await signingKey(), encoder.encode(body));
   return `${body}.${toBase64Url(new Uint8Array(signature))}`;
 }
 
-export async function readScope(raw: string | undefined, nowSeconds: number): Promise<ProjectScope | null> {
+// Returns the decoded payload only if the signature verifies AND exp is in the
+// future. Everything past this point is a claim the server itself made.
+async function readSigned<T extends { exp: number }>(raw: string | undefined, nowSeconds: number): Promise<T | null> {
   if (!raw) return null;
   const [body, signature] = raw.split(".");
   if (!body || !signature) return null;
@@ -77,20 +86,51 @@ export async function readScope(raw: string | undefined, nowSeconds: number): Pr
       encoder.encode(body)
     );
     if (!valid) return null;
-    const scope = JSON.parse(new TextDecoder().decode(fromBase64Url(body))) as ProjectScope;
-    if (typeof scope.exp !== "number" || scope.exp <= nowSeconds) return null;
-    if (typeof scope.projectId !== "string" || typeof scope.osProjectId !== "number") return null;
-    return scope;
+    const payload = JSON.parse(new TextDecoder().decode(fromBase64Url(body))) as T;
+    if (typeof payload.exp !== "number" || payload.exp <= nowSeconds) return null;
+    return payload;
   } catch {
     return null;
   }
+}
+
+export async function signScope(scope: Omit<ProjectScope, "exp">, nowSeconds: number): Promise<string> {
+  return sign({ ...scope, exp: nowSeconds + SCOPE_TTL_SECONDS } satisfies ProjectScope);
+}
+
+export async function readScope(raw: string | undefined, nowSeconds: number): Promise<ProjectScope | null> {
+  const scope = await readSigned<ProjectScope>(raw, nowSeconds);
+  if (!scope) return null;
+  if (typeof scope.projectId !== "string" || typeof scope.osProjectId !== "number") return null;
+  return scope;
+}
+
+// The standalone (shared-password) session. Previously this cookie's value was
+// the APP_SESSION_TOKEN constant and admin was flagged by a SECOND cookie holding
+// the SAME constant — so any logged-in user could copy their session cookie into
+// an sms_admin cookie and become admin. Admin is now a signed claim inside the
+// one session cookie: unforgeable without the signing key, and there is no second
+// cookie to copy anything into.
+export type StandaloneSession = { admin: boolean; exp: number };
+
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
+
+export async function signSession(admin: boolean, nowSeconds: number): Promise<string> {
+  return sign({ admin, exp: nowSeconds + SESSION_TTL_SECONDS } satisfies StandaloneSession);
+}
+
+export async function readSession(raw: string | undefined, nowSeconds: number): Promise<StandaloneSession | null> {
+  const session = await readSigned<StandaloneSession>(raw, nowSeconds);
+  if (!session) return null;
+  // A tampered/absent admin flag is not admin, never the reverse.
+  return { admin: session.admin === true, exp: session.exp };
 }
 
 export function scopeCookieOptions() {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: true, // localhost is a secure context, so this costs dev nothing and cannot be lost to a missing NODE_ENV
     path: process.env.NEXT_PUBLIC_BASE_PATH || "/",
     maxAge: SCOPE_TTL_SECONDS,
   };
@@ -106,11 +146,11 @@ export function scopeFromRequest(req: Request, nowSeconds: number): Promise<Proj
 // can call it — next/headers must not be imported here, this module also
 // runs in edge middleware.
 export async function isAdminFromCookies(
-  adminCookie: string | undefined,
+  sessionCookie: string | undefined,
   scopeCookie: string | undefined,
   nowSeconds: number
 ): Promise<boolean> {
-  if (isAdmin(adminCookie)) return true;
+  if ((await readSession(sessionCookie, nowSeconds))?.admin) return true;
   const scope = await readScope(scopeCookie, nowSeconds);
   return isToolAdmin(scope?.toolLevel);
 }
@@ -121,7 +161,7 @@ export async function isAdminFromCookies(
 // raw Cookie header instead.
 export function isAdminRequest(req: Request): Promise<boolean> {
   return isAdminFromCookies(
-    parseCookie(req, ADMIN_SESSION_COOKIE),
+    parseCookie(req, SESSION_COOKIE),
     parseCookie(req, SCOPE_COOKIE),
     Math.floor(Date.now() / 1000)
   );

@@ -17,7 +17,7 @@ function requestWithScope(cookieValue: string): Request {
 }
 
 beforeEach(() => {
-  process.env.APP_SESSION_TOKEN = "signing-secret-abc";
+  process.env.SESSION_SIGNING_SECRET = "signing-secret-abc".padEnd(32, "x");
 });
 
 describe("scope cookie", () => {
@@ -39,7 +39,7 @@ describe("scope cookie", () => {
 
   it("rejects a scope signed with a different secret", async () => {
     const token = await signScope(SCOPE, NOW);
-    process.env.APP_SESSION_TOKEN = "a-different-secret";
+    process.env.SESSION_SIGNING_SECRET = "a-different-secret".padEnd(32, "x");
     expect(await readScope(token, NOW)).toBeNull();
   });
 

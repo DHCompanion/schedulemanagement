@@ -7,7 +7,7 @@ import { SCOPE_COOKIE, signScope } from "@/lib/scope";
 const hasDb = !!process.env.DATABASE_URL;
 const PERSON_ID = 4242;
 
-process.env.APP_SESSION_TOKEN ||= "linkage-test-secret";
+process.env.SESSION_SIGNING_SECRET ||= "linkage-test-secret".padEnd(32, "x");
 
 async function scopedRequest(projectId: string, body: unknown): Promise<Request> {
   const scope = await signScope(

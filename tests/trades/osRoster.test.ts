@@ -6,7 +6,7 @@ import { getProjectDisciplines, getPartnersForDiscipline } from "@/lib/trades/tr
 const hasDb = !!process.env.DATABASE_URL;
 const OS_PROJECT_ID = 771001;
 
-process.env.APP_SESSION_TOKEN ||= "roster-test-secret";
+process.env.SESSION_SIGNING_SECRET ||= "roster-test-secret".padEnd(32, "x");
 process.env.SKILES_OS_APP_ORIGIN ||= "https://sgconnect.dev";
 process.env.SKILES_OS_API_BASE_URL ||= "https://api.sgconnect.dev/api";
 

@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "@/lib/db";
 import { commitImport } from "@/lib/import/commitImport";
-import { ADMIN_SESSION_COOKIE } from "@/lib/auth";
+import { SESSION_COOKIE } from "@/lib/auth";
+import { signSession } from "@/lib/scope";
 
 const xml = readFileSync(resolve(__dirname, "../fixtures/minimal.xml"), "utf8");
 const hasDb = !!process.env.DATABASE_URL;
@@ -12,7 +13,7 @@ describe.runIf(hasDb)("project reset", () => {
   const created: string[] = [];
 
   beforeEach(() => {
-    process.env.APP_SESSION_TOKEN = "token-abc";
+    process.env.SESSION_SIGNING_SECRET = "r".repeat(32);
   });
 
   afterAll(async () => {
@@ -52,7 +53,8 @@ describe.runIf(hasDb)("project reset", () => {
     expect(activitiesBefore).toBeGreaterThan(0);
 
     const { POST } = await import("@/app/api/projects/[id]/reset/route");
-    const res = await POST(request(projectId, `${ADMIN_SESSION_COOKIE}=token-abc`), { params: Promise.resolve({ id: projectId }) });
+    const adminSession = await signSession(true, Math.floor(Date.now() / 1000));
+    const res = await POST(request(projectId, `${SESSION_COOKIE}=${adminSession}`), { params: Promise.resolve({ id: projectId }) });
     expect(res.status).toBe(303);
 
     expect(await prisma.scheduleImport.count({ where: { projectId } })).toBe(0);
