@@ -37,7 +37,7 @@ beforeEach(() => {
   process.env.APP_BASE_URL = "https://sgconnect.dev/schedule-manager";
   process.env.SKILES_OS_APP_ORIGIN = `https://www.sgconnect.dev, ${OS_ORIGIN}`;
   process.env.SKILES_OS_API_BASE_URL = "https://api.sgconnect.dev/api";
-  process.env.APP_SESSION_TOKEN = "token-abc";
+  process.env.SESSION_SIGNING_SECRET = "token-abc".padEnd(32, "x");
 });
 
 afterEach(() => {

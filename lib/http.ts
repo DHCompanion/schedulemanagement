@@ -45,6 +45,22 @@ export function osAppOrigins(): string[] {
     .filter(Boolean);
 }
 
+// Schedule XML enters this app at three routes (imports/preview, imports/commit,
+// export) and each one hands the whole string to fast-xml-parser inside a
+// serverless function. Without a cap, one oversized upload is a memory/CPU
+// exhaustion lever. Real MSPDI exports from large jobs run to a few MB; 50 is
+// generous headroom and still bounded.
+export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+
+// Reads an uploaded XML file, refusing anything over the cap BEFORE materialising
+// it as a string. Returns the text, or an error message for the caller to 413.
+export async function readUploadedXml(file: File): Promise<{ xml: string } | { error: string }> {
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return { error: `File is too large. The limit is ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))} MB.` };
+  }
+  return { xml: await file.text() };
+}
+
 // Every client write in this app has the same shape: POST or DELETE some JSON,
 // and on failure show the server's own message rather than a generic one. The
 // caller keeps its busy state and its fallback wording; this owns the transport.

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { appPath } from "@/lib/http";
-import { ADMIN_SESSION_COOKIE } from "@/lib/auth";
+import { SESSION_COOKIE } from "@/lib/auth";
 import { SCOPE_COOKIE, isAdminFromCookies, readScope } from "@/lib/scope";
 import { applyDictionary, getKnownScopes, getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
@@ -64,7 +64,7 @@ export default async function DataHealthPage(
   const jar = await cookies();
   const nowSeconds = Math.floor(Date.now() / 1000);
   const adminSession = await isAdminFromCookies(
-    jar.get(ADMIN_SESSION_COOKIE)?.value,
+    jar.get(SESSION_COOKIE)?.value,
     jar.get(SCOPE_COOKIE)?.value,
     nowSeconds
   );

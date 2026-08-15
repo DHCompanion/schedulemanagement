@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readUploadedXml } from "@/lib/http";
 import { prisma } from "@/lib/db";
 import { commitImport } from "@/lib/import/commitImport";
 import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
@@ -15,7 +16,11 @@ export async function POST(req: Request) {
   const scope = await scopeFromRequest(req, Math.floor(Date.now() / 1000));
   const denied = denyOutOfScope(scope, projectId);
   if (denied) return denied;
-  const xml = await file.text();
+  const upload = await readUploadedXml(file);
+  if ("error" in upload) {
+    return NextResponse.json({ error: { message: upload.error } }, { status: 413 });
+  }
+  const { xml } = upload;
   try {
     const { id } = await commitImport({
       projectId,

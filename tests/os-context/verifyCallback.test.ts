@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { verifyContextCallback } from "@/lib/os-context/verifyCallback";
+import { verifyContextCallback, MAX_CONTEXT_LIMIT } from "@/lib/os-context/verifyCallback";
 
 const SECRET = "context-secret-abc";
 const NOW = new Date("2026-07-28T14:00:30.000Z");
@@ -95,5 +95,73 @@ describe("verifyContextCallback", () => {
     const result = verifyContextCallback(raw, sign(raw), NOW);
 
     expect(result.ok === false && result.status).toBe(500);
+  });
+});
+
+// SECURITY_REMEDIATION_HANDOFF #4 — a valid HMAC alone is not enough: the call
+// must also be fresh, from an allowed tool, and bounded in what it can ask for.
+describe("verifyContextCallback — replay, allowlist and limit bounds (#4)", () => {
+  it("rejects a captured body replayed after the freshness window", () => {
+    // Signature genuine, and the OS's own expiresAt has NOT passed — only the
+    // issuedAt window stops this, which is the whole point of the finding.
+    const raw = body({ issuedAt: "2026-07-28T13:50:00.000Z", expiresAt: "2026-07-28T15:00:00.000Z" });
+    expect(verifyContextCallback(raw, sign(raw), NOW).ok).toBe(false);
+  });
+
+  it("accepts a callback issued within the window", () => {
+    const raw = body({ issuedAt: "2026-07-28T14:00:00.000Z", expiresAt: "2026-07-28T14:05:00.000Z" });
+    expect(verifyContextCallback(raw, sign(raw), NOW).ok).toBe(true);
+  });
+
+  it("rejects a future-dated issuedAt beyond clock skew", () => {
+    const raw = body({ issuedAt: "2026-07-28T14:10:00.000Z", expiresAt: "2026-07-28T14:15:00.000Z" });
+    expect(verifyContextCallback(raw, sign(raw), NOW).ok).toBe(false);
+  });
+
+  it("rejects an unparseable issuedAt rather than letting NaN slip through", () => {
+    const raw = body({ issuedAt: "not-a-date" });
+    expect(verifyContextCallback(raw, sign(raw), NOW).ok).toBe(false);
+  });
+
+  it("rejects a correctly-signed callback naming a tool the manifest does not allow", () => {
+    for (const tool of ["weekly-report-builder", "safetalk", "schedule-manager"]) {
+      const raw = body({ requestingTool: tool });
+      expect(verifyContextCallback(raw, sign(raw), NOW).ok, `${tool} must not be allowed`).toBe(false);
+    }
+  });
+
+  it("accepts the one tool the manifest does allow", () => {
+    const raw = body({ requestingTool: "procurement-manager" });
+    expect(verifyContextCallback(raw, sign(raw), NOW).ok).toBe(true);
+  });
+
+  it("clamps an oversized limit instead of loading the project unbounded", () => {
+    const raw = body({ limit: 1_000_000 });
+    const res = verifyContextCallback(raw, sign(raw), NOW);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.payload.limit).toBe(MAX_CONTEXT_LIMIT);
+  });
+
+  it("leaves a reasonable limit alone", () => {
+    const raw = body({ limit: 10 });
+    const res = verifyContextCallback(raw, sign(raw), NOW);
+    if (res.ok) expect(res.payload.limit).toBe(10);
+  });
+
+  it("gives every rejection the same client-visible message", () => {
+    const cases = [
+      body({ requestingTool: "safetalk" }),
+      body({ issuedAt: "2026-07-28T13:50:00.000Z", expiresAt: "2026-07-28T15:00:00.000Z" }),
+      body({ expiresAt: "2026-07-28T14:00:00.000Z" }),
+      body({ personId: "not-an-int" }),
+    ];
+    const messages = new Set(
+      cases.map((raw) => {
+        const res = verifyContextCallback(raw, sign(raw), NOW);
+        return res.ok ? "accepted" : res.message;
+      }),
+    );
+    expect(messages.size, "distinct messages leak which check failed").toBe(1);
+    expect(messages.has("accepted")).toBe(false);
   });
 });

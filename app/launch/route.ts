@@ -21,17 +21,21 @@ export async function GET(req: Request): Promise<NextResponse> {
 
   if (!token) return new NextResponse("Missing token", { status: 400 });
 
-  // Open-redirect guard: only bounce back to the OS itself.
+  // Open-redirect guard: only bounce back to the OS itself. The origin check is
+  // the security boundary; normalising to origin + pathname on top of it drops
+  // any attacker-chosen query or fragment, which is the only part of a
+  // same-origin URL that could still carry a payload into the OS.
   if (returnUrl && !isOsOrigin(returnUrl, osOrigins)) {
     return new NextResponse("Invalid returnUrl", { status: 400 });
   }
+  const safeReturnUrl = returnUrl ? originAndPath(returnUrl) : "";
 
   let context;
   try {
     context = await getProjectContext(token);
   } catch {
     // Expired or rejected token — send the user back to re-launch from the OS.
-    return NextResponse.redirect(returnUrl || osOrigins[0] || appUrl(req, "/login"), 303);
+    return NextResponse.redirect(safeReturnUrl || osOrigins[0] || appUrl(req, "/login"), 303);
   }
 
   const osProjectId = context.project?.id;
@@ -128,6 +132,13 @@ async function cacheProcurementRisk(token: string, projectId: string): Promise<v
   } catch {
     // Keep whatever was cached previously.
   }
+}
+
+// Strips query and fragment, keeping only the OS origin and path. Called after
+// isOsOrigin has already vouched for the origin, so the URL parses.
+function originAndPath(candidate: string): string {
+  const url = new URL(candidate);
+  return `${url.origin}${url.pathname}`;
 }
 
 function isOsOrigin(candidate: string, allowedOrigins: string[]): boolean {

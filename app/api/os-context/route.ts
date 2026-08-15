@@ -16,6 +16,8 @@ export async function POST(request: Request) {
   const verification = verifyContextCallback(rawBody, request.headers.get(CALLBACK_SIGNATURE_HEADER));
 
   if (!verification.ok) {
+    // The specific reason is logged, never returned — see REJECTED in verifyCallback.
+    console.error("[schedule-manager/os-context] rejected:", verification.reason);
     return Response.json({ error: verification.message }, { status: verification.status });
   }
 
