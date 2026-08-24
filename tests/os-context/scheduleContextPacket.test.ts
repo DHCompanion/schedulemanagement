@@ -37,6 +37,9 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     // resolves this name as the leaf's phase. Omitted: leaf keeps the schema
     // defaults (outlineLevel 0, outlineNumber null), phase resolves to null.
     phaseName?: string;
+    // CSI division code on the seeded OS discipline roster entry. Omitted
+    // defaults to "" like the other seedProject callers that don't care.
+    division?: string;
   }) {
     const project = await prisma.project.create({
       data: { name: `os-context ${options.osProjectId}`, osProjectId: options.osProjectId },
@@ -91,7 +94,7 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
 
     await prisma.osTradePartner.create({
       data: {
-        disciplines: [{ division: "", id: options.osDisciplineId, name: "Trade" }],
+        disciplines: [{ division: options.division ?? "", id: options.osDisciplineId, name: "Trade" }],
         name: options.partnerName,
         osPartnerId: options.osPartnerId,
         projectId: project.id,
@@ -262,6 +265,7 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
       partnerName: "Test Electrical",
       plannedStart: new Date("2026-05-04T00:00:00.000Z"),
       phaseName,
+      division: "26A",
     });
     const packet = await buildScheduleContextPacket(osProjectId, 25);
     const row = packet.items.find((i) => i.osPartnerId === 4242);
@@ -271,6 +275,7 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     expect(group.canonicalScope).toBe(scopeName);
     expect(group.firstActivityStart).toBe("2026-05-04T00:00:00.000Z");
     expect(group.phase).toBe(expectedPhase);
+    expect(group.division).toBe("26A");
     expect(row!.activities.length).toBeGreaterThanOrEqual(1);
     expect(row!.activities[0].canonicalScope).toBe(scopeName);
     expect(row!.activities.find((a) => a.canonicalScope === scopeName)!.phase).toBe(expectedPhase);
