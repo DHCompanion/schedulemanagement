@@ -32,6 +32,11 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     partnerName: string;
     plannedStart: Date;
     isCritical?: boolean;
+    // When set, seeds a WBS ancestor row (outlineLevel 1, outlineNumber "1")
+    // above the leaf (outlineLevel 2, outlineNumber "1.1") so phaseByActivityId
+    // resolves this name as the leaf's phase. Omitted: leaf keeps the schema
+    // defaults (outlineLevel 0, outlineNumber null), phase resolves to null.
+    phaseName?: string;
   }) {
     const project = await prisma.project.create({
       data: { name: `os-context ${options.osProjectId}`, osProjectId: options.osProjectId },
@@ -48,12 +53,33 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
       },
     });
 
+    if (options.phaseName) {
+      // A real WBS ancestor row: outlineLevel/outlineNumber precede the leaf's,
+      // and it must NOT be type "summary" (isLeafActive excludes those from the
+      // `leaves` list phaseByActivityId is built from) or its name would never
+      // reach phaseByActivityId's nameById map.
+      await prisma.activity.create({
+        data: {
+          canonicalActivityKey: `0|${options.phaseName.toLowerCase()}`,
+          externalUid: 0,
+          isActive: true,
+          name: options.phaseName,
+          outlineLevel: 1,
+          outlineNumber: "1",
+          scheduleImportId: scheduleImport.id,
+          type: "task",
+        },
+      });
+    }
+
     await prisma.activity.create({
       data: {
         canonicalActivityKey: `1|${options.activityName.toLowerCase()}`,
         externalUid: 1,
         isCritical: options.isCritical ?? false,
         name: options.activityName,
+        outlineLevel: options.phaseName ? 2 : 0,
+        outlineNumber: options.phaseName ? "1.1" : null,
         plannedFinish: new Date(options.plannedStart.getTime() + 5 * 86400000),
         plannedStart: options.plannedStart,
         scheduleImportId: scheduleImport.id,
@@ -223,6 +249,7 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
 
   it("nests scopeGroups and leaf activities under the partner row", async () => {
     const osProjectId = 970000 + (stamp % 1000);
+    const phaseName = `zz-phase-${stamp}`;
     await seedProject({
       osProjectId,
       activityName: `${scopeName} rough-in`,
@@ -231,6 +258,7 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
       osPartnerId: 4242,
       partnerName: "Test Electrical",
       plannedStart: new Date("2026-05-04T00:00:00.000Z"),
+      phaseName,
     });
     const packet = await buildScheduleContextPacket(osProjectId, 25);
     const row = packet.items.find((i) => i.osPartnerId === 4242);
@@ -239,7 +267,9 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     const group = row!.scopeGroups[0];
     expect(group.canonicalScope).toBe(scopeName);
     expect(group.firstActivityStart).toBe("2026-05-04T00:00:00.000Z");
+    expect(group.phase).toBe(phaseName);
     expect(row!.activities.length).toBeGreaterThanOrEqual(1);
     expect(row!.activities[0].canonicalScope).toBe(scopeName);
+    expect(row!.activities.find((a) => a.canonicalScope === scopeName)!.phase).toBe(phaseName);
   });
 });
