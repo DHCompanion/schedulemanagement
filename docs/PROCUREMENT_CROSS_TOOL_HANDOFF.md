@@ -102,7 +102,30 @@ payload.
       "firstActivityStart": "2026-08-11T00:00:00.000Z",
       "lastActivityFinish": "2026-11-02T00:00:00.000Z",
       "minFloatDays": 3.5,
-      "isCritical": true
+      "isCritical": true,
+      "scopeGroups": [
+        {
+          "canonicalScope": "electrical-rough-in",
+          "phase": "Level 3 Fit-Out",
+          "firstActivityStart": "2026-08-11T00:00:00.000Z",
+          "lastActivityFinish": "2026-09-02T00:00:00.000Z",
+          "activityCount": 12,
+          "isCritical": true
+        }
+      ],
+      "activities": [
+        {
+          "key": "1|electrical rough-in",
+          "name": "Electrical Rough-In",
+          "wbsCode": "3.2.1",
+          "canonicalScope": "electrical-rough-in",
+          "phase": "Level 3 Fit-Out",
+          "plannedStart": "2026-08-11T00:00:00.000Z",
+          "plannedFinish": "2026-08-18T00:00:00.000Z",
+          "isCritical": true,
+          "minFloatDays": 0
+        }
+      ]
     }
   ],
   "summary": {
@@ -138,6 +161,21 @@ Field by field:
   critical path. Deliberately a flag, not a count: a trade with one critical
   activity is a trade whose material date matters.
 - **`activityCount`** — how many scheduled activities map to that partner.
+- **`scopeGroups`** — that partner's activities rolled up by `canonicalScope` +
+  `phase` (top-level WBS group; `null` when the schedule has no WBS hierarchy
+  above the activity). This is the grain to match a procurement item against: a
+  door hardware item tagged scope `doors` + phase `Level 3 Fit-Out` matches the
+  group with the same pair, not the whole partner row. `firstActivityStart` /
+  `lastActivityFinish` / `isCritical` are scoped to that group, same meaning as
+  the partner-level fields above but narrower.
+- **`activities`** — leaf-level detail nested under the partner row, one entry
+  per scheduled activity, carrying the same `canonicalScope` + `phase` pair as
+  its group plus `key` (`canonicalActivityKey`, stable across re-imports),
+  `wbsCode`, and `minFloatDays`. Use `scopeGroups` for matching; `activities` is
+  for drilling into *why* a group's dates are what they are.
+
+Both are nested under the partner row, never new top-level rows — the OS's
+25-item cap still applies only to `items.length`.
 
 Items are sorted **soonest `firstActivityStart` first** — the trade whose material
 is needed next is the one you most need to see. Partners with no dated activity

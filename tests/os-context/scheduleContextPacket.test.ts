@@ -220,4 +220,26 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     expect(wb.nextWeek.cards[0].partnerName).toBeNull();
     expect(wb.done).toEqual({ count: 0, cards: [] });
   });
+
+  it("nests scopeGroups and leaf activities under the partner row", async () => {
+    const osProjectId = 970000 + (stamp % 1000);
+    await seedProject({
+      osProjectId,
+      activityName: `${scopeName} rough-in`,
+      canonicalScope: scopeName,
+      osDisciplineId: disciplineId,
+      osPartnerId: 4242,
+      partnerName: "Test Electrical",
+      plannedStart: new Date("2026-05-04T00:00:00.000Z"),
+    });
+    const packet = await buildScheduleContextPacket(osProjectId, 25);
+    const row = packet.items.find((i) => i.osPartnerId === 4242);
+    expect(row).toBeDefined();
+    expect(row!.scopeGroups.length).toBeGreaterThanOrEqual(1);
+    const group = row!.scopeGroups[0];
+    expect(group.canonicalScope).toBe(scopeName);
+    expect(group.firstActivityStart).toBe("2026-05-04T00:00:00.000Z");
+    expect(row!.activities.length).toBeGreaterThanOrEqual(1);
+    expect(row!.activities[0].canonicalScope).toBe(scopeName);
+  });
 });

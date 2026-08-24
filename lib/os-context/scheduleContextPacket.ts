@@ -6,6 +6,7 @@ import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { minutesToDays } from "@/lib/msp/duration";
 import { isLeafActive } from "@/lib/msp/types";
 import { applyDictionary } from "@/lib/normalize/normalizationService";
+import { phaseByActivityId } from "./activityPhase";
 import { BUCKET_ORDER, groupIntoBuckets, type BucketKey } from "@/lib/schedule/weekBuckets";
 import { getProjectAssignments, getTradeDictionary } from "@/lib/trades/tradesService";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
@@ -32,7 +33,36 @@ export type ScheduleContextItem = {
   // The OS project id, not ours. The OS re-checks every item's projectId against
   // the session it authorized, so carrying it here is what lets that check work.
   projectId: number;
+  // Nested under the partner row (never new top-level rows) so the 25-item OS
+  // cap still holds one row per partner while procurement gets scope+phase
+  // detail to match items against.
+  scopeGroups: ScopeGroup[];
+  activities: PacketActivity[];
 };
+
+// A single schedule activity, leaf-level detail nested under its partner's row.
+export interface PacketActivity {
+  key: string; // activity.canonicalActivityKey
+  name: string;
+  wbsCode: string | null;
+  canonicalScope: string;
+  phase: string | null;
+  plannedStart: string | null;
+  plannedFinish: string | null;
+  isCritical: boolean;
+  minFloatDays: number | null;
+}
+
+// One scope+phase group within a partner's row — the grain procurement matches
+// items against.
+export interface ScopeGroup {
+  canonicalScope: string;
+  phase: string | null;
+  firstActivityStart: string | null;
+  lastActivityFinish: string | null;
+  activityCount: number;
+  isCritical: boolean;
+}
 
 // One card per activity, grouped by the same week buckets the schedule body
 // shows (Task 1's groupIntoBuckets) — the OS week view and Connect's own view
@@ -54,6 +84,15 @@ export type ScheduleContextPacket = {
   warnings: string[];
 };
 
+type ScopeGroupAccum = {
+  canonicalScope: string;
+  phase: string | null;
+  firstStart: Date | null;
+  lastFinish: Date | null;
+  activityCount: number;
+  criticalCount: number;
+};
+
 type Bucket = {
   activityCount: number;
   criticalCount: number;
@@ -61,6 +100,8 @@ type Bucket = {
   lastFinish: Date | null;
   minFloatMinutes: number | null;
   partnerName: string;
+  scopeGroups: Map<string, ScopeGroupAccum>; // key = `${scope} ${phase}`
+  activities: PacketActivity[];
 };
 
 /**
@@ -102,6 +143,9 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     getProjectAssignments(project.id),
   ]);
   const scopeByActivityId = new Map(mapped.map((m) => [m.activity.id, m.canonicalScope]));
+  const phaseById = phaseByActivityId(
+    leaves.map((a) => ({ id: a.id, outlineLevel: a.outlineLevel, outlineNumber: a.outlineNumber, name: a.name })),
+  );
 
   const progressByKey = resolveCurrentProgress(await getFinalizedEntries(project.id));
   const dataDate = await resolveForecastStatusDate(project.id, latestImport);
@@ -135,6 +179,8 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
       lastFinish: null,
       minFloatMinutes: null,
       partnerName: assignment.name,
+      scopeGroups: new Map<string, ScopeGroupAccum>(),
+      activities: [],
     };
 
     bucket.activityCount += 1;
@@ -142,6 +188,34 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     bucket.firstStart = minOf(bucket.firstStart, activity.plannedStart);
     bucket.lastFinish = maxOf(bucket.lastFinish, activity.plannedFinish);
     bucket.minFloatMinutes = minOf(bucket.minFloatMinutes, activity.totalSlackMinutes);
+
+    const phase = phaseById.get(activity.id) ?? null;
+    const groupKey = `${canonicalScope} ${phase ?? ""}`;
+    const g = bucket.scopeGroups.get(groupKey) ?? {
+      canonicalScope,
+      phase,
+      firstStart: null as Date | null,
+      lastFinish: null as Date | null,
+      activityCount: 0,
+      criticalCount: 0,
+    };
+    g.activityCount += 1;
+    if (activity.isCritical) g.criticalCount += 1;
+    g.firstStart = minOf(g.firstStart, activity.plannedStart);
+    g.lastFinish = maxOf(g.lastFinish, activity.plannedFinish);
+    bucket.scopeGroups.set(groupKey, g);
+
+    bucket.activities.push({
+      key: activity.canonicalActivityKey,
+      name: activity.name,
+      wbsCode: activity.wbsCode,
+      canonicalScope,
+      phase,
+      plannedStart: activity.plannedStart?.toISOString() ?? null,
+      plannedFinish: activity.plannedFinish?.toISOString() ?? null,
+      isCritical: activity.isCritical,
+      minFloatDays: roundDays(minutesToDays(activity.totalSlackMinutes, minutesPerDay)),
+    });
 
     buckets.set(assignment.osPartnerId, bucket);
   }
@@ -164,6 +238,15 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     osPartnerId,
     partnerName: bucket.partnerName,
     projectId: osProjectId,
+    scopeGroups: [...bucket.scopeGroups.values()].map((g) => ({
+      canonicalScope: g.canonicalScope,
+      phase: g.phase,
+      firstActivityStart: g.firstStart?.toISOString() ?? null,
+      lastActivityFinish: g.lastFinish?.toISOString() ?? null,
+      activityCount: g.activityCount,
+      isCritical: g.criticalCount > 0,
+    })),
+    activities: bucket.activities,
   }));
 
   // Same forecast layer as the schedule body's own week buckets (Task 1), but
