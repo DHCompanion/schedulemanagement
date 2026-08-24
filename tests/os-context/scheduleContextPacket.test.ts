@@ -54,20 +54,21 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     });
 
     if (options.phaseName) {
-      // A real WBS ancestor row: outlineLevel/outlineNumber precede the leaf's,
-      // and it must NOT be type "summary" (isLeafActive excludes those from the
-      // `leaves` list phaseByActivityId is built from) or its name would never
-      // reach phaseByActivityId's nameById map.
+      // A real top-level WBS phase group: type "summary", outlineLevel/
+      // outlineNumber precede the leaf's, so phaseByActivityId's ancestor
+      // stack (built from the full activity set, summaries included) resolves
+      // this as the leaf's phase.
       await prisma.activity.create({
         data: {
           canonicalActivityKey: `0|${options.phaseName.toLowerCase()}`,
           externalUid: 0,
           isActive: true,
+          isSummary: true,
           name: options.phaseName,
           outlineLevel: 1,
           outlineNumber: "1",
           scheduleImportId: scheduleImport.id,
-          type: "task",
+          type: "summary",
         },
       });
     }

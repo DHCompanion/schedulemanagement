@@ -100,7 +100,7 @@ type Bucket = {
   lastFinish: Date | null;
   minFloatMinutes: number | null;
   partnerName: string;
-  scopeGroups: Map<string, ScopeGroupAccum>; // key = `${scope} ${phase}`
+  scopeGroups: Map<string, ScopeGroupAccum>; // key = JSON.stringify([scope, phase])
   activities: PacketActivity[];
 };
 
@@ -143,8 +143,14 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     getProjectAssignments(project.id),
   ]);
   const scopeByActivityId = new Map(mapped.map((m) => [m.activity.id, m.canonicalScope]));
+  // Real top-level WBS phase groups ARE type "summary" rows — deriveSectionInfo
+  // (inside phaseByActivityId) only sees what it's given, so the phase map has
+  // to be built from the fuller set that keeps summaries, unlike `leaves`
+  // (isLeafActive) which drops them. Same pattern as ScheduleBody.tsx:117-119.
   const phaseById = phaseByActivityId(
-    leaves.map((a) => ({ id: a.id, outlineLevel: a.outlineLevel, outlineNumber: a.outlineNumber, name: a.name })),
+    latestImport.activities
+      .filter((a) => a.type !== "project_summary")
+      .map((a) => ({ id: a.id, outlineLevel: a.outlineLevel, outlineNumber: a.outlineNumber, name: a.name })),
   );
 
   const progressByKey = resolveCurrentProgress(await getFinalizedEntries(project.id));
@@ -190,7 +196,7 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     bucket.minFloatMinutes = minOf(bucket.minFloatMinutes, activity.totalSlackMinutes);
 
     const phase = phaseById.get(activity.id) ?? null;
-    const groupKey = `${canonicalScope} ${phase ?? ""}`;
+    const groupKey = JSON.stringify([canonicalScope, phase]);
     const g = bucket.scopeGroups.get(groupKey) ?? {
       canonicalScope,
       phase,
@@ -218,6 +224,26 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     });
 
     buckets.set(assignment.osPartnerId, bucket);
+  }
+
+  // Bound the nested leaf list per partner — a partner can carry hundreds of
+  // activities and the packet has no cap on that dimension otherwise. Soonest
+  // first, same "what's needed next" ordering as the top-level trade sort.
+  const ACTIVITIES_PER_PARTNER_CAP = 100;
+  const activityCapWarnings: string[] = [];
+  for (const bucket of buckets.values()) {
+    bucket.activities.sort((a, b) => {
+      if (a.plannedStart && b.plannedStart) return a.plannedStart.localeCompare(b.plannedStart);
+      if (a.plannedStart) return -1;
+      if (b.plannedStart) return 1;
+      return 0;
+    });
+    if (bucket.activities.length > ACTIVITIES_PER_PARTNER_CAP) {
+      activityCapWarnings.push(
+        `${bucket.partnerName} has ${bucket.activities.length} activities; the ${ACTIVITIES_PER_PARTNER_CAP} starting soonest are included.`,
+      );
+      bucket.activities = bucket.activities.slice(0, ACTIVITIES_PER_PARTNER_CAP);
+    }
   }
 
   // Soonest-starting trade first: the one whose material is needed next is the
@@ -296,6 +322,7 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
   if (bucketsTruncated) {
     warnings.push(`Week buckets list up to ${CARD_CAP} activities each; counts cover all.`);
   }
+  warnings.push(...activityCapWarnings);
 
   return {
     items,
