@@ -148,14 +148,16 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     getProjectDisciplines(project.id),
   ]);
   const scopeByActivityId = new Map(mapped.map((m) => [m.activity.id, m.canonicalScope]));
-  // TradeDictionaryEntry only stores osDisciplineId + disciplineName, not the
-  // division code — that lives on the OS disciplines roster instead. Join
-  // scope -> discipline id -> roster entry once, up front.
-  const divisionByDisciplineId = new Map(disciplines.map((d) => [d.id, d.division]));
+  // Procurement joins on the CSI sub-code (e.g. "26A") — which the OS roster
+  // carries as the PREFIX of the discipline `name` ("26A: ELECTRICAL"), NOT in
+  // the roster's `division` field (that holds the broad division, "26 Electrical").
+  // Parse the sub-code from the name; join scope -> discipline id -> code once.
+  const csiCode = (name: string): string | null => name.match(/^\s*(\d{2}[A-Za-z])/)?.[1]?.toUpperCase() ?? null;
+  const codeByDisciplineId = new Map(disciplines.map((d) => [d.id, csiCode(d.name)]));
   const divisionByScope = new Map<string, string>();
   for (const [scope, discipline] of tradeDictionary) {
-    const division = divisionByDisciplineId.get(discipline.id);
-    if (division) divisionByScope.set(scope, division);
+    const code = codeByDisciplineId.get(discipline.id);
+    if (code) divisionByScope.set(scope, code);
   }
   // Real top-level WBS phase groups ARE type "summary" rows — deriveSectionInfo
   // (inside phaseByActivityId) only sees what it's given, so the phase map has

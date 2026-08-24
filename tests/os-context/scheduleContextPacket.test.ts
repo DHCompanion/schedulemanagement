@@ -37,8 +37,10 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     // resolves this name as the leaf's phase. Omitted: leaf keeps the schema
     // defaults (outlineLevel 0, outlineNumber null), phase resolves to null.
     phaseName?: string;
-    // CSI division code on the seeded OS discipline roster entry. Omitted
-    // defaults to "" like the other seedProject callers that don't care.
+    // CSI sub-code (e.g. "26A") to seed as the PREFIX of the discipline's
+    // roster `name` ("26A: ELECTRICAL"), which is where the real OS roster
+    // carries it. The roster's own `division` field holds the broad division
+    // ("26 Electrical") and must be IGNORED by the packet. Omitted → generic.
     division?: string;
   }) {
     const project = await prisma.project.create({
@@ -94,7 +96,15 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
 
     await prisma.osTradePartner.create({
       data: {
-        disciplines: [{ division: options.division ?? "", id: options.osDisciplineId, name: "Trade" }],
+        disciplines: [
+          {
+            // Broad division on the roster is a decoy — the packet must read the
+            // sub-code from the name prefix, not this field.
+            division: "26 Electrical (broad — must be ignored)",
+            id: options.osDisciplineId,
+            name: options.division ? `${options.division}: TRADE` : "Trade",
+          },
+        ],
         name: options.partnerName,
         osPartnerId: options.osPartnerId,
         projectId: project.id,
