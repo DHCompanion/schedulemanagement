@@ -250,7 +250,9 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
 
   it("nests scopeGroups and leaf activities under the partner row", async () => {
     const osProjectId = 970000 + (stamp % 1000);
-    const phaseName = `zz-phase-${stamp}`;
+    // A real phase band name; phaseByActivityId normalizes it to its token.
+    const phaseName = "Phase 7";
+    const expectedPhase = "7";
     await seedProject({
       osProjectId,
       activityName: `${scopeName} rough-in`,
@@ -268,9 +270,9 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     const group = row!.scopeGroups[0];
     expect(group.canonicalScope).toBe(scopeName);
     expect(group.firstActivityStart).toBe("2026-05-04T00:00:00.000Z");
-    expect(group.phase).toBe(phaseName);
+    expect(group.phase).toBe(expectedPhase);
     expect(row!.activities.length).toBeGreaterThanOrEqual(1);
     expect(row!.activities[0].canonicalScope).toBe(scopeName);
-    expect(row!.activities.find((a) => a.canonicalScope === scopeName)!.phase).toBe(phaseName);
+    expect(row!.activities.find((a) => a.canonicalScope === scopeName)!.phase).toBe(expectedPhase);
   });
 });
