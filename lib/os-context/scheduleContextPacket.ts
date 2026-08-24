@@ -8,7 +8,7 @@ import { isLeafActive } from "@/lib/msp/types";
 import { applyDictionary } from "@/lib/normalize/normalizationService";
 import { phaseByActivityId } from "./activityPhase";
 import { BUCKET_ORDER, groupIntoBuckets, type BucketKey } from "@/lib/schedule/weekBuckets";
-import { getProjectAssignments, getTradeDictionary } from "@/lib/trades/tradesService";
+import { getProjectAssignments, getProjectDisciplines, getTradeDictionary } from "@/lib/trades/tradesService";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
 
 // The only packet type this tool exposes. Declared in the OS registry as
@@ -58,6 +58,10 @@ export interface PacketActivity {
 export interface ScopeGroup {
   canonicalScope: string;
   phase: string | null;
+  // CSI division code (e.g. "22A") so procurement can join to its own
+  // Category.code. Null when the trade dictionary's discipline id has no
+  // matching entry on the OS disciplines roster (or no division set there).
+  division: string | null;
   firstActivityStart: string | null;
   lastActivityFinish: string | null;
   activityCount: number;
@@ -137,12 +141,22 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
   }
 
   const leaves = latestImport.activities.filter(isLeafActive);
-  const [{ mapped, unmappedNames }, tradeDictionary, assignments] = await Promise.all([
+  const [{ mapped, unmappedNames }, tradeDictionary, assignments, disciplines] = await Promise.all([
     applyDictionary(leaves),
     getTradeDictionary(),
     getProjectAssignments(project.id),
+    getProjectDisciplines(project.id),
   ]);
   const scopeByActivityId = new Map(mapped.map((m) => [m.activity.id, m.canonicalScope]));
+  // TradeDictionaryEntry only stores osDisciplineId + disciplineName, not the
+  // division code — that lives on the OS disciplines roster instead. Join
+  // scope -> discipline id -> roster entry once, up front.
+  const divisionByDisciplineId = new Map(disciplines.map((d) => [d.id, d.division]));
+  const divisionByScope = new Map<string, string>();
+  for (const [scope, discipline] of tradeDictionary) {
+    const division = divisionByDisciplineId.get(discipline.id);
+    if (division) divisionByScope.set(scope, division);
+  }
   // Real top-level WBS phase groups ARE type "summary" rows — deriveSectionInfo
   // (inside phaseByActivityId) only sees what it's given, so the phase map has
   // to be built from the fuller set that keeps summaries, unlike `leaves`
@@ -267,6 +281,7 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     scopeGroups: [...bucket.scopeGroups.values()].map((g) => ({
       canonicalScope: g.canonicalScope,
       phase: g.phase,
+      division: divisionByScope.get(g.canonicalScope) ?? null,
       firstActivityStart: g.firstStart?.toISOString() ?? null,
       lastActivityFinish: g.lastFinish?.toISOString() ?? null,
       activityCount: g.activityCount,
