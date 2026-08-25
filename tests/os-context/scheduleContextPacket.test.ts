@@ -37,9 +37,12 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
     // resolves this name as the leaf's phase. Omitted: leaf keeps the schema
     // defaults (outlineLevel 0, outlineNumber null), phase resolves to null.
     phaseName?: string;
-    // CSI division code on the seeded OS discipline roster entry. Omitted
-    // defaults to "" like the other seedProject callers that don't care.
+    // OS discipline roster entry, in the shape the OS actually sends: `division`
+    // is a display label ("26 Electrical") and the CSI sub-code prefixes `name`
+    // ("26A: ELECTRICAL"). Omitted defaults to "" / "Trade" like the callers
+    // that don't care.
     division?: string;
+    disciplineName?: string;
   }) {
     const project = await prisma.project.create({
       data: { name: `os-context ${options.osProjectId}`, osProjectId: options.osProjectId },
@@ -94,7 +97,7 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
 
     await prisma.osTradePartner.create({
       data: {
-        disciplines: [{ division: options.division ?? "", id: options.osDisciplineId, name: "Trade" }],
+        disciplines: [{ division: options.division ?? "", id: options.osDisciplineId, name: options.disciplineName ?? "Trade" }],
         name: options.partnerName,
         osPartnerId: options.osPartnerId,
         projectId: project.id,
@@ -265,7 +268,8 @@ describe.runIf(hasDb)("buildScheduleContextPacket", () => {
       partnerName: "Test Electrical",
       plannedStart: new Date("2026-05-04T00:00:00.000Z"),
       phaseName,
-      division: "26A",
+      division: "26 Electrical",
+      disciplineName: "26A: ELECTRICAL",
     });
     const packet = await buildScheduleContextPacket(osProjectId, 25);
     const row = packet.items.find((i) => i.osPartnerId === 4242);
