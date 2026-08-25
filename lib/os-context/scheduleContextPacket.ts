@@ -151,7 +151,13 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
   // TradeDictionaryEntry only stores osDisciplineId + disciplineName, not the
   // division code — that lives on the OS disciplines roster instead. Join
   // scope -> discipline id -> roster entry once, up front.
-  const divisionByDisciplineId = new Map(disciplines.map((d) => [d.id, d.division]));
+  // ...and the roster's `division` is a display label ("26 Electrical"), while
+  // procurement's Category.code is the sub-code that prefixes the discipline
+  // name ("26A: ELECTRICAL" -> "26A"). Fall back to the bare division number for
+  // a roster entry whose name carries no sub-code.
+  const csiCode = (d: { name: string; division: string }) =>
+    d.name.match(/^\d{2}[A-Za-z]?/)?.[0] ?? d.division.match(/^\d{2}/)?.[0] ?? "";
+  const divisionByDisciplineId = new Map(disciplines.map((d) => [d.id, csiCode(d)]));
   const divisionByScope = new Map<string, string>();
   for (const [scope, discipline] of tradeDictionary) {
     const division = divisionByDisciplineId.get(discipline.id);
