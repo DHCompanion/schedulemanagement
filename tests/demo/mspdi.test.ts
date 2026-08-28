@@ -17,8 +17,31 @@ describe("buildMspdi", () => {
       expect(p.isCritical).toBe(a.critical);
     }
     expect(parsed.relationships.length).toBe(story.activities.reduce((n, a) => n + a.predecessors.length, 0));
+    for (const a of story.activities) {
+      for (const p of a.predecessors) {
+        const rel = parsed.relationships.find((r) => r.successorExternalUid === a.uid && r.predecessorExternalUid === p.uid)!;
+        expect(rel).toBeDefined();
+        expect(rel.type).toBe(p.type);
+        expect(rel.lagMinutes).toBe(p.lagDays * 480);
+      }
+    }
+    // uid 6 "Underground plumbing" has a -3 day lag on its predecessor — confirm negative lag round-trips.
+    const negLag = parsed.relationships.find((r) => r.successorExternalUid === 6 && r.predecessorExternalUid === 5)!;
+    expect(negLag.lagMinutes).toBe(-3 * 480);
     expect(parsed.header.statusDate).toBeNull();
     expect(parsed.activities.some((a) => a.baselineStart)).toBe(false);
+  });
+  it("maps an SS predecessor to parsed type SS", () => {
+    const ssStory = {
+      project: { name: "SS Test", number: "SS-1", startOffset: 0, finishOffset: 5 },
+      activities: [
+        { uid: 0, wbs: "1", name: "A", level: 0, parentUid: null, summary: false, milestone: false, critical: false, startOffset: 0, durationDays: 3, predecessors: [] },
+        { uid: 1, wbs: "2", name: "B", level: 0, parentUid: null, summary: false, milestone: false, critical: false, startOffset: 0, durationDays: 3, predecessors: [{ uid: 0, type: "SS", lagDays: 0 }] },
+      ],
+    };
+    const parsed = parseMspXml(buildMspdi(ssStory, anchor, null));
+    const rel = parsed.relationships.find((r) => r.successorExternalUid === 1 && r.predecessorExternalUid === 0)!;
+    expect(rel.type).toBe("SS");
   });
   it("status update carries actuals before the status date and baseline 0", () => {
     const parsed = parseMspXml(buildMspdi(story, anchor, -7));
