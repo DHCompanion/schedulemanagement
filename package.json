@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "demo:seed": "tsx demo/seed.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -30,6 +31,7 @@
     "postcss": "^8.5.24",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.13",
+    "tsx": "^4.23.12",
     "typescript": "^5.6.0",
     "vitest": "^4.1.10"
   },
