@@ -279,7 +279,11 @@ describe.runIf(!!process.env.DATABASE_URL)("procurement risk cache", () => {
     expect(await prisma.osProcurementRisk.count({ where: { projectId: project!.id } })).toBe(0);
   });
 
-  it("clears a stale cache when the packet comes back empty", async () => {
+  it("keeps the previous cache when the packet comes back empty", async () => {
+    // The cache is now upsert-by-partner, not delete-then-recreate: a packet
+    // with no items touches no rows, so a transient "nothing to report" answer
+    // can't wipe out a good cache. The previous rows (and their honest "as of"
+    // timestamp) stay in place for the next successful refresh to update.
     stubLaunchGateway(4103, { procurement: "ok" });
     await GET(launchRequest("?token=t"));
     const project = await prisma.project.findUnique({ where: { osProjectId: 4103 } });
@@ -297,6 +301,6 @@ describe.runIf(!!process.env.DATABASE_URL)("procurement risk cache", () => {
     vi.stubGlobal("fetch", emptyMock);
 
     await GET(launchRequest("?token=t"));
-    expect(await prisma.osProcurementRisk.count({ where: { projectId: project!.id } })).toBe(0);
+    expect(await prisma.osProcurementRisk.count({ where: { projectId: project!.id } })).toBe(2);
   });
 });

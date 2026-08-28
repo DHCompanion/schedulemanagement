@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 // Minimal Skiles Connect Tool Gateway client.
 //
 // SKILES_OS_API_BASE_URL must END IN /api and point at the OS *backend*
@@ -100,4 +102,33 @@ export async function getProcurementSummary(token: string): Promise<OsProcuremen
       limit: 25,
     }),
   })) as OsProcurementSummary;
+}
+
+const SERVICE_TOOL_SLUG = "schedule-manager";
+
+// Mint a short-lived service session for one OS project, with no human token in
+// hand — used to refresh procurement risk on page load. Signed with the same
+// secret the OS verifies inbound context callbacks with
+// (SCHEDULE_MANAGER_CONTEXT_SECRET); every caller must treat a throw as
+// "skip this refresh".
+export async function mintServiceToken(osProjectId: number): Promise<string> {
+  const base = process.env.SKILES_OS_API_BASE_URL;
+  const secret = process.env.SCHEDULE_MANAGER_CONTEXT_SECRET;
+  if (!base) throw new Error("SKILES_OS_API_BASE_URL is not set");
+  if (!secret) throw new Error("SCHEDULE_MANAGER_CONTEXT_SECRET is not set");
+  const issuedAt = new Date().toISOString();
+  const signature = createHmac("sha256", secret)
+    .update(`${SERVICE_TOOL_SLUG}|${osProjectId}|${issuedAt}`)
+    .digest("base64url");
+  const res = await fetch(`${base.replace(/\/+$/, "")}/tool-gateway/service-sessions`, {
+    method: "POST",
+    cache: "no-store",
+    signal: AbortSignal.timeout(8000),
+    headers: { "Content-Type": "application/json", "x-tool-service-signature": signature },
+    body: JSON.stringify({ toolSlug: SERVICE_TOOL_SLUG, projectId: osProjectId, issuedAt }),
+  });
+  if (!res.ok) throw new Error(`tool-gateway service-sessions -> ${res.status}`);
+  const data = (await res.json()) as { token?: string };
+  if (!data.token) throw new Error("service-sessions returned no token");
+  return data.token;
 }
