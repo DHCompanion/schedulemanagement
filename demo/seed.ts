@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { prisma } from "../lib/db";
 import { commitImport } from "../lib/import/commitImport";
 import { finalizeUpdate, getOrCreateDraft, saveEntries } from "../lib/updates/updateService";
-import { buildMspdi, dayAt } from "./mspdi";
+import { buildMspdi } from "./mspdi";
 
 // --- shared helper block (anchorMonday, dateAt, loadStory, loadIds), duplicated verbatim
 // across the demo seeders per plan (not imported across repos). requireDemoUrl is the
@@ -60,10 +60,7 @@ async function main() {
   }
 
   // Learning dictionaries (global): one scope entry per scoped leaf name, one trade entry per scope.
-  // Indexed on both discipline.key and discipline.scope: story.json's activities[].scopeKey is
-  // inconsistent between the two (e.g. "sprinkler"/"glazing" activities carry the scope string
-  // "fire sprinkler"/"exterior windows" rather than the discipline key) — no collisions in practice.
-  const scopeByKey = new Map(story.disciplines.flatMap((d) => [[d.key, d], [d.scope, d]] as const));
+  const scopeByKey = new Map(story.disciplines.map((d) => [d.key, d]));
   for (const a of story.activities) {
     if (a.summary || !a.scopeKey) continue;
     const d = scopeByKey.get(a.scopeKey)!;
