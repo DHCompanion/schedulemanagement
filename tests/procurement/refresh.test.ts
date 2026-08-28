@@ -31,9 +31,12 @@ describe.runIf(!!process.env.DATABASE_URL)("refreshProcurementRiskIfStale", () =
   it("refreshes when stale and upserts by partner", async () => {
     const project = await prisma.project.create({ data: { name: `zz-refresh-${Date.now()}`, osProjectId: 990000 + (Date.now() % 1000) } });
     await prisma.osProcurementRisk.create({ data: { projectId: project.id, osPartnerId: 1, partnerName: "Old", itemCount: 1, behindCount: 0, submittalLateCount: 0, projectedLateCount: 0, releasedAtRiskCount: 0, missingDatesCount: 0, leastAdvancedState: "release", fetchedAt: new Date(Date.now() - 3600_000) } });
+    // Partner 3 has since departed the project (not in the mocked packet below)
+    // — a non-empty packet is authoritative, so a real refresh should drop it.
+    await prisma.osProcurementRisk.create({ data: { projectId: project.id, osPartnerId: 3, partnerName: "Departed", itemCount: 1, behindCount: 0, submittalLateCount: 0, projectedLateCount: 0, releasedAtRiskCount: 0, missingDatesCount: 0, leastAdvancedState: "release", fetchedAt: new Date(Date.now() - 3600_000) } });
     expect(await refreshProcurementRiskIfStale(project)).toBe("refreshed");
     const rows = await prisma.osProcurementRisk.findMany({ where: { projectId: project.id }, orderBy: { osPartnerId: "asc" } });
-    expect(rows.map((r) => [r.osPartnerId, r.behindCount])).toEqual([[1, 2], [2, 0]]);   // partner 1 updated in place, partner 2 added
+    expect(rows.map((r) => [r.osPartnerId, r.behindCount])).toEqual([[1, 2], [2, 0]]);   // partner 1 updated in place, partner 2 added, partner 3 gone
     expect(await refreshProcurementRiskIfStale(project)).toBe("fresh");
     await prisma.project.delete({ where: { id: project.id } });
   });
