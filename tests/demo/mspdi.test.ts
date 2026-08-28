@@ -1,12 +1,17 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import { beforeAll, describe, expect, it } from "vitest";
 import { parseMspXml } from "@/lib/msp/parseMspXml";
 import { buildMspdi } from "../../demo/mspdi";
 
-const story = JSON.parse(readFileSync(process.env.DEMO_STORY_PATH ?? "/home/awoodyard/workspace/skiles-group-connect-v1/.claude/worktrees/demo/demo/story.json", "utf8"));
+const storyPath = process.env.DEMO_STORY_PATH ?? "/home/awoodyard/workspace/skiles-group-connect-v1/.claude/worktrees/demo/demo/story.json";
 const anchor = new Date(Date.UTC(2026, 8, 7)); // a Monday
 
-describe("buildMspdi", () => {
+describe.skipIf(!existsSync(storyPath))("buildMspdi", () => {
+  let story: any;
+  beforeAll(() => {
+    story = JSON.parse(readFileSync(storyPath, "utf8"));
+  });
+
   it("round-trips every activity with the story's canonical key", () => {
     const parsed = parseMspXml(buildMspdi(story, anchor, null));
     expect(parsed.activities.length).toBe(story.activities.length);
