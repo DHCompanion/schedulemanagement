@@ -38,7 +38,7 @@ type Story = Parameters<typeof buildMspdi>[0] & {
   project: { number: string; name: string; client: string; superintendentKey: string; statusOffsets: number[] };
   disciplines: { key: string; osName: string; csi: string; scope: string }[];
   tradePartners: { key: string; name: string; disciplineKeys: string[]; projectNumbers: string[] }[];
-  activities: (Parameters<typeof buildMspdi>[0]["activities"][number] & { key: string; scopeKey: string | null; partnerKey: string | null })[];
+  activities: (Parameters<typeof buildMspdi>[0]["activities"][number] & { key: string; scopeKey: string | null; canonicalScope?: string | null; partnerKey: string | null })[];
 };
 
 async function main() {
@@ -64,11 +64,18 @@ async function main() {
   for (const a of story.activities) {
     if (a.summary || !a.scopeKey) continue;
     const d = scopeByKey.get(a.scopeKey)!;
-    await prisma.scopeDictionaryEntry.upsert({ where: { normalizedName: a.name.trim().toLowerCase().replace(/\s+/g, " ") }, update: {}, create: { normalizedName: a.name.trim().toLowerCase().replace(/\s+/g, " "), canonicalScope: d.scope, createdBy: "demo" } });
+    const canonicalScope = a.canonicalScope ?? d.scope; // an activity may name its catalog scope (e.g. "Frame Walls"); update so a corrected story re-seeds
+    await prisma.scopeDictionaryEntry.upsert({ where: { normalizedName: a.name.trim().toLowerCase().replace(/\s+/g, " ") }, update: { canonicalScope }, create: { normalizedName: a.name.trim().toLowerCase().replace(/\s+/g, " "), canonicalScope, createdBy: "demo" } });
   }
   for (const d of story.disciplines) {
     const os = ids.disciplines[d.key];
     await prisma.tradeDictionaryEntry.upsert({ where: { canonicalScope: d.scope }, update: { osDisciplineId: os.id, disciplineName: os.name }, create: { canonicalScope: d.scope, osDisciplineId: os.id, disciplineName: os.name, createdBy: "demo", personId: superId } });
+  }
+  // activity-level scopes map to the discipline of the activities that use them
+  for (const a of story.activities) {
+    if (a.summary || !a.scopeKey || !a.canonicalScope) continue;
+    const os = ids.disciplines[a.scopeKey];
+    await prisma.tradeDictionaryEntry.upsert({ where: { canonicalScope: a.canonicalScope }, update: { osDisciplineId: os.id, disciplineName: os.name }, create: { canonicalScope: a.canonicalScope, osDisciplineId: os.id, disciplineName: os.name, createdBy: "demo", personId: superId } });
   }
 
   // Partner roster (as the OS launch would cache it) + per-discipline assignment.
