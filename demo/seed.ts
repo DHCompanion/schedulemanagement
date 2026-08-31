@@ -34,7 +34,7 @@ export function loadIds<T = unknown>(): T {
 }
 
 type Ids = { anchor: string; projects: Record<string, number>; people: Record<string, { id: number; name: string }>; tradePartners: Record<string, { id: number; name: string }>; disciplines: Record<string, { id: number; name: string; division: string }> };
-type Story = Parameters<typeof buildMspdi>[0] & {
+type Story = Omit<Parameters<typeof buildMspdi>[0], "activities"> & {
   project: { number: string; name: string; client: string; superintendentKey: string; statusOffsets: number[] };
   disciplines: { key: string; osName: string; csi: string; scope: string }[];
   tradePartners: { key: string; name: string; disciplineKeys: string[]; projectNumbers: string[] }[];

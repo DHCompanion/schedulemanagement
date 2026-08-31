@@ -21,7 +21,7 @@ describe.skipIf(!existsSync(storyPath))("buildMspdi", () => {
       expect(p.type).toBe(a.level === 0 ? "project_summary" : a.summary ? "summary" : a.milestone ? "milestone" : "task");
       expect(p.isCritical).toBe(a.critical);
     }
-    expect(parsed.relationships.length).toBe(story.activities.reduce((n, a) => n + a.predecessors.length, 0));
+    expect(parsed.relationships.length).toBe(story.activities.reduce((n: number, a: { predecessors: unknown[] }) => n + a.predecessors.length, 0));
     for (const a of story.activities) {
       for (const p of a.predecessors) {
         const rel = parsed.relationships.find((r) => r.successorExternalUid === a.uid && r.predecessorExternalUid === p.uid)!;
@@ -41,7 +41,7 @@ describe.skipIf(!existsSync(storyPath))("buildMspdi", () => {
       project: { name: "SS Test", number: "SS-1", startOffset: 0, finishOffset: 5 },
       activities: [
         { uid: 0, wbs: "1", name: "A", level: 0, parentUid: null, summary: false, milestone: false, critical: false, startOffset: 0, durationDays: 3, predecessors: [] },
-        { uid: 1, wbs: "2", name: "B", level: 0, parentUid: null, summary: false, milestone: false, critical: false, startOffset: 0, durationDays: 3, predecessors: [{ uid: 0, type: "SS", lagDays: 0 }] },
+        { uid: 1, wbs: "2", name: "B", level: 0, parentUid: null, summary: false, milestone: false, critical: false, startOffset: 0, durationDays: 3, predecessors: [{ uid: 0, type: "SS" as const, lagDays: 0 }] },
       ],
     };
     const parsed = parseMspXml(buildMspdi(ssStory, anchor, null));
