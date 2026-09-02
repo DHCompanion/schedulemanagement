@@ -3,6 +3,7 @@ import { SESSION_COOKIE } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { appUrl, osAppOrigins } from "@/lib/http";
 import { getProcurementSummary, getProjectContext, getTradePartners } from "@/lib/os-gateway";
+import { upsertProcurementRisk } from "@/lib/procurement/refresh";
 import { SCOPE_COOKIE, scopeCookieOptions, signScope } from "@/lib/scope";
 
 export const dynamic = "force-dynamic";
@@ -110,25 +111,7 @@ async function cacheTradePartners(token: string, projectId: string): Promise<voi
 // the next launch retries.
 async function cacheProcurementRisk(token: string, projectId: string): Promise<void> {
   try {
-    const packet = await getProcurementSummary(token);
-    await prisma.$transaction([
-      prisma.osProcurementRisk.deleteMany({ where: { projectId } }),
-      prisma.osProcurementRisk.createMany({
-        data: packet.items.map((item) => ({
-          projectId,
-          osPartnerId: item.osPartnerId,
-          partnerName: item.partnerName,
-          itemCount: item.itemCount,
-          behindCount: item.behindCount,
-          submittalLateCount: item.submittalLateCount,
-          projectedLateCount: item.projectedLateCount,
-          releasedAtRiskCount: item.releasedAtRiskCount,
-          missingDatesCount: item.missingDatesCount,
-          earliestRequiredOnSite: item.earliestRequiredOnSite ? new Date(item.earliestRequiredOnSite) : null,
-          leastAdvancedState: item.leastAdvancedState,
-        })),
-      }),
-    ]);
+    await upsertProcurementRisk(projectId, await getProcurementSummary(token));
   } catch {
     // Keep whatever was cached previously.
   }

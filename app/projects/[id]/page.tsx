@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { ScheduleBody } from "@/components/ScheduleBody";
 import { getScheduleHealth } from "@/lib/health/healthService";
 import { appPath } from "@/lib/http";
+import { refreshProcurementRiskIfStale } from "@/lib/procurement/refresh";
 import { getScheduleData } from "@/lib/schedule/scheduleRows";
 import { getDataHealthCounts } from "@/lib/health/dataHealthCounts";
 import { ProjectTabs } from "@/components/ProjectTabs";
@@ -22,6 +23,7 @@ export default async function ProjectPage(props: {
 
   const view = searchParams.view === "6wk" || searchParams.view === "3wk" ? searchParams.view : "full";
 
+  await refreshProcurementRiskIfStale(project);
   const schedule = await getScheduleData(project.id);
   const health = await getScheduleHealth(project.id);
   const dataCounts = await getDataHealthCounts(project.id);
