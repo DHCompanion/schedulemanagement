@@ -316,6 +316,11 @@ model OsProcurementRisk {
   projectedLateCount     Int
   releasedAtRiskCount    Int
   missingDatesCount      Int
+  // scheduleActivityKey of every one of this partner's items that is behind
+  // (submittal- or projected-late), from the same packet as behindCount.
+  // Lets isActivityAtRisk flag the specific linked activity instead of
+  // every activity this partner is assigned to project-wide.
+  atRiskActivityKeys     String[]  @default([])
   earliestRequiredOnSite DateTime?
   leastAdvancedState     String
   fetchedAt              DateTime  @default(now())

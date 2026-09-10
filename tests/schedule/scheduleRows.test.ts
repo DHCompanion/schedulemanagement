@@ -60,4 +60,46 @@ describe.runIf(hasDb)("getScheduleData", () => {
     // Inactive activities get no forecast entry; expectedStart falls back to planned.
     expect(c.expectedStart).toBe("2026-08-17T08:00:00.000Z");
   });
+
+  it("flags only the specific activity procurement linked, not every activity for that trade partner", async () => {
+    const project = await prisma.project.create({ data: { name: "Scoped Risk Test" } });
+
+    const imp = await prisma.scheduleImport.create({
+      data: {
+        projectId: project.id, sourceFormat: "msproject_xml", fileName: "f.xml", fileHash: "h2",
+        statusDate: new Date("2026-08-07T17:00:00Z"), minutesPerDay: 480,
+      },
+    });
+    await prisma.activity.createMany({
+      data: [
+        {
+          scheduleImportId: imp.id, externalUid: 11, canonicalActivityKey: "5.1-set-ahu-1", name: "5.1 Set rooftop AHU-1", type: "task",
+          wbsCode: "5.1", plannedStart: new Date("2026-08-03T08:00:00Z"), plannedFinish: new Date("2026-08-07T17:00:00Z"), durationDays: 5,
+        },
+        {
+          scheduleImportId: imp.id, externalUid: 12, canonicalActivityKey: "5.2-set-ahu-2", name: "5.2 Set rooftop AHU-2", type: "task",
+          wbsCode: "5.2", plannedStart: new Date("2026-08-03T08:00:00Z"), plannedFinish: new Date("2026-08-07T17:00:00Z"), durationDays: 5,
+        },
+      ],
+    });
+    // Same trade partner (osPartnerId 500) is behind, but only AHU-1's item is
+    // actually linked to activity 5.1 -- AHU-2's sibling activity must stay clean.
+    await prisma.osProcurementRisk.create({
+      data: {
+        projectId: project.id, osPartnerId: 500, partnerName: "Mechanical Co", itemCount: 2, behindCount: 1,
+        submittalLateCount: 1, projectedLateCount: 0, releasedAtRiskCount: 0, missingDatesCount: 0,
+        atRiskActivityKeys: ["5.1-set-ahu-1"], leastAdvancedState: "submittal_prep",
+      },
+    });
+
+    try {
+      const data = await getScheduleData(project.id);
+      const ahu1 = data!.rows.find((r) => r.wbsCode === "5.1")!;
+      const ahu2 = data!.rows.find((r) => r.wbsCode === "5.2")!;
+      expect(ahu1.atRisk).toBe(true);
+      expect(ahu2.atRisk).toBe(false);
+    } finally {
+      await prisma.project.delete({ where: { id: project.id } });
+    }
+  });
 });

@@ -64,18 +64,20 @@ export async function resolveActivityTrades(
 }
 
 /**
- * Whether an activity wears the AT RISK pill: its partner is one procurement
- * flagged, and the work is not already done. Completed work cannot be threatened
- * by late material.
+ * Whether an activity wears the AT RISK pill: procurement has a behind-schedule
+ * item linked to THIS activity specifically (its canonicalActivityKey), and the
+ * work is not already done. Scoped to the activity, not the whole trade partner
+ * — a partner can carry many activities, and only the one a late item is linked
+ * to should light up. Completed work cannot be threatened by late material.
  */
 export function isActivityAtRisk(
-  osPartnerId: number | null,
+  activityKey: string | null,
   percentComplete: number | null,
-  flagged: Set<number>,
+  flaggedActivityKeys: Set<string>,
 ): boolean {
-  if (osPartnerId === null) return false;
+  if (activityKey === null) return false;
   if (percentComplete === 100) return false;
-  return flagged.has(osPartnerId);
+  return flaggedActivityKeys.has(activityKey);
 }
 
 /**

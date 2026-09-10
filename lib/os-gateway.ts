@@ -80,6 +80,7 @@ export type OsProcurementRiskItem = {
   projectedLateCount: number;
   releasedAtRiskCount: number;
   missingDatesCount: number;
+  atRiskActivityKeys: string[];
 };
 
 export type OsProcurementSummary = {

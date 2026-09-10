@@ -67,10 +67,11 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       projectedLateCount: true,
       releasedAtRiskCount: true,
       missingDatesCount: true,
+      atRiskActivityKeys: true,
       fetchedAt: true,
     },
   });
-  const flaggedPartners = new Set(procurementRisk.filter((r) => r.behindCount > 0).map((r) => r.osPartnerId));
+  const flaggedActivityKeys = new Set(procurementRisk.flatMap((r) => r.atRiskActivityKeys));
   const procurementByPartner = new Map(
     procurementRisk.map((r) => [
       r.osPartnerId,
@@ -109,7 +110,7 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
       disciplineName: trades.get(a.id)?.disciplineName ?? null,
       partnerName: trades.get(a.id)?.partnerName ?? null,
-      atRisk: isActivityAtRisk(partnerId, percentComplete, flaggedPartners),
+      atRisk: isActivityAtRisk(a.canonicalActivityKey, percentComplete, flaggedActivityKeys),
       procurement: partnerId === null ? null : procurementByPartner.get(partnerId) ?? null,
       type: a.type,
       isCritical: a.isCritical,
