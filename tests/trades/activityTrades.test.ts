@@ -51,27 +51,28 @@ describe("resolveActivityTradesWith", () => {
 });
 
 describe("isActivityAtRisk", () => {
-  const flagged = new Set([77]);
+  const flagged = new Set(["5.1-set-ahu-1"]);
 
-  it("flags an activity whose partner procurement marked at risk", () => {
-    expect(isActivityAtRisk(77, 40, flagged)).toBe(true);
+  it("flags the specific activity a late procurement item is linked to", () => {
+    expect(isActivityAtRisk("5.1-set-ahu-1", 40, flagged)).toBe(true);
   });
 
-  it("does not flag a partner procurement left alone", () => {
-    expect(isActivityAtRisk(91, 40, flagged)).toBe(false);
+  it("does not flag a sibling activity for the same trade partner that has no late item of its own", () => {
+    // This is the point: procurement links to one schedule activity, not a whole partner's book of work.
+    expect(isActivityAtRisk("5.2-set-ahu-2", 40, flagged)).toBe(false);
   });
 
-  it("does not flag an activity with no assigned partner", () => {
+  it("does not flag an activity with no linked schedule activity key", () => {
     expect(isActivityAtRisk(null, 40, flagged)).toBe(false);
   });
 
   it("suppresses the pill once the work is complete", () => {
     // Finished work cannot be threatened by late material.
-    expect(isActivityAtRisk(77, 100, flagged)).toBe(false);
+    expect(isActivityAtRisk("5.1-set-ahu-1", 100, flagged)).toBe(false);
   });
 
   it("flags an activity with unknown progress", () => {
-    expect(isActivityAtRisk(77, null, flagged)).toBe(true);
+    expect(isActivityAtRisk("5.1-set-ahu-1", null, flagged)).toBe(true);
   });
 });
 

@@ -12,12 +12,14 @@ vi.mock("@/lib/os-gateway", () => ({
         earliestRequiredOnSite: null, leastAdvancedState: "submitted",
         behindCount: 2, submittalLateCount: 2, projectedLateCount: 0,
         releasedAtRiskCount: 0, missingDatesCount: 0,
+        atRiskActivityKeys: ["5.1-set-ahu-1", "5.3-set-switchgear"],
       },
       {
         osPartnerId: 2, partnerName: "Second Co", itemCount: 1,
         earliestRequiredOnSite: null, leastAdvancedState: "release",
         behindCount: 0, submittalLateCount: 0, projectedLateCount: 0,
         releasedAtRiskCount: 0, missingDatesCount: 0,
+        atRiskActivityKeys: [],
       },
     ],
     summary: {},
@@ -37,6 +39,8 @@ describe.runIf(!!process.env.DATABASE_URL)("refreshProcurementRiskIfStale", () =
     expect(await refreshProcurementRiskIfStale(project)).toBe("refreshed");
     const rows = await prisma.osProcurementRisk.findMany({ where: { projectId: project.id }, orderBy: { osPartnerId: "asc" } });
     expect(rows.map((r) => [r.osPartnerId, r.behindCount])).toEqual([[1, 2], [2, 0]]);   // partner 1 updated in place, partner 2 added, partner 3 gone
+    expect(rows[0].atRiskActivityKeys).toEqual(["5.1-set-ahu-1", "5.3-set-switchgear"]);
+    expect(rows[1].atRiskActivityKeys).toEqual([]);
     expect(await refreshProcurementRiskIfStale(project)).toBe("fresh");
     await prisma.project.delete({ where: { id: project.id } });
   });
