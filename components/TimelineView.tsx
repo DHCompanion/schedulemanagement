@@ -2,6 +2,8 @@
 
 import type { ScheduleRow } from "@/lib/schedule/types";
 import { spanPct, pointPct, axisTicks, weekendBands, gridLines, type TimelineWindow } from "@/lib/schedule/timelineGeometry";
+import { fmtShortDate } from "@/lib/schedule/weekBuckets";
+import { isRequiredOnSiteOutOfSync } from "@/lib/schedule/requiredOnSiteSync";
 import { paletteEntry } from "./sectionPalette";
 import { ActivityDetail } from "./ActivityDetail";
 
@@ -12,7 +14,13 @@ export interface TimelineItem {
   sectionName: string | null;
 }
 
-const LEFT_COL = "38%";
+const LEFT_COL = "48%";
+// Two fixed date columns live inside the left region (name flexes to fill the rest).
+const DATE_CELL = "w-[74px] shrink-0 px-1 text-right text-xs tabular-nums";
+
+function fmtDate(iso: string | null): string {
+  return iso ? fmtShortDate(iso) : "—";
+}
 
 function fmtDur(days: number): string {
   return Number.isInteger(days) ? `${days}d` : `${days.toFixed(1)}d`;
@@ -62,7 +70,11 @@ export function TimelineView({
 
       {/* Axis header */}
       <div className="relative flex border-b-2 border-slate-200 text-[10px] text-slate-500">
-        <div className="shrink-0 px-3 py-1 font-medium" style={{ width: LEFT_COL }}>Activity</div>
+        <div className="flex shrink-0 items-center py-1 font-medium" style={{ width: LEFT_COL }}>
+          <span className="flex-1 px-3">Activity</span>
+          <span className={DATE_CELL}>Start</span>
+          <span className={DATE_CELL}>Finish</span>
+        </div>
         <div className="relative h-6 flex-1">
           {ticks.map((t) => (
             <span key={t.label + t.leftPct} className="absolute top-1 -translate-x-1/2 whitespace-nowrap" style={{ left: `${t.leftPct}%` }}>
@@ -104,30 +116,58 @@ export function TimelineView({
           const expectedPoint = isMilestone ? pointPct(a.expectedFinish ?? a.expectedStart ?? a.plannedFinish, win) : null;
           const pct = Math.min(100, Math.max(0, a.percentComplete ?? 0));
 
+          // Forecast dates for the Start/Finish columns (fall back to planned).
+          // A milestone is a single point — show its date under Finish only.
+          const rowStart = isMilestone ? null : (a.expectedStart ?? a.plannedStart);
+          const rowFinish = isMilestone
+            ? (a.expectedFinish ?? a.expectedStart ?? a.plannedFinish)
+            : (a.expectedFinish ?? a.plannedFinish);
+          const rosDate = a.atRiskItem?.requiredOnSite ?? null;
+          const rosAnchor = isMilestone ? rowFinish : rowStart;
+          const rosOutOfSync = isRequiredOnSiteOutOfSync(rosDate, rosAnchor);
+          const rosWarning = rosOutOfSync ? (
+            <span
+              className="mr-0.5 cursor-help text-amber-600"
+              title={`Required on site ${fmtDate(rosDate)} is on/after this activity's start ${fmtDate(rosAnchor)} — likely a stale procurement link.`}
+            >
+              ⚠
+            </span>
+          ) : null;
+
           return (
             <li key={a.id} className="relative">
               <div className="flex items-stretch">
-                <button
-                  onClick={() => onToggleOpen(a.id)}
-                  className={`shrink-0 border-l-4 px-3 py-1.5 text-left text-sm ${palette.rail}`}
-                  style={{ width: LEFT_COL, paddingLeft: 10 + (a.outlineLevel - 1) * 12 }}
-                >
-                  <span className="mr-2 text-xs text-slate-400">{a.wbsCode}</span>
-                  <span className={a.isCritical ? "font-medium text-red-700" : "font-medium"}>{a.canonicalScope ?? a.name}</span>
-                  {a.canonicalScope && a.canonicalScope !== a.name && (
-                    <span className="ml-2 text-xs text-slate-400">{a.name}</span>
-                  )}
-                  {!isMilestone && a.durationDays !== null && (
-                    <span className="ml-2 whitespace-nowrap text-xs text-slate-400">{fmtDur(a.durationDays)}</span>
-                  )}
-                  {isMilestone && <span className="ml-2 text-xs text-indigo-600">◆</span>}
-                  {a.percentComplete === 100 && (
-                    <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">✓ Completed</span>
-                  )}
-                  {a.atRisk && (
-                    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">AT RISK</span>
-                  )}
-                </button>
+                <div className="flex shrink-0 items-stretch" style={{ width: LEFT_COL }}>
+                  <button
+                    onClick={() => onToggleOpen(a.id)}
+                    className={`min-w-0 flex-1 border-l-4 px-3 py-1.5 text-left text-sm ${palette.rail}`}
+                    style={{ paddingLeft: 10 + (a.outlineLevel - 1) * 12 }}
+                  >
+                    <span className="mr-2 text-xs text-slate-400">{a.wbsCode}</span>
+                    <span className={a.isCritical ? "font-medium text-red-700" : "font-medium"}>{a.canonicalScope ?? a.name}</span>
+                    {a.canonicalScope && a.canonicalScope !== a.name && (
+                      <span className="ml-2 text-xs text-slate-400">{a.name}</span>
+                    )}
+                    {!isMilestone && a.durationDays !== null && (
+                      <span className="ml-2 whitespace-nowrap text-xs text-slate-400">{fmtDur(a.durationDays)}</span>
+                    )}
+                    {isMilestone && <span className="ml-2 text-xs text-indigo-600">◆</span>}
+                    {a.percentComplete === 100 && (
+                      <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700">✓ Completed</span>
+                    )}
+                    {a.atRisk && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">AT RISK</span>
+                    )}
+                  </button>
+                  <span className={`${DATE_CELL} flex items-center justify-end py-1.5 text-slate-500`}>
+                    {isMilestone ? null : rosWarning}
+                    {fmtDate(rowStart)}
+                  </span>
+                  <span className={`${DATE_CELL} flex items-center justify-end py-1.5 text-slate-500`}>
+                    {isMilestone ? rosWarning : null}
+                    {fmtDate(rowFinish)}
+                  </span>
+                </div>
                 <div className="relative min-h-[2.25rem] flex-1">
                   {planned && (
                     <div
