@@ -7,7 +7,7 @@ const today = new Date("2026-08-05T12:00:00Z");
 
 const row = (over: Partial<ScheduleRow> = {}): ScheduleRow => ({
   id: "a1", externalId: 101, wbsCode: "1.2", name: "MEP R/I L2", canonicalScope: "Overhead MEP Rough-In",
-  disciplineName: "Mechanical", partnerName: "TDIndustries", atRisk: false, procurement: null,
+  disciplineName: "Mechanical", partnerName: "TDIndustries", atRisk: false, atRiskItem: null, procurement: null,
   type: "task", isCritical: false, outlineLevel: 2,
   plannedStart: "2026-08-03T08:00:00.000Z", plannedFinish: "2026-08-07T17:00:00.000Z",
   expectedStart: "2026-08-03T08:00:00.000Z", expectedFinish: "2026-08-07T17:00:00.000Z",
@@ -106,7 +106,7 @@ describe("attention sentences", () => {
     const v = build(
       [
         row({ id: "a1", atRisk: true, partnerName: "TDIndustries", canonicalScope: "Overhead MEP",
-              procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 1, projectedLateCount: 2, releasedAtRiskCount: 0, missingDatesCount: 0, leastAdvancedState: "release", earliestRequiredOnSite: null } }),
+              procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 1, projectedLateCount: 2, releasedAtRiskCount: 0, missingDatesCount: 0 } }),
         row({ id: "a2", canonicalScope: "In-Wall Rough-In", driftDays: 3, pushedByName: "MEP Rough-In",
               expectedFinish: "2026-08-12T17:00:00.000Z" }),
       ],

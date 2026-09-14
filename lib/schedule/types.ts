@@ -1,4 +1,4 @@
-import type { ActivityProcurement } from "@/lib/procurement/display";
+import type { ActivityProcurement, AtRiskItem } from "@/lib/procurement/display";
 
 export type RowStatus = "not_started" | "in_progress" | "complete";
 
@@ -11,6 +11,8 @@ export interface ScheduleRow {
   disciplineName: string | null;
   partnerName: string | null;
   atRisk: boolean;
+  /** The specific late procurement item behind the AT RISK tag, when known. */
+  atRiskItem: AtRiskItem | null;
   procurement: ActivityProcurement | null;
   type: string;
   isCritical: boolean;

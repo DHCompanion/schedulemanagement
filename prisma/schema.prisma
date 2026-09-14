@@ -322,6 +322,12 @@ model OsProcurementRisk {
   // Lets isActivityAtRisk flag the specific linked activity instead of
   // every activity this partner is assigned to project-wide.
   atRiskActivityKeys     String[]  @default([])
+  // Per behind-item detail keyed by schedule activity:
+  // [{ activityKey, requiredOnSite (ISO|null), state }]. Lets a flagged
+  // activity show the specific late item's own date/state instead of the
+  // partner-wide earliestRequiredOnSite/leastAdvancedState aggregates, which
+  // usually describe a different item (see describeAtRiskCause).
+  atRiskActivities       Json      @default("[]")
   earliestRequiredOnSite DateTime?
   leastAdvancedState     String
   fetchedAt              DateTime  @default(now())

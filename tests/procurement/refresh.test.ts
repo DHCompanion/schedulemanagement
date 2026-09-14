@@ -42,6 +42,9 @@ describe.runIf(!!process.env.DATABASE_URL)("refreshProcurementRiskIfStale", () =
     expect(rows[0].atRiskActivityKeys).toEqual(["5.1-set-ahu-1", "5.3-set-switchgear"]);
     expect(rows[1].atRiskActivityKeys).toEqual([]);
     expect(await refreshProcurementRiskIfStale(project)).toBe("fresh");
+    // The Sync button forces a refetch: maxAgeMs 0 bypasses the staleness gate
+    // even when the cache is still fresh.
+    expect(await refreshProcurementRiskIfStale(project, 0)).toBe("refreshed");
     await prisma.project.delete({ where: { id: project.id } });
   });
 });
