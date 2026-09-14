@@ -143,7 +143,7 @@ export default async function DataHealthPage(
   const badge = namingRows.length + granularityCount + disciplineRows.length;
 
   return (
-    <main className="mx-auto max-w-7xl p-4 sm:p-6">
+    <main className="mx-auto max-w-screen-2xl p-4 sm:p-6">
       <ProjectTabs projectId={project.id} active="data" dataBadge={badge} />
 
       {searchParams.wizard === "1" && !project.onboardingCompletedAt && (
