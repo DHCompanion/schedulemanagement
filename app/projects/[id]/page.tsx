@@ -70,9 +70,17 @@ export default async function ProjectPage(props: {
             </div>
           </div>
           {schedule.riskFetchedAt && (
-            <p className="mb-2 text-xs text-slate-500">
-              Procurement risk as of {schedule.riskFetchedAt.toISOString().slice(0, 16).replace("T", " ")}
-            </p>
+            <div className="mb-2 flex items-center gap-2 text-xs text-slate-500">
+              <span>
+                Procurement risk as of {schedule.riskFetchedAt.toISOString().slice(0, 16).replace("T", " ")}
+              </span>
+              <form action={appPath("/api/procurement/refresh")} method="post">
+                <input type="hidden" name="projectId" value={project.id} />
+                <button className="rounded border border-slate-300 px-2 py-0.5 font-medium text-slate-600 hover:bg-slate-100">
+                  Sync
+                </button>
+              </form>
+            </div>
           )}
           <ScheduleBody
             key={`${view}|${searchParams.filter ?? ""}|${searchParams.sort ?? ""}`}
