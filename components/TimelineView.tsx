@@ -1,9 +1,11 @@
 "use client";
 
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ScheduleRow } from "@/lib/schedule/types";
 import { spanPct, pointPct, axisTicks, weekendBands, gridLines, type TimelineWindow } from "@/lib/schedule/timelineGeometry";
 import { fmtShortDate } from "@/lib/schedule/weekBuckets";
 import { isRequiredOnSiteOutOfSync } from "@/lib/schedule/requiredOnSiteSync";
+import { connectorPath } from "@/lib/schedule/pushLinks";
 import { paletteEntry } from "./sectionPalette";
 import { ActivityDetail } from "./ActivityDetail";
 
@@ -48,8 +50,59 @@ export function TimelineView({
   const grid = gridLines(win);
   const todayPct = pointPct(todayIso, win);
 
+  // On-demand push connectors: clicking an activity's "pushed by" or "pushing N"
+  // chip selects it and draws the link(s) to its driver / the successors it pushes,
+  // highlighting the counterpart rows. Nothing is drawn until a chip is clicked.
+  const [selectedUid, setSelectedUid] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const barRefs = useRef<Map<number, HTMLElement>>(new Map());
+  const [links, setLinks] = useState<{ key: string; d: string }[]>([]);
+
+  const rowByUid = new Map(items.filter((i) => i.row.type !== "summary").map((i) => [i.row.externalUid, i.row]));
+
+  const highlightUids = new Set<number>();
+  if (selectedUid !== null) {
+    highlightUids.add(selectedUid);
+    const sel = rowByUid.get(selectedUid);
+    if (sel?.pushedByUid != null) highlightUids.add(sel.pushedByUid);
+    for (const i of items) if (i.row.type !== "summary" && i.row.pushedByUid === selectedUid) highlightUids.add(i.row.externalUid);
+  }
+
+  const toggleSelected = (uid: number) => setSelectedUid((cur) => (cur === uid ? null : uid));
+
+  useLayoutEffect(() => {
+    const overlay = overlayRef.current;
+    const container = containerRef.current;
+    if (selectedUid === null || !overlay || !container) { setLinks([]); return; }
+    const sel = rowByUid.get(selectedUid);
+    if (!sel) { setLinks([]); return; }
+    const svgW = overlay.clientWidth;
+    const cTop = container.getBoundingClientRect().top;
+    const centerY = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2 - cTop; };
+
+    // pairs oriented [driver, pushed]: the selected item's incoming push, plus any it drives.
+    const pairs: [ScheduleRow, ScheduleRow][] = [];
+    if (sel.pushedByUid != null) { const drv = rowByUid.get(sel.pushedByUid); if (drv) pairs.push([drv, sel]); }
+    for (const i of items) if (i.row.type !== "summary" && i.row.pushedByUid === selectedUid) pairs.push([sel, i.row]);
+
+    const out: { key: string; d: string }[] = [];
+    for (const [drv, psh] of pairs) {
+      const drvBar = barRefs.current.get(drv.externalUid);
+      const pshBar = barRefs.current.get(psh.externalUid);
+      if (!drvBar || !pshBar) continue; // a counterpart hidden by collapse/filter — skip
+      const drvSpan = spanPct(drv.expectedStart ?? drv.plannedStart, drv.expectedFinish ?? drv.plannedFinish, win);
+      const pshSpan = spanPct(psh.expectedStart ?? psh.plannedStart, psh.expectedFinish ?? psh.plannedFinish, win);
+      if (!drvSpan || !pshSpan) continue; // outside the current window
+      const fromX = ((drvSpan.leftPct + drvSpan.widthPct) / 100) * svgW;
+      const toX = (pshSpan.leftPct / 100) * svgW;
+      out.push({ key: `${drv.externalUid}->${psh.externalUid}`, d: connectorPath({ x: fromX, y: centerY(drvBar) }, { x: toX, y: centerY(pshBar) }) });
+    }
+    setLinks(out);
+  }, [selectedUid, items, win]);
+
   return (
-    <div className="relative overflow-hidden rounded border border-slate-200 bg-white">
+    <div ref={containerRef} className="relative overflow-hidden rounded border border-slate-200 bg-white">
       {/* Time layers: weekend bands + today line span the bar area of every row. */}
       <div className="pointer-events-none absolute inset-y-0 right-0" style={{ left: LEFT_COL }}>
         {bands.map((b, i) => (
@@ -65,6 +118,22 @@ export function TimelineView({
         ))}
         {todayPct !== null && (
           <div className="absolute inset-y-0 z-10 w-px bg-cyan-600" style={{ left: `${todayPct}%` }} />
+        )}
+      </div>
+
+      {/* Push-link connectors (on-demand): spans the bar area, drawn only when a chip is selected. */}
+      <div ref={overlayRef} className="pointer-events-none absolute inset-y-0 right-0 z-20" style={{ left: LEFT_COL }}>
+        {links.length > 0 && (
+          <svg className="h-full w-full overflow-visible" fill="none">
+            <defs>
+              <marker id="pushArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="#d97706" />
+              </marker>
+            </defs>
+            {links.map((l) => (
+              <path key={l.key} d={l.d} stroke="#d97706" strokeWidth={2} markerEnd="url(#pushArrow)" />
+            ))}
+          </svg>
         )}
       </div>
 
@@ -135,7 +204,7 @@ export function TimelineView({
           ) : null;
 
           return (
-            <li key={a.id} className="relative">
+            <li key={a.id} className={`relative ${highlightUids.has(a.externalUid) ? "bg-amber-50 ring-1 ring-inset ring-amber-300" : ""}`}>
               <div className="flex items-stretch">
                 <div className="flex shrink-0 items-stretch" style={{ width: LEFT_COL }}>
                   <button
@@ -168,7 +237,10 @@ export function TimelineView({
                     {fmtDate(rowFinish)}
                   </span>
                 </div>
-                <div className="relative min-h-[2.25rem] flex-1">
+                <div
+                  ref={(el) => { if (el) barRefs.current.set(a.externalUid, el); else barRefs.current.delete(a.externalUid); }}
+                  className="relative min-h-[2.25rem] flex-1"
+                >
                   {planned && (
                     <div
                       data-bar="planned"
@@ -201,6 +273,28 @@ export function TimelineView({
                   )}
                 </div>
               </div>
+              {((a.pushedByName && a.driftDays > 0) || a.pushesCount > 0) && (
+                <div className="flex flex-wrap items-center gap-2 pb-1 text-[11px]" style={{ paddingLeft: 14 + (a.outlineLevel - 1) * 12 }}>
+                  {a.pushedByName && a.driftDays > 0 && (
+                    <button
+                      onClick={() => toggleSelected(a.externalUid)}
+                      className={`rounded px-1.5 py-0.5 font-medium ${selectedUid === a.externalUid ? "bg-amber-200 text-amber-900" : "bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+                      title={`Delayed completion of "${a.pushedByName}" pushed this activity +${a.driftDays} working days. Click to trace the link.`}
+                    >
+                      ⤶ pushed by {a.pushedByName} +{a.driftDays}d
+                    </button>
+                  )}
+                  {a.pushesCount > 0 && (
+                    <button
+                      onClick={() => toggleSelected(a.externalUid)}
+                      className={`rounded px-1.5 py-0.5 font-medium ${selectedUid === a.externalUid ? "bg-amber-200 text-amber-900" : "bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+                      title={`This activity's slip is pushing ${a.pushesCount} later ${a.pushesCount === 1 ? "activity" : "activities"}. Click to trace the links.`}
+                    >
+                      ⤳ pushing {a.pushesCount}
+                    </button>
+                  )}
+                </div>
+              )}
               {openId === a.id && (
                 <div className="px-3 pb-2" style={{ paddingLeft: 14 + (a.outlineLevel - 1) * 12 }}>
                   <ActivityDetail row={a} sectionName={sectionName} />

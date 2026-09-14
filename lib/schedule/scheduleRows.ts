@@ -7,6 +7,7 @@ import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { stableActivityKey } from "@/lib/msp/stableKey";
+import { countPushesByDriver } from "./pushLinks";
 import type { AtRiskItem } from "@/lib/procurement/display";
 import {
   isActivityAtRisk,
@@ -107,6 +108,11 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
   );
   const mpd = latest.minutesPerDay ?? 480;
 
+  // How many later activities each activity's slip pushes (for the "pushing N" badge).
+  const pushCounts = countPushesByDriver(
+    latest.activities.map((a) => ({ externalUid: a.externalUid, pushedByUid: forecasts.get(a.externalUid)?.pushedByUid ?? null })),
+  );
+
   const rows: ScheduleRow[] = latest.activities.map((a) => {
     const progress = progressByKey.get(a.canonicalActivityKey) ?? baselineProgress(a);
     const percentComplete = progress.percentComplete ?? a.percentComplete;
@@ -117,6 +123,7 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
     return {
       id: a.id,
       externalId: a.externalId,
+      externalUid: a.externalUid,
       wbsCode: a.wbsCode,
       name: a.name,
       canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
@@ -134,6 +141,8 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       expectedFinish: f?.expectedFinish ? f.expectedFinish.toISOString() : a.plannedFinish?.toISOString() ?? null,
       driftDays: f?.driftDays ?? 0,
       pushedByName: f?.pushedByUid != null ? nameByUid.get(f.pushedByUid) ?? null : null,
+      pushedByUid: f?.pushedByUid ?? null,
+      pushesCount: pushCounts.get(a.externalUid) ?? 0,
       status,
       percentComplete,
       totalSlackDays: toDays(a.totalSlackMinutes, mpd),

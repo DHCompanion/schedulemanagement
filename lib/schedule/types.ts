@@ -5,6 +5,8 @@ export type RowStatus = "not_started" | "in_progress" | "complete";
 export interface ScheduleRow {
   id: string;
   externalId: number | null;
+  /** Stable MSP UID — the key push links (pushedByUid) reference. */
+  externalUid: number;
   wbsCode: string | null;
   name: string;
   canonicalScope: string | null;
@@ -23,6 +25,10 @@ export interface ScheduleRow {
   expectedFinish: string | null;
   driftDays: number;
   pushedByName: string | null;
+  /** The driver activity's UID when this activity was pushed by a predecessor. */
+  pushedByUid: number | null;
+  /** How many later activities this activity's slip pushes (0 when it drives none). */
+  pushesCount: number;
   status: RowStatus;
   percentComplete: number | null;
   totalSlackDays: number | null;
