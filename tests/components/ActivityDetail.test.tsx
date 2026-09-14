@@ -37,7 +37,12 @@ describe("ActivityDetail", () => {
     expect(screen.getByText(/Section: Level 2 Rough-In/)).toBeTruthy();
   });
   it("renders procurement tallies when present", () => {
-    render(<ActivityDetail row={row({ procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 2, projectedLateCount: 1, releasedAtRiskCount: 0, missingDatesCount: 0 } })} />);
+    render(<ActivityDetail row={row({ procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 2, projectedLateCount: 1, releasedAtRiskCount: 0, missingDatesCount: 0, leastAdvancedState: "release", earliestRequiredOnSite: null } })} />);
     expect(screen.getByText(/This trade's procurement:/)).toBeTruthy();
+  });
+
+  it("calls out the at-risk cause when the activity is flagged", () => {
+    render(<ActivityDetail row={row({ atRisk: true, procurement: { itemCount: 9, behindCount: 1, submittalLateCount: 1, projectedLateCount: 0, releasedAtRiskCount: 0, missingDatesCount: 0, leastAdvancedState: "submittal_prep", earliestRequiredOnSite: "2026-08-04T08:00:00.000Z" } })} />);
+    expect(screen.getByText(/At risk: Linked procurement item behind — least advanced state: submittal prep; required on site Aug 4/)).toBeTruthy();
   });
 });

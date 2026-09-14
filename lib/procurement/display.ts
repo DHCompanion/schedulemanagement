@@ -6,7 +6,28 @@ export type ActivityProcurement = {
   projectedLateCount: number;
   releasedAtRiskCount: number;
   missingDatesCount: number;
+  /** Furthest-behind procurement stage among the partner's items. */
+  leastAdvancedState: string;
+  /** ISO date the material is first needed on site, or null if undated. */
+  earliestRequiredOnSite: string | null;
 };
+
+/**
+ * Why THIS activity wears the AT RISK pill: a procurement item linked to it is
+ * behind. We can't name the single item (only per-partner aggregates are
+ * cached), so we surface the concrete facts we do have — how far behind the
+ * least-advanced linked material is, and when it is needed on site.
+ */
+export function describeAtRiskCause(
+  p: ActivityProcurement,
+  fmtDate: (iso: string) => string,
+): string {
+  const state = p.leastAdvancedState.replace(/_/g, " ").trim() || "unknown";
+  const onSite = p.earliestRequiredOnSite
+    ? `; required on site ${fmtDate(p.earliestRequiredOnSite)}`
+    : "";
+  return `Linked procurement item behind — least advanced state: ${state}${onSite}`;
+}
 
 /**
  * Turns a partner's tallies into the lines shown under an activity. Counts are
