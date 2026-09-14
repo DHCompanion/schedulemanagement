@@ -37,7 +37,7 @@ export default async function ProjectPage(props: {
     : null;
 
   return (
-    <main className="mx-auto max-w-7xl p-4 sm:p-6">
+    <main className="mx-auto max-w-screen-2xl p-4 sm:p-6">
       <ProjectTabs projectId={project.id} active="schedule" dataBadge={dataCounts.total} />
 
       {!schedule ? (
