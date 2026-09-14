@@ -12,7 +12,7 @@ const base = (over: Partial<ScheduleRow> = {}): ScheduleRow => ({
   type: "task", isCritical: false, outlineLevel: 2,
   plannedStart: "2026-08-03T08:00:00.000Z", plannedFinish: "2026-08-07T17:00:00.000Z",
   expectedStart: "2026-08-03T08:00:00.000Z", expectedFinish: "2026-08-12T17:00:00.000Z",
-  driftDays: 3, pushedByName: null, status: "in_progress",
+  driftDays: 3, pushedByName: null, externalUid: 1, pushedByUid: null, pushesCount: 0, status: "in_progress",
   percentComplete: 45, totalSlackDays: null, durationDays: 5, customFields: {},
   ...over,
 });
@@ -73,5 +73,24 @@ describe("TimelineView", () => {
       <TimelineView items={[item(base())]} window={win} todayIso="2026-08-05T00:00:00.000Z" openId="a1" onToggleOpen={noop} collapsed={new Set()} onToggleCollapsed={noop} />,
     );
     expect(screen.getByText(/Section: Rough-In/)).toBeTruthy();
+  });
+  it("shows push chips and draws a connector when a chip is clicked", () => {
+    const driver = base({ id: "drv", name: "MEP R/I L2", canonicalScope: "MEP Rough-In", externalUid: 1, pushesCount: 1 });
+    const pushed = base({ id: "psh", name: "In-Wall", canonicalScope: "In-Wall Rough-In", externalUid: 2, pushedByUid: 1, pushedByName: "MEP R/I L2", driftDays: 3 });
+    const { container } = render(
+      <TimelineView items={[item(driver), item(pushed)]} window={win} todayIso="2026-08-05T00:00:00.000Z" openId={null} onToggleOpen={noop} collapsed={new Set()} onToggleCollapsed={noop} />,
+    );
+    // Both chips render without expanding any row.
+    expect(screen.getByText(/pushed by MEP R\/I L2 \+3d/)).toBeTruthy();
+    const drivingChip = screen.getByText(/pushing 1/);
+    expect(drivingChip).toBeTruthy();
+    // Nothing drawn until a chip is clicked.
+    expect(container.querySelectorAll('path[stroke="#d97706"]').length).toBe(0);
+    fireEvent.click(drivingChip);
+    // One connector for the single activity this driver pushes.
+    expect(container.querySelectorAll('path[stroke="#d97706"]').length).toBe(1);
+    // Clicking the same chip again clears it.
+    fireEvent.click(drivingChip);
+    expect(container.querySelectorAll('path[stroke="#d97706"]').length).toBe(0);
   });
 });

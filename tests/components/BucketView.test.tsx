@@ -12,7 +12,7 @@ const base = (over: Partial<ScheduleRow> = {}): ScheduleRow => ({
   type: "task", isCritical: false, outlineLevel: 2,
   plannedStart: "2026-08-03T08:00:00.000Z", plannedFinish: "2026-08-07T17:00:00.000Z",
   expectedStart: "2026-08-03T08:00:00.000Z", expectedFinish: "2026-08-07T17:00:00.000Z",
-  driftDays: 0, pushedByName: null, status: "in_progress",
+  driftDays: 0, pushedByName: null, externalUid: 1, pushedByUid: null, pushesCount: 0, status: "in_progress",
   percentComplete: 45, totalSlackDays: null, durationDays: 5, customFields: {},
   ...over,
 });
