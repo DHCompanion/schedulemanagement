@@ -81,6 +81,12 @@ export type OsProcurementRiskItem = {
   releasedAtRiskCount: number;
   missingDatesCount: number;
   atRiskActivityKeys: string[];
+  // Per behind-item detail keyed by the schedule activity it's linked to: that
+  // item's own required-on-site date and state. Lets an at-risk activity name
+  // the specific late item instead of the partner-wide earliest/least-advanced
+  // aggregates above, which usually describe a different item. Optional: an
+  // older procurement build omits it, and the reader falls back to nothing.
+  atRiskActivities?: { activityKey: string; requiredOnSite: string | null; state: string }[];
 };
 
 export type OsProcurementSummary = {

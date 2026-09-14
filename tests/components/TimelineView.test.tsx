@@ -8,7 +8,7 @@ const win = { startMs: Date.parse("2026-08-03T00:00:00Z"), endMs: Date.parse("20
 
 const base = (over: Partial<ScheduleRow> = {}): ScheduleRow => ({
   id: "a1", externalId: 1, wbsCode: "1.1", name: "MEP R/I L2", canonicalScope: "Overhead MEP Rough-In",
-  disciplineName: "Mechanical", partnerName: "TDI", atRisk: false, procurement: null,
+  disciplineName: "Mechanical", partnerName: "TDI", atRisk: false, atRiskItem: null, procurement: null,
   type: "task", isCritical: false, outlineLevel: 2,
   plannedStart: "2026-08-03T08:00:00.000Z", plannedFinish: "2026-08-07T17:00:00.000Z",
   expectedStart: "2026-08-03T08:00:00.000Z", expectedFinish: "2026-08-12T17:00:00.000Z",

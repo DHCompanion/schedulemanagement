@@ -9,8 +9,6 @@ describe("describeProcurement", () => {
     projectedLateCount: 0,
     releasedAtRiskCount: 0,
     missingDatesCount: 0,
-    leastAdvancedState: "release",
-    earliestRequiredOnSite: null,
   };
 
   it("leads with the behind count against the total", () => {
@@ -70,19 +68,15 @@ describe("describeProcurement", () => {
 });
 
 describe("describeAtRiskCause", () => {
-  const base = {
-    itemCount: 9, behindCount: 1, submittalLateCount: 1, projectedLateCount: 0,
-    releasedAtRiskCount: 0, missingDatesCount: 0,
-    leastAdvancedState: "submittal_prep", earliestRequiredOnSite: null,
-  };
-  const fmt = () => "Aug 4";
+  const fmt = () => "Sep 21";
 
-  it("humanizes the state and includes the required-on-site date", () => {
-    const r = describeAtRiskCause({ ...base, earliestRequiredOnSite: "2026-08-04T00:00:00.000Z" }, fmt);
-    expect(r).toBe("Linked procurement item behind — least advanced state: submittal prep; required on site Aug 4");
+  it("humanizes the item's state and includes its own required-on-site date", () => {
+    const r = describeAtRiskCause({ state: "submitted", requiredOnSite: "2026-09-21T00:00:00.000Z" }, fmt);
+    expect(r).toBe("Linked procurement item behind — state: submitted; required on site Sep 21");
   });
 
-  it("omits the date clause when the material is undated", () => {
-    expect(describeAtRiskCause(base, fmt)).toBe("Linked procurement item behind — least advanced state: submittal prep");
+  it("omits the date clause when the item is undated", () => {
+    expect(describeAtRiskCause({ state: "submittal_prep", requiredOnSite: null }, fmt))
+      .toBe("Linked procurement item behind — state: submittal prep");
   });
 });

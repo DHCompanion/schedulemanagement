@@ -6,7 +6,7 @@ import type { ScheduleRow } from "@/lib/schedule/types";
 
 const row = (over: Partial<ScheduleRow> = {}): ScheduleRow => ({
   id: "a1", externalId: 101, wbsCode: "1.2", name: "MEP R/I L2", canonicalScope: "Overhead MEP Rough-In",
-  disciplineName: "Mechanical", partnerName: "TDIndustries", atRisk: false, procurement: null,
+  disciplineName: "Mechanical", partnerName: "TDIndustries", atRisk: false, atRiskItem: null, procurement: null,
   type: "task", isCritical: false, outlineLevel: 2,
   plannedStart: "2026-08-03T08:00:00.000Z", plannedFinish: "2026-08-07T17:00:00.000Z",
   expectedStart: "2026-08-03T08:00:00.000Z", expectedFinish: "2026-08-12T17:00:00.000Z",
@@ -37,12 +37,12 @@ describe("ActivityDetail", () => {
     expect(screen.getByText(/Section: Level 2 Rough-In/)).toBeTruthy();
   });
   it("renders procurement tallies when present", () => {
-    render(<ActivityDetail row={row({ procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 2, projectedLateCount: 1, releasedAtRiskCount: 0, missingDatesCount: 0, leastAdvancedState: "release", earliestRequiredOnSite: null } })} />);
+    render(<ActivityDetail row={row({ procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 2, projectedLateCount: 1, releasedAtRiskCount: 0, missingDatesCount: 0 } })} />);
     expect(screen.getByText(/This trade's procurement:/)).toBeTruthy();
   });
 
-  it("calls out the at-risk cause when the activity is flagged", () => {
-    render(<ActivityDetail row={row({ atRisk: true, procurement: { itemCount: 9, behindCount: 1, submittalLateCount: 1, projectedLateCount: 0, releasedAtRiskCount: 0, missingDatesCount: 0, leastAdvancedState: "submittal_prep", earliestRequiredOnSite: "2026-08-04T08:00:00.000Z" } })} />);
-    expect(screen.getByText(/At risk: Linked procurement item behind — least advanced state: submittal prep; required on site Aug 4/)).toBeTruthy();
+  it("calls out the specific late item behind the at-risk tag", () => {
+    render(<ActivityDetail row={row({ atRisk: true, atRiskItem: { state: "submitted", requiredOnSite: "2026-09-21T08:00:00.000Z" } })} />);
+    expect(screen.getByText(/At risk: Linked procurement item behind — state: submitted; required on site Sep 21/)).toBeTruthy();
   });
 });

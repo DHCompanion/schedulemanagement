@@ -89,6 +89,7 @@ describe.runIf(hasDb)("getScheduleData", () => {
         projectId: project.id, osPartnerId: 500, partnerName: "Mechanical Co", itemCount: 2, behindCount: 1,
         submittalLateCount: 1, projectedLateCount: 0, releasedAtRiskCount: 0, missingDatesCount: 0,
         atRiskActivityKeys: ["5.1-set-ahu-1"], leastAdvancedState: "submittal_prep",
+        atRiskActivities: [{ activityKey: "5.1-set-ahu-1", requiredOnSite: "2026-09-21T00:00:00.000Z", state: "submitted" }],
       },
     });
 
@@ -97,7 +98,10 @@ describe.runIf(hasDb)("getScheduleData", () => {
       const ahu1 = data!.rows.find((r) => r.wbsCode === "5.1")!;
       const ahu2 = data!.rows.find((r) => r.wbsCode === "5.2")!;
       expect(ahu1.atRisk).toBe(true);
+      // The flagged row carries its own linked item's date/state, not the partner aggregate.
+      expect(ahu1.atRiskItem).toEqual({ requiredOnSite: "2026-09-21T00:00:00.000Z", state: "submitted" });
       expect(ahu2.atRisk).toBe(false);
+      expect(ahu2.atRiskItem).toBeNull();
     } finally {
       await prisma.project.delete({ where: { id: project.id } });
     }

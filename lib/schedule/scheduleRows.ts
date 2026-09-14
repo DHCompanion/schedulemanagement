@@ -6,6 +6,7 @@ import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
+import type { AtRiskItem } from "@/lib/procurement/display";
 import {
   isActivityAtRisk,
   resolveActivityTrades,
@@ -67,13 +68,20 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       projectedLateCount: true,
       releasedAtRiskCount: true,
       missingDatesCount: true,
-      leastAdvancedState: true,
-      earliestRequiredOnSite: true,
       atRiskActivityKeys: true,
+      atRiskActivities: true,
       fetchedAt: true,
     },
   });
   const flaggedActivityKeys = new Set(procurementRisk.flatMap((r) => r.atRiskActivityKeys));
+  // activityKey -> the specific behind item linked to it, for the AT RISK cause
+  // line. Flattened across partners; a key belongs to exactly one item here.
+  const atRiskItemByKey = new Map<string, AtRiskItem>(
+    procurementRisk.flatMap((r) =>
+      ((r.atRiskActivities as unknown as { activityKey: string; requiredOnSite: string | null; state: string }[]) ?? [])
+        .map((a) => [a.activityKey, { requiredOnSite: a.requiredOnSite, state: a.state }] as const),
+    ),
+  );
   const procurementByPartner = new Map(
     procurementRisk.map((r) => [
       r.osPartnerId,
@@ -84,8 +92,6 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
         projectedLateCount: r.projectedLateCount,
         releasedAtRiskCount: r.releasedAtRiskCount,
         missingDatesCount: r.missingDatesCount,
-        leastAdvancedState: r.leastAdvancedState,
-        earliestRequiredOnSite: r.earliestRequiredOnSite?.toISOString() ?? null,
       },
     ]),
   );
@@ -106,6 +112,7 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
     const partnerId = trades.get(a.id)?.osPartnerId ?? null;
     const f = forecasts.get(a.externalUid);
     const status: RowStatus = progress.status;
+    const atRisk = isActivityAtRisk(a.canonicalActivityKey, percentComplete, flaggedActivityKeys);
     return {
       id: a.id,
       externalId: a.externalId,
@@ -114,7 +121,8 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
       disciplineName: trades.get(a.id)?.disciplineName ?? null,
       partnerName: trades.get(a.id)?.partnerName ?? null,
-      atRisk: isActivityAtRisk(a.canonicalActivityKey, percentComplete, flaggedActivityKeys),
+      atRisk,
+      atRiskItem: atRisk && a.canonicalActivityKey ? atRiskItemByKey.get(a.canonicalActivityKey) ?? null : null,
       procurement: partnerId === null ? null : procurementByPartner.get(partnerId) ?? null,
       type: a.type,
       isCritical: a.isCritical,
