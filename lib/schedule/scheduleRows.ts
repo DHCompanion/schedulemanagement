@@ -6,6 +6,7 @@ import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
+import { stableActivityKey } from "@/lib/msp/stableKey";
 import type { AtRiskItem } from "@/lib/procurement/display";
 import {
   isActivityAtRisk,
@@ -112,7 +113,7 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
     const partnerId = trades.get(a.id)?.osPartnerId ?? null;
     const f = forecasts.get(a.externalUid);
     const status: RowStatus = progress.status;
-    const atRisk = isActivityAtRisk(a.canonicalActivityKey, percentComplete, flaggedActivityKeys);
+    const atRisk = isActivityAtRisk(stableActivityKey(a), percentComplete, flaggedActivityKeys);
     return {
       id: a.id,
       externalId: a.externalId,
@@ -122,7 +123,7 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       disciplineName: trades.get(a.id)?.disciplineName ?? null,
       partnerName: trades.get(a.id)?.partnerName ?? null,
       atRisk,
-      atRiskItem: atRisk && a.canonicalActivityKey ? atRiskItemByKey.get(a.canonicalActivityKey) ?? null : null,
+      atRiskItem: atRisk ? atRiskItemByKey.get(stableActivityKey(a)) ?? null : null,
       procurement: partnerId === null ? null : procurementByPartner.get(partnerId) ?? null,
       type: a.type,
       isCritical: a.isCritical,
