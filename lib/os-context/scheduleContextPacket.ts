@@ -5,6 +5,7 @@ import { baselineProgress } from "@/lib/lookahead/computeLookahead";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { minutesToDays } from "@/lib/msp/duration";
 import { isLeafActive } from "@/lib/msp/types";
+import { stableActivityKey } from "@/lib/msp/stableKey";
 import { applyDictionary } from "@/lib/normalize/normalizationService";
 import { phaseByActivityId } from "./activityPhase";
 import { BUCKET_ORDER, groupIntoBuckets, type BucketKey } from "@/lib/schedule/weekBuckets";
@@ -42,7 +43,7 @@ export type ScheduleContextItem = {
 
 // A single schedule activity, leaf-level detail nested under its partner's row.
 export interface PacketActivity {
-  key: string; // activity.canonicalActivityKey
+  key: string; // stableActivityKey(activity) — guid/uid, survives re-imports (NOT canonicalActivityKey)
   name: string;
   wbsCode: string | null;
   canonicalScope: string;
@@ -232,7 +233,7 @@ export async function buildScheduleContextPacket(osProjectId: number, limit: num
     bucket.scopeGroups.set(groupKey, g);
 
     bucket.activities.push({
-      key: activity.canonicalActivityKey,
+      key: stableActivityKey(activity),
       name: activity.name,
       wbsCode: activity.wbsCode,
       canonicalScope,
