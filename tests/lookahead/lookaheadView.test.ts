@@ -106,7 +106,7 @@ describe("attention sentences", () => {
     const v = build(
       [
         row({ id: "a1", atRisk: true, partnerName: "TDIndustries", canonicalScope: "Overhead MEP",
-              procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 1, projectedLateCount: 2, releasedAtRiskCount: 0, missingDatesCount: 0 } }),
+              procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 1, projectedLateCount: 2, releasedAtRiskCount: 0, missingDatesCount: 0, leastAdvancedState: "release", earliestRequiredOnSite: null } }),
         row({ id: "a2", canonicalScope: "In-Wall Rough-In", driftDays: 3, pushedByName: "MEP Rough-In",
               expectedFinish: "2026-08-12T17:00:00.000Z" }),
       ],

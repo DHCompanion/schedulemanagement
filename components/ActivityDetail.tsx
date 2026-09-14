@@ -1,7 +1,7 @@
 "use client";
 
 import type { ScheduleRow } from "@/lib/schedule/types";
-import { describeProcurement } from "@/lib/procurement/display";
+import { describeProcurement, describeAtRiskCause } from "@/lib/procurement/display";
 import { fmtShortDate } from "@/lib/schedule/weekBuckets";
 
 function range(startIso: string | null, endIso: string | null): string {
@@ -14,6 +14,11 @@ function range(startIso: string | null, endIso: string | null): string {
 export function ActivityDetail({ row, sectionName }: { row: ScheduleRow; sectionName?: string | null }) {
   return (
     <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-600">
+      {row.atRisk && row.procurement && (
+        <div className="col-span-2 rounded bg-amber-50 px-2 py-1 font-medium text-amber-800">
+          At risk: {describeAtRiskCause(row.procurement, fmtShortDate)}
+        </div>
+      )}
       <div className="col-span-2 flex flex-wrap gap-x-4">
         <span>Planned: {range(row.plannedStart, row.plannedFinish)}</span>
         <span>

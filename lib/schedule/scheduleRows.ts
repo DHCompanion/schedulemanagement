@@ -67,6 +67,8 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       projectedLateCount: true,
       releasedAtRiskCount: true,
       missingDatesCount: true,
+      leastAdvancedState: true,
+      earliestRequiredOnSite: true,
       atRiskActivityKeys: true,
       fetchedAt: true,
     },
@@ -82,6 +84,8 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
         projectedLateCount: r.projectedLateCount,
         releasedAtRiskCount: r.releasedAtRiskCount,
         missingDatesCount: r.missingDatesCount,
+        leastAdvancedState: r.leastAdvancedState,
+        earliestRequiredOnSite: r.earliestRequiredOnSite?.toISOString() ?? null,
       },
     ]),
   );
