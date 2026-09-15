@@ -130,9 +130,11 @@ describe("verifyContextCallback — replay, allowlist and limit bounds (#4)", ()
     }
   });
 
-  it("accepts the one tool the manifest does allow", () => {
-    const raw = body({ requestingTool: "procurement-manager" });
-    expect(verifyContextCallback(raw, sign(raw), NOW).ok).toBe(true);
+  it("accepts the tools the manifest allows", () => {
+    for (const tool of ["procurement-manager", "calendar"]) {
+      const raw = body({ requestingTool: tool });
+      expect(verifyContextCallback(raw, sign(raw), NOW).ok, `${tool} must be allowed`).toBe(true);
+    }
   });
 
   it("clamps an oversized limit instead of loading the project unbounded", () => {

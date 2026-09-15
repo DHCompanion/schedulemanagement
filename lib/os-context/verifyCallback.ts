@@ -15,7 +15,7 @@ const SECRET_ENV = "SCHEDULE_MANAGER_CONTEXT_SECRET";
 // The OS authorizes the requesting tool on its side; this is the tool-side half
 // of the same decision, so anyone holding the shared secret still cannot pull a
 // project's schedule packet while naming a tool we never agreed to expose to.
-const ALLOWED_REQUESTING_TOOLS = new Set(["procurement-manager"]);
+const ALLOWED_REQUESTING_TOOLS = new Set(["procurement-manager", "calendar"]);
 
 // A signed body replays for the whole OS-chosen validity. Bounding how old
 // issuedAt may be shrinks that window to something an operator can reason about.
