@@ -18,6 +18,13 @@ const nextConfig = {
   // of the server bundle: webpack cannot bundle a brotli-packed executable, and
   // Playwright resolves it from disk at runtime.
   serverExternalPackages: ["playwright-core", "@sparticuz/chromium"],
+  // Externalizing keeps the package a runtime require, but @sparticuz loads its
+  // brotli chromium from bin/ by file path — the tracer never sees that as an
+  // import and prunes it, so the deployed function 500s with "input directory
+  // .../@sparticuz/chromium/bin does not exist". Force the files into the route.
+  outputFileTracingIncludes: {
+    "/api/export/lookahead-pdf": ["./node_modules/@sparticuz/chromium/bin/**"],
+  },
 };
 
 export default nextConfig;
