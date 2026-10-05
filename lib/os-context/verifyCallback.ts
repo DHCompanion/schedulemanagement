@@ -10,12 +10,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export const CALLBACK_SIGNATURE_HEADER = "x-os-callback-signature";
 const SECRET_ENV = "SCHEDULE_MANAGER_CONTEXT_SECRET";
 
-// Mirrors this tool's manifest contextExposures.allowedRequestingTools — see
-// docs/PROCUREMENT_CROSS_TOOL_HANDOFF.md ("What the manifests already say").
-// The OS authorizes the requesting tool on its side; this is the tool-side half
-// of the same decision, so anyone holding the shared secret still cannot pull a
-// project's schedule packet while naming a tool we never agreed to expose to.
-const ALLOWED_REQUESTING_TOOLS = new Set(["procurement-manager", "calendar"]);
+// No requesting-tool allowlist here (D2): the OS registry's allowedRequestingTools
+// is the single gate, and requestingTool sits inside the signed body, so only the
+// OS can name it. A second list in this file only drifts from the registry.
 
 // A signed body replays for the whole OS-chosen validity. Bounding how old
 // issuedAt may be shrinks that window to something an operator can reason about.
@@ -106,10 +103,6 @@ export function verifyContextCallback(
   const issuedAge = now.getTime() - new Date(payload.issuedAt).getTime();
   if (!(issuedAge > -MAX_CLOCK_SKEW_MS && issuedAge < MAX_ISSUED_AGE_MS)) {
     return reject("stale-or-future-issuedAt");
-  }
-
-  if (!ALLOWED_REQUESTING_TOOLS.has(payload.requestingTool)) {
-    return reject("requesting-tool-not-allowed");
   }
 
   // Clamped rather than rejected: an over-large limit is the OS asking for "as

@@ -99,8 +99,8 @@ describe("verifyContextCallback", () => {
 });
 
 // SECURITY_REMEDIATION_HANDOFF #4 — a valid HMAC alone is not enough: the call
-// must also be fresh, from an allowed tool, and bounded in what it can ask for.
-describe("verifyContextCallback — replay, allowlist and limit bounds (#4)", () => {
+// must also be fresh and bounded in what it can ask for.
+describe("verifyContextCallback — replay and limit bounds (#4)", () => {
   it("rejects a captured body replayed after the freshness window", () => {
     // Signature genuine, and the OS's own expiresAt has NOT passed — only the
     // issuedAt window stops this, which is the whole point of the finding.
@@ -123,18 +123,14 @@ describe("verifyContextCallback — replay, allowlist and limit bounds (#4)", ()
     expect(verifyContextCallback(raw, sign(raw), NOW).ok).toBe(false);
   });
 
-  it("rejects a correctly-signed callback naming a tool the manifest does not allow", () => {
-    for (const tool of ["weekly-report-builder", "safetalk", "schedule-manager"]) {
+  // D2: which tool may ask is the OS registry's decision, made before it signs.
+  it("accepts any OS-signed requesting tool, and still requires one to be named", () => {
+    for (const tool of ["procurement-manager", "calendar", "a-tool-registered-next-year"]) {
       const raw = body({ requestingTool: tool });
-      expect(verifyContextCallback(raw, sign(raw), NOW).ok, `${tool} must not be allowed`).toBe(false);
+      expect(verifyContextCallback(raw, sign(raw), NOW).ok, `${tool} is the OS's call`).toBe(true);
     }
-  });
-
-  it("accepts the tools the manifest allows", () => {
-    for (const tool of ["procurement-manager", "calendar"]) {
-      const raw = body({ requestingTool: tool });
-      expect(verifyContextCallback(raw, sign(raw), NOW).ok, `${tool} must be allowed`).toBe(true);
-    }
+    const raw = body({ requestingTool: "" });
+    expect(verifyContextCallback(raw, sign(raw), NOW).ok).toBe(false);
   });
 
   it("clamps an oversized limit instead of loading the project unbounded", () => {
@@ -152,7 +148,7 @@ describe("verifyContextCallback — replay, allowlist and limit bounds (#4)", ()
 
   it("gives every rejection the same client-visible message", () => {
     const cases = [
-      body({ requestingTool: "safetalk" }),
+      body({ requestingTool: "" }),
       body({ issuedAt: "2026-07-28T13:50:00.000Z", expiresAt: "2026-07-28T15:00:00.000Z" }),
       body({ expiresAt: "2026-07-28T14:00:00.000Z" }),
       body({ personId: "not-an-int" }),

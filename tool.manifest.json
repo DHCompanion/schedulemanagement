@@ -1,0 +1,20 @@
+{
+  "slug": "schedule-manager",
+  "name": "CPM Schedule Manager",
+  "emittedEvents": [],
+  "capabilityRequests": ["activity_events"],
+  "contextDependencies": [
+    {
+      "target": "procurement-manager",
+      "packetTypes": ["procurement_project_summary"],
+      "purpose": "Request OS-mediated procurement status to flag activities exposed to late material.",
+      "required": false
+    }
+  ],
+  "contextExposures": [
+    {
+      "packetType": "project_schedule_summary",
+      "description": "Per-project schedule summary, one row per trade partner (not per activity), each carrying its scope+phase groups and dates, for approved coordination consumers."
+    }
+  ]
+}
