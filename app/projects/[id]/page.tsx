@@ -60,7 +60,20 @@ export default async function ProjectPage(props: {
               {project.sector && <span className="rounded bg-slate-200 px-2 py-1">{project.sector}</span>}
               {project.sizeSqFt && <span className="rounded bg-slate-200 px-2 py-1">{project.sizeSqFt.toLocaleString()} sf</span>}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* The date every forecast and the 3/6-week window count from. */}
+              <form action={appPath(`/api/projects/${project.id}/data-date`)} method="post" className="flex items-center gap-1 text-xs text-slate-600">
+                <label htmlFor="dataDate">Data date</label>
+                <input
+                  id="dataDate"
+                  type="date"
+                  name="dataDate"
+                  required
+                  defaultValue={schedule.statusDate.slice(0, 10)}
+                  className="rounded border border-slate-300 px-2 py-1 text-sm"
+                />
+                <button className="rounded border border-slate-300 px-2 py-1 font-medium hover:bg-slate-100">Set</button>
+              </form>
               <ExportMenu projectId={project.id} />
               <form action={appPath("/api/updates")} method="post">
                 <input type="hidden" name="projectId" value={project.id} />

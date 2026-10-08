@@ -29,6 +29,11 @@ model Project {
   externalProjectKey  String?
   externalProjectGuid String?
   onboardingCompletedAt DateTime?
+  // A data date set by hand on the schedule screen, and when. It competes on
+  // recency with the latest import and the latest finalized progress update —
+  // see lib/forecast/resolveStatusDate.ts.
+  dataDateOverride    DateTime?
+  dataDateOverrideAt  DateTime?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   imports             ScheduleImport[]
