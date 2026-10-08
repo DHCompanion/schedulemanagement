@@ -22,11 +22,14 @@ export function CoarsePanel({ rows, isAdmin }: { rows: CoarseNameRow[]; isAdmin:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showReviewed, setShowReviewed] = useState(false);
-  const reviewedCount = rows.filter((r) => r.notCoarse).length;
+  // Decided either way: marked not coarse, or already carrying a split rule
+  // (those are listed under "Split rules" and wait for Accept in Data Health).
+  const decided = (r: CoarseNameRow) => Boolean(r.notCoarse) || r.finerScopes.length > 0;
+  const reviewedCount = rows.filter(decided).length;
 
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const pool = showReviewed ? rows : rows.filter((r) => !r.notCoarse);
+    const pool = showReviewed ? rows : rows.filter((r) => !decided(r));
     return needle ? pool.filter((r) => r.name.toLowerCase().includes(needle)) : pool;
   }, [rows, q, showReviewed]);
 
@@ -69,7 +72,7 @@ export function CoarsePanel({ rows, isAdmin }: { rows: CoarseNameRow[]; isAdmin:
       <h2 className="mb-2 text-sm font-semibold text-slate-700">Mark a scope as too coarse</h2>
       <p className="mb-2 text-xs text-slate-500">
         {isAdmin
-          ? "List the finer scopes an activity should really be tracked as, comma-separated. Every activity with that name gets flagged. Mark a name not coarse to drop it from this list on every project and future import."
+          ? "List the finer scopes an activity should really be tracked as, comma-separated. Every activity with that name gets flagged. Mark a name not coarse to drop it from this list on every project and future import. Names you give finer scopes move to Split rules below and are split from Data Health."
           : "Only an admin can mark scopes as coarse."}
       </p>
       {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
@@ -84,11 +87,12 @@ export function CoarsePanel({ rows, isAdmin }: { rows: CoarseNameRow[]; isAdmin:
         {reviewedCount > 0 && (
           <label className="flex items-center gap-1">
             <input type="checkbox" checked={showReviewed} onChange={(e) => setShowReviewed(e.target.checked)} />
-            Show {reviewedCount} marked not coarse
+            Show {reviewedCount} already reviewed
           </label>
         )}
       </p>
-      <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
+      {matches.length === 0 && <p className="mb-2 text-sm text-slate-500">Nothing left to review.</p>}
+      <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white empty:hidden">
         {matches.slice(0, limit).map((r) => (
           <li key={r.name} className="px-3 py-3">
             <div className="flex items-center justify-between gap-3">
