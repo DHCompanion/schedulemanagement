@@ -57,11 +57,14 @@ export function injectSplits(doc: AnyRec, splits: SplitForExport[]): AnyRec {
   const project = doc.Project as AnyRec | undefined;
   const tasksNode = project?.Tasks as AnyRec | undefined;
   if (!tasksNode) return doc;
-  let tasks = asArray(tasksNode.Task);
+  const tasks = asArray(tasksNode.Task);
+  const firstId = Number(tasks[0]?.ID) || 0;
+  let applied = false;
 
   for (const split of splits) {
     const coarseIndex = tasks.findIndex((t) => Number(t.UID) === split.coarseExternalUid);
     if (coarseIndex === -1) continue;
+    applied = true;
     const coarsePredecessors = asArray(tasks[coarseIndex].PredecessorLink);
 
     const newTasks = split.finerScopes.map((name, i) => buildNewTask(split, name, split.mintedUids[i], i, coarsePredecessors));
@@ -81,6 +84,12 @@ export function injectSplits(doc: AnyRec, splits: SplitForExport[]): AnyRec {
       t.PredecessorLink = rebuilt.length === 1 ? rebuilt[0] : rebuilt;
     }
   }
+
+  // MS Project places rows by <ID>, not document order. The minted tasks carry
+  // their UID as ID — past the end of the sheet — so without this they open at
+  // the bottom, outside their WBS parent, behind a run of blank rows as long as
+  // the gap. Links reference UID, never ID, so renumbering is safe.
+  if (applied) tasks.forEach((t, i) => { t.ID = String(firstId + i); });
 
   tasksNode.Task = tasks;
   dropAssignmentsForRemovedTasks(project, new Set(splits.map((s) => s.coarseExternalUid)));
