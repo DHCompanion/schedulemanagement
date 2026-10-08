@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import { isAdminSession } from "@/lib/adminSession";
 import { applyDictionary } from "@/lib/normalize/normalizationService";
 import { getCompleteness } from "@/lib/completeness/completenessService";
-import { getSplitRules } from "@/lib/completeness/splitRuleService";
+import { getNotCoarseNames, getSplitRules } from "@/lib/completeness/splitRuleService";
+import { normalizeName } from "@/lib/normalize/normalizeName";
 import { getDataHealthCounts } from "@/lib/health/dataHealthCounts";
 import { DictionaryPanel, type MappedRow } from "@/components/DictionaryPanel";
 import { CoarsePanel } from "@/components/CoarsePanel";
@@ -46,6 +47,10 @@ export default async function AdminPage(props: { params: Promise<{ id: string }>
   ].sort((a, b) => a.canonicalScope.localeCompare(b.canonicalScope));
 
   const completeness = await getCompleteness(project.id);
+  // Merged here rather than inside getCompleteness: that read also backs Data
+  // Health and split acceptance, which have no use for the reviewed marks.
+  const notCoarse = await getNotCoarseNames();
+  const coarseRows = completeness.names.map((n) => ({ ...n, notCoarse: notCoarse.has(normalizeName(n.name)) }));
   const splitRules: SplitRuleRow[] = [...(await getSplitRules()).entries()].map(([coarseScope, finerScopes]) => ({ coarseScope, finerScopes }));
   const dataCounts = await getDataHealthCounts(project.id);
 
@@ -60,7 +65,7 @@ export default async function AdminPage(props: { params: Promise<{ id: string }>
       <div className="space-y-4">
         <div className="rounded border border-slate-200 bg-white p-4">
           <h1 className="mb-3 font-medium">Task Granularity rules</h1>
-          {completeness.hasImport && <CoarsePanel rows={completeness.names} isAdmin />}
+          {completeness.hasImport && <CoarsePanel rows={coarseRows} isAdmin />}
           <div className="mt-6">
             <SplitRulesPanel rules={splitRules} isAdmin />
           </div>

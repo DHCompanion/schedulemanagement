@@ -57,3 +57,32 @@ describe("CoarsePanel", () => {
     expect(screen.getByText("Hang Drywall")).toBeTruthy();
   });
 });
+
+describe("CoarsePanel not-coarse marks", () => {
+  const mixed = [
+    { name: "Punchlist", count: 2, finerScopes: [] },
+    { name: "Final Clean", count: 1, finerScopes: [], notCoarse: true },
+    { name: "MEP OH Rough-In", count: 8, finerScopes: ["Electrical Rough"] },
+  ];
+
+  it("hides reviewed names until asked, and offers no mark on a name with a rule", () => {
+    render(<CoarsePanel rows={mixed} isAdmin />);
+    expect(screen.queryByText("Final Clean")).toBeNull();
+    expect(screen.getAllByText("Not coarse")).toHaveLength(1); // Punchlist only
+    fireEvent.click(screen.getByLabelText(/Show 1 marked not coarse/));
+    expect(screen.getByText("Final Clean")).toBeTruthy();
+    expect(screen.getByText("Undo not coarse")).toBeTruthy();
+  });
+
+  it("posts the mark and deletes it on undo", async () => {
+    const { calls } = stubFetch({ ok: true });
+    render(<CoarsePanel rows={mixed} isAdmin />);
+    fireEvent.click(screen.getByText("Not coarse"));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]).toMatchObject({ url: "/api/completeness/not-coarse", method: "POST", body: { name: "Punchlist" } });
+    fireEvent.click(screen.getByLabelText(/Show 1 marked not coarse/));
+    fireEvent.click(screen.getByText("Undo not coarse"));
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(calls[1]).toMatchObject({ method: "DELETE", body: { name: "Final Clean" } });
+  });
+});
