@@ -65,13 +65,15 @@ describe("CoarsePanel not-coarse marks", () => {
     { name: "MEP OH Rough-In", count: 8, finerScopes: ["Electrical Rough"] },
   ];
 
-  it("hides reviewed names until asked, and offers no mark on a name with a rule", () => {
+  it("hides decided names — not coarse or already given a rule — until asked", () => {
     render(<CoarsePanel rows={mixed} isAdmin />);
     expect(screen.queryByText("Final Clean")).toBeNull();
-    expect(screen.getAllByText("Not coarse")).toHaveLength(1); // Punchlist only
-    fireEvent.click(screen.getByLabelText(/Show 1 marked not coarse/));
+    expect(screen.queryByText("MEP OH Rough-In")).toBeNull();
+    fireEvent.click(screen.getByLabelText(/Show 2 already reviewed/));
     expect(screen.getByText("Final Clean")).toBeTruthy();
+    expect(screen.getByText("MEP OH Rough-In")).toBeTruthy();
     expect(screen.getByText("Undo not coarse")).toBeTruthy();
+    expect(screen.getAllByText("Not coarse")).toHaveLength(1); // Punchlist only — never on a name with a rule
   });
 
   it("posts the mark and deletes it on undo", async () => {
@@ -80,7 +82,7 @@ describe("CoarsePanel not-coarse marks", () => {
     fireEvent.click(screen.getByText("Not coarse"));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]).toMatchObject({ url: "/api/completeness/not-coarse", method: "POST", body: { name: "Punchlist" } });
-    fireEvent.click(screen.getByLabelText(/Show 1 marked not coarse/));
+    fireEvent.click(screen.getByLabelText(/Show 2 already reviewed/));
     fireEvent.click(screen.getByText("Undo not coarse"));
     await waitFor(() => expect(calls).toHaveLength(2));
     expect(calls[1]).toMatchObject({ method: "DELETE", body: { name: "Final Clean" } });
