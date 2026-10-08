@@ -144,3 +144,22 @@ describe("assignments referencing a replaced task", () => {
     expect(() => injectSplits(d, [split])).not.toThrow();
   });
 });
+
+describe("injectSplits row numbering", () => {
+  // MS Project places rows by <ID>, not by document order: a gap in the IDs
+  // opens as that many blank rows, and an ID past the end drops the task to the
+  // bottom of the sheet, outside its WBS parent.
+  it("renumbers ID contiguously in document order after a split", () => {
+    const d = doc();
+    tasks(d).forEach((t, i) => { t.ID = String(i); });
+    injectSplits(d, [split]);
+    expect(tasks(d).map((t) => t.ID)).toEqual(["0", "1", "2", "3"]);
+  });
+
+  it("leaves IDs alone when no split applies", () => {
+    const d = doc();
+    tasks(d).forEach((t, i) => { t.ID = String(i * 5); });
+    injectSplits(d, [{ ...split, coarseExternalUid: 999 }]);
+    expect(tasks(d).map((t) => t.ID)).toEqual(["0", "5", "10"]);
+  });
+});
