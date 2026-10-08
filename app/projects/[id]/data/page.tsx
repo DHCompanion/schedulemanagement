@@ -4,13 +4,12 @@ import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import { appPath } from "@/lib/http";
-import { SESSION_COOKIE } from "@/lib/auth";
-import { SCOPE_COOKIE, isAdminFromCookies, readScope } from "@/lib/scope";
+import { SCOPE_COOKIE, readScope } from "@/lib/scope";
+import { isAdminSession } from "@/lib/adminSession";
 import { applyDictionary, getKnownScopes, getDictionary } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { suggestScopes } from "@/lib/normalize/suggestScopes";
 import { getCompleteness } from "@/lib/completeness/completenessService";
-import { getSplitRules } from "@/lib/completeness/splitRuleService";
 import {
   getTradeDictionary,
   getProjectDisciplines,
@@ -21,13 +20,9 @@ import {
 import { applyTradeDictionaryWith } from "@/lib/trades/applyTradeDictionary";
 import { getTradeDrift } from "@/lib/trades/tradeDrift";
 import { NormalizePanel, type UnmappedRow } from "@/components/NormalizePanel";
-import { DictionaryPanel, type MappedRow } from "@/components/DictionaryPanel";
 import { CompletenessIssuesTable } from "@/components/CompletenessIssuesTable";
-import { CoarsePanel } from "@/components/CoarsePanel";
-import { SplitRulesPanel, type SplitRuleRow } from "@/components/SplitRulesPanel";
 import { TradesPanel, type DisciplineRow, type AssignmentRow } from "@/components/TradesPanel";
 import { ProjectTabs } from "@/components/ProjectTabs";
-import { ResetProjectButton } from "@/components/ResetProjectButton";
 
 export const dynamic = "force-dynamic";
 
@@ -63,11 +58,7 @@ export default async function DataHealthPage(
 
   const jar = await cookies();
   const nowSeconds = Math.floor(Date.now() / 1000);
-  const adminSession = await isAdminFromCookies(
-    jar.get(SESSION_COOKIE)?.value,
-    jar.get(SCOPE_COOKIE)?.value,
-    nowSeconds
-  );
+  const adminSession = await isAdminSession();
   // The toolLevel Connect handed down, shown verbatim, so a launched session
   // can confirm what the OS resolved without guessing at the footer below.
   const scope = await readScope(jar.get(SCOPE_COOKIE)?.value, nowSeconds);
@@ -85,19 +76,9 @@ export default async function DataHealthPage(
     count: nameCounts.get(name) ?? 1,
     suggestions: suggestScopes(name, knownScopes),
   }));
-  const mappedRows: MappedRow[] = [
-    ...new Map(
-      mapped.map(({ activity, canonicalScope }) => {
-        const rawName = activity.name.trim();
-        return [rawName, { rawName, canonicalScope, count: nameCounts.get(rawName) ?? 1 }] as const;
-      })
-    ).values(),
-  ].sort((a, b) => a.canonicalScope.localeCompare(b.canonicalScope));
 
   // --- Task Granularity (moved verbatim from completeness/page.tsx) ---
   const completeness = await getCompleteness(project.id);
-  const splitRulesMap = await getSplitRules();
-  const splitRules: SplitRuleRow[] = [...splitRulesMap.entries()].map(([coarseScope, finerScopes]) => ({ coarseScope, finerScopes }));
 
   // --- Trades (moved verbatim from trades/page.tsx) ---
   const scopeDict = await getDictionary();
@@ -144,7 +125,7 @@ export default async function DataHealthPage(
 
   return (
     <main className="mx-auto max-w-screen-2xl p-4 sm:p-6">
-      <ProjectTabs projectId={project.id} active="data" dataBadge={badge} />
+      <ProjectTabs projectId={project.id} active="data" dataBadge={badge} isAdmin={adminSession} />
 
       {searchParams.wizard === "1" && !project.onboardingCompletedAt && (
         <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm">
@@ -191,14 +172,6 @@ export default async function DataHealthPage(
             ) : (
               <CompletenessIssuesTable projectId={project.id} issues={completeness.issues} />
             )}
-            {completeness.hasImport && (
-              <div className="mt-6">
-                <CoarsePanel rows={completeness.names} isAdmin={adminSession} />
-              </div>
-            )}
-            <div className="mt-6">
-              <SplitRulesPanel rules={splitRules} isAdmin={adminSession} />
-            </div>
           </Section>
 
           <Section title="Task Naming" count={namingRows.length}>
@@ -207,11 +180,6 @@ export default async function DataHealthPage(
               <p className="text-slate-500">All activity names are mapped.</p>
             ) : (
               <NormalizePanel rows={namingRows} knownScopes={knownScopes} />
-            )}
-            {mappedRows.length > 0 && (
-              <div className="mt-6">
-                <DictionaryPanel rows={mappedRows} isAdmin={adminSession} />
-              </div>
             )}
           </Section>
 
@@ -230,12 +198,6 @@ export default async function DataHealthPage(
             />
           </Section>
         </>
-      )}
-
-      {adminSession && (
-        <div className="mt-8 border-t border-slate-200 pt-4">
-          <ResetProjectButton projectId={project.id} projectName={project.name} />
-        </div>
       )}
 
       {scope && (
