@@ -163,3 +163,26 @@ describe("injectSplits row numbering", () => {
     expect(tasks(d).map((t) => t.ID)).toEqual(["0", "5", "10"]);
   });
 });
+
+describe("injectSplits progress", () => {
+  it("carries the coarse task's completion onto every finer task, before its links", () => {
+    const d = doc();
+    Object.assign(tasks(d)[1], { PercentComplete: "100", ActualStart: "2026-03-02T08:00:00", ActualFinish: "2026-03-09T17:00:00" });
+    injectSplits(d, [split]);
+    for (const uid of ["101", "102"]) {
+      const t = tasks(d).find((x) => x.UID === uid);
+      expect(t.PercentComplete).toBe("100");
+      expect(t.ActualStart).toBe("2026-03-02T08:00:00");
+      expect(t.ActualFinish).toBe("2026-03-09T17:00:00");
+      const keys = Object.keys(t);
+      expect(keys.indexOf("Summary")).toBeLessThan(keys.indexOf("PercentComplete"));
+      expect(keys.indexOf("ActualFinish")).toBeLessThan(keys.indexOf("PredecessorLink"));
+    }
+  });
+
+  it("adds no progress fields when the coarse task had none", () => {
+    const d = doc();
+    injectSplits(d, [split]);
+    expect(tasks(d).find((x) => x.UID === "101")).not.toHaveProperty("PercentComplete");
+  });
+});

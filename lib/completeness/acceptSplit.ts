@@ -1,8 +1,33 @@
-import { Prisma, type ScheduleImport, type CompletenessSplit } from "@prisma/client";
+import { Prisma, type Activity, type ScheduleImport, type CompletenessSplit } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { canonicalActivityKey as buildCanonicalActivityKey } from "@/lib/msp/canonicalKey";
 import { getSplitRules } from "@/lib/completeness/splitRuleService";
 import { getCompleteness } from "@/lib/completeness/completenessService";
+
+type CoarseProgress = Pick<
+  Activity,
+  "durationMinutes" | "actualStart" | "actualFinish" | "actualDurationMinutes" | "remainingDurationMinutes" | "percentComplete" | "percentWorkComplete"
+>;
+
+/**
+ * A split changes how work is tracked, not how much of it is done: each finer
+ * activity starts with the coarse one's progress. Without this a coarse activity
+ * imported as complete came back as N not-started ones.
+ *
+ * ponytail: partial progress is copied evenly — a coarse task at 50% yields
+ * finer tasks each at 50%. The file cannot say which trade is further along;
+ * the next progress update corrects it per activity.
+ */
+export function inheritedProgress(coarse: CoarseProgress) {
+  return {
+    actualStart: coarse.actualStart,
+    actualFinish: coarse.actualFinish,
+    actualDurationMinutes: coarse.actualDurationMinutes,
+    remainingDurationMinutes: coarse.remainingDurationMinutes ?? coarse.durationMinutes,
+    percentComplete: coarse.percentComplete ?? 0,
+    percentWorkComplete: coarse.percentWorkComplete,
+  };
+}
 
 export async function acceptSplit(
   projectId: string,
@@ -199,8 +224,7 @@ export async function acceptSplit(
             plannedFinish: coarse.plannedFinish,
             durationMinutes: coarse.durationMinutes,
             durationDays: coarse.durationDays,
-            remainingDurationMinutes: coarse.durationMinutes,
-            percentComplete: 0,
+            ...inheritedProgress(coarse),
             calendarExternalUid: coarse.calendarExternalUid,
           };
         }),
