@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
-import { applyDictionaryWith, confirmMapping, getDictionary, getKnownScopes, applyDictionary } from "@/lib/normalize/normalizationService";
+import { applyDictionaryWith, buildDictionary, confirmMapping, getDictionary, getKnownScopes, applyDictionary } from "@/lib/normalize/normalizationService";
 
 describe("applyDictionaryWith (pure)", () => {
   it("splits mapped vs distinct unmapped names", () => {
@@ -12,6 +12,22 @@ describe("applyDictionaryWith (pure)", () => {
     expect(res.mapped.length).toBe(2);
     expect(res.mapped[0].canonicalScope).toBe("Electrical Rough-In");
     expect(res.unmappedNames).toEqual(["Mystery Task"]); // deduped
+  });
+});
+
+describe("buildDictionary (pure)", () => {
+  it("maps a standard scope's own name to itself", () => {
+    const dict = buildDictionary([{ normalizedName: "plumbing oh r/i", canonicalScope: "Plumbing Overhead Rough-In" }]);
+    const res = applyDictionaryWith([{ name: "Plumbing Overhead Rough-In" }], dict);
+    expect(res.unmappedNames).toEqual([]);
+    expect(res.mapped[0].canonicalScope).toBe("Plumbing Overhead Rough-In");
+  });
+  it("lets an explicit entry win over the implied one", () => {
+    const dict = buildDictionary([
+      { normalizedName: "demo", canonicalScope: "Selective Demolition" },
+      { normalizedName: "tear out", canonicalScope: "Demo" },
+    ]);
+    expect(dict.get("demo")).toBe("Selective Demolition");
   });
 });
 

@@ -21,9 +21,23 @@ export function applyDictionaryWith<A extends ActivityName>(activities: A[], dic
   return { mapped, unmappedNames: [...unmapped] };
 }
 
+/**
+ * A standard scope is itself a standard name: an activity literally called
+ * "Plumbing Overhead Rough-In" needs no entry to map to that scope. Without
+ * this, such a name — typically one minted by an accepted split — showed up for
+ * review with itself as the suggestion. An explicit entry still wins.
+ */
+export function buildDictionary(rows: { normalizedName: string; canonicalScope: string }[]): Map<string, string> {
+  const dict = new Map(rows.map((r) => [r.normalizedName, r.canonicalScope]));
+  for (const r of rows) {
+    const self = normalizeName(r.canonicalScope);
+    if (!dict.has(self)) dict.set(self, r.canonicalScope);
+  }
+  return dict;
+}
+
 export async function getDictionary(): Promise<Map<string, string>> {
-  const rows = await prisma.scopeDictionaryEntry.findMany();
-  return new Map(rows.map((r) => [r.normalizedName, r.canonicalScope]));
+  return buildDictionary(await prisma.scopeDictionaryEntry.findMany());
 }
 
 export async function applyDictionary<A extends ActivityName>(activities: A[]): Promise<ApplyResult<A>> {
