@@ -15,6 +15,13 @@ describe("ProjectTabs", () => {
     expect(links[1].getAttribute("href")).toBe("/projects/p1/data");
     expect(screen.getByText("14")).toBeTruthy();
   });
+  it("shows the Admin tab only to admins", () => {
+    render(<ProjectTabs projectId="p1" active="data" dataBadge={0} />);
+    expect(screen.queryByText("Admin")).toBeNull();
+    cleanup();
+    render(<ProjectTabs projectId="p1" active="admin" dataBadge={0} isAdmin />);
+    expect(screen.getByText("Admin").getAttribute("href")).toBe("/projects/p1/admin");
+  });
   it("hides the badge at zero", () => {
     render(<ProjectTabs projectId="p1" active="data" dataBadge={0} />);
     expect(screen.queryByText("0")).toBeNull();

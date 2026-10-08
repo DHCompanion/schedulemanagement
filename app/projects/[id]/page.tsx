@@ -7,6 +7,7 @@ import { refreshProcurementRiskIfStale } from "@/lib/procurement/refresh";
 import { getScheduleData } from "@/lib/schedule/scheduleRows";
 import { getDataHealthCounts } from "@/lib/health/dataHealthCounts";
 import { ProjectTabs } from "@/components/ProjectTabs";
+import { isAdminSession } from "@/lib/adminSession";
 import { StatStrip } from "@/components/StatStrip";
 import { ExportMenu } from "@/components/ExportMenu";
 
@@ -38,7 +39,7 @@ export default async function ProjectPage(props: {
 
   return (
     <main className="mx-auto max-w-screen-2xl p-4 sm:p-6">
-      <ProjectTabs projectId={project.id} active="schedule" dataBadge={dataCounts.total} />
+      <ProjectTabs projectId={project.id} active="schedule" dataBadge={dataCounts.total} isAdmin={await isAdminSession()} />
 
       {!schedule ? (
         <p className="text-slate-500">
