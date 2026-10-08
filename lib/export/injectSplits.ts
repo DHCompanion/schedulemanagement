@@ -30,7 +30,13 @@ function asArray(v: unknown): AnyRec[] {
 // Out-of-order children are tolerated when the file is opened as a new project
 // but not when it is merged into an existing one, which is why this survived
 // undetected: opening looked perfectly fine.
-function buildNewTask(split: SplitForExport, name: string, uid: number, index: number, predecessors: AnyRec[]): AnyRec {
+// Progress fields the finer tasks take from the coarse <Task> they replace, in
+// MSPDI sequence order (they sit between Summary and PredecessorLink). Read
+// from the uploaded file itself, so a coarse task that came in complete goes
+// back out as complete finer tasks.
+const PROGRESS_FIELDS = ["PercentComplete", "PercentWorkComplete", "ActualStart", "ActualFinish", "ActualDuration", "RemainingDuration"] as const;
+
+function buildNewTask(split: SplitForExport, name: string, uid: number, index: number, predecessors: AnyRec[], coarseTask: AnyRec): AnyRec {
   const task: AnyRec = {
     UID: String(uid),
     ID: String(uid),
@@ -47,6 +53,9 @@ function buildNewTask(split: SplitForExport, name: string, uid: number, index: n
   if (duration) task.Duration = duration;
   task.Milestone = "0";
   task.Summary = "0";
+  for (const field of PROGRESS_FIELDS) {
+    if (coarseTask[field] !== undefined) task[field] = coarseTask[field];
+  }
   if (predecessors.length === 1) task.PredecessorLink = { ...predecessors[0] };
   else if (predecessors.length > 1) task.PredecessorLink = predecessors.map((p) => ({ ...p }));
   return task;
@@ -67,7 +76,7 @@ export function injectSplits(doc: AnyRec, splits: SplitForExport[]): AnyRec {
     applied = true;
     const coarsePredecessors = asArray(tasks[coarseIndex].PredecessorLink);
 
-    const newTasks = split.finerScopes.map((name, i) => buildNewTask(split, name, split.mintedUids[i], i, coarsePredecessors));
+    const newTasks = split.finerScopes.map((name, i) => buildNewTask(split, name, split.mintedUids[i], i, coarsePredecessors, tasks[coarseIndex]));
     tasks.splice(coarseIndex, 1, ...newTasks);
 
     for (const t of tasks) {
