@@ -347,6 +347,15 @@ model ScopeSplitRule {
   @@index([coarseScope])
 }
 
+// Names an admin has reviewed and decided are fine as they are. Global, like
+// the split rules. It only trims the admin "mark a scope as too coarse" list:
+// a split rule on the same name still flags it.
+model ScopeNotCoarse {
+  normalizedName String   @id
+  personId       Int?
+  createdAt      DateTime @default(now())
+}
+
 model CompletenessDismissal {
   id                   String   @id @default(cuid())
   projectId            String

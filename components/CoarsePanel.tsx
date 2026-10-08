@@ -8,6 +8,8 @@ export interface CoarseNameRow {
   name: string;
   count: number;
   finerScopes: string[];
+  /** Reviewed by an admin and judged fine as it is; hidden unless asked for. */
+  notCoarse?: boolean;
 }
 
 const PAGE = 50;
@@ -19,11 +21,26 @@ export function CoarsePanel({ rows, isAdmin }: { rows: CoarseNameRow[]; isAdmin:
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showReviewed, setShowReviewed] = useState(false);
+  const reviewedCount = rows.filter((r) => r.notCoarse).length;
 
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return needle ? rows.filter((r) => r.name.toLowerCase().includes(needle)) : rows;
-  }, [rows, q]);
+    const pool = showReviewed ? rows : rows.filter((r) => !r.notCoarse);
+    return needle ? pool.filter((r) => r.name.toLowerCase().includes(needle)) : pool;
+  }, [rows, q, showReviewed]);
+
+  async function setNotCoarse(name: string, notCoarse: boolean) {
+    setBusy(true);
+    setError(null);
+    const err = await sendJson("/api/completeness/not-coarse", { name }, notCoarse ? "POST" : "DELETE");
+    setBusy(false);
+    if (err) {
+      setError(err);
+      return;
+    }
+    router.refresh();
+  }
 
   async function save() {
     setBusy(true);
@@ -52,7 +69,7 @@ export function CoarsePanel({ rows, isAdmin }: { rows: CoarseNameRow[]; isAdmin:
       <h2 className="mb-2 text-sm font-semibold text-slate-700">Mark a scope as too coarse</h2>
       <p className="mb-2 text-xs text-slate-500">
         {isAdmin
-          ? "List the finer scopes an activity should really be tracked as, comma-separated. Every activity with that name gets flagged."
+          ? "List the finer scopes an activity should really be tracked as, comma-separated. Every activity with that name gets flagged. Mark a name not coarse to drop it from this list on every project and future import."
           : "Only an admin can mark scopes as coarse."}
       </p>
       {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
@@ -62,16 +79,32 @@ export function CoarsePanel({ rows, isAdmin }: { rows: CoarseNameRow[]; isAdmin:
         placeholder="Search activity names"
         className="mb-2 w-full rounded border border-slate-300 px-3 py-2 text-sm"
       />
-      <p className="mb-2 text-xs text-slate-500">
-        {matches.length} distinct name{matches.length === 1 ? "" : "s"} in this schedule
+      <p className="mb-2 flex flex-wrap items-center gap-x-4 text-xs text-slate-500">
+        <span>{matches.length} distinct name{matches.length === 1 ? "" : "s"} {showReviewed ? "in this schedule" : "to review"}</span>
+        {reviewedCount > 0 && (
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={showReviewed} onChange={(e) => setShowReviewed(e.target.checked)} />
+            Show {reviewedCount} marked not coarse
+          </label>
+        )}
       </p>
       <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
         {matches.slice(0, limit).map((r) => (
           <li key={r.name} className="px-3 py-3">
             <div className="flex items-center justify-between gap-3">
               <span className="font-medium">{r.name}</span>
-              <span className="whitespace-nowrap text-xs text-slate-400">
+              <span className="flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-slate-400">
                 {r.count} activit{r.count === 1 ? "y" : "ies"}
+                {/* No "Not coarse" on a name that carries a split rule — the rule says otherwise. */}
+                {isAdmin && (r.notCoarse || r.finerScopes.length === 0) && (
+                  <button
+                    disabled={busy}
+                    onClick={() => setNotCoarse(r.name, !r.notCoarse)}
+                    className="rounded border border-slate-300 px-2 py-1 font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    {r.notCoarse ? "Undo not coarse" : "Not coarse"}
+                  </button>
+                )}
               </span>
             </div>
             {r.finerScopes.length > 0 && (
