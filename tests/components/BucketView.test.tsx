@@ -57,7 +57,7 @@ describe("BucketView", () => {
   it("tapping a card opens the shared detail", () => {
     let opened = "";
     render(<BucketView rows={[brow()]} asOfIso={asOf} openId={null} onToggleOpen={(id) => { opened = id; }} />);
-    fireEvent.click(screen.getByText("Overhead MEP Rough-In"));
+    fireEvent.click(screen.getByText("MEP R/I L2"));
     expect(opened).toBe("a1");
   });
 });

@@ -17,8 +17,9 @@ export interface TimelineItem {
 }
 
 const LEFT_COL = "48%";
-// Two fixed date columns live inside the left region (name flexes to fill the rest).
+// Fixed duration + date columns live inside the left region (name flexes to fill the rest).
 const DATE_CELL = "w-[74px] shrink-0 px-1 text-right text-xs tabular-nums";
+const DUR_CELL = "w-[48px] shrink-0 px-1 text-right text-xs tabular-nums";
 
 function fmtDate(iso: string | null): string {
   return iso ? fmtShortDate(iso) : "—";
@@ -141,6 +142,7 @@ export function TimelineView({
       <div className="relative flex border-b-2 border-slate-200 text-[10px] text-slate-500">
         <div className="flex shrink-0 items-center py-1 font-medium" style={{ width: LEFT_COL }}>
           <span className="flex-1 px-3">Activity</span>
+          <span className={DUR_CELL}>Dur</span>
           <span className={DATE_CELL}>Start</span>
           <span className={DATE_CELL}>Finish</span>
         </div>
@@ -204,7 +206,7 @@ export function TimelineView({
           ) : null;
 
           return (
-            <li key={a.id} className={`relative ${highlightUids.has(a.externalUid) ? "bg-amber-50 ring-1 ring-inset ring-amber-300" : ""}`}>
+            <li key={a.id} className={`relative ${highlightUids.has(a.externalUid) ? "bg-amber-50 ring-1 ring-inset ring-amber-300" : a.atRisk ? "bg-amber-100" : ""}`}>
               <div className="flex items-stretch">
                 <div className="flex shrink-0 items-stretch" style={{ width: LEFT_COL }}>
                   <button
@@ -213,12 +215,9 @@ export function TimelineView({
                     style={{ paddingLeft: 10 + (a.outlineLevel - 1) * 12 }}
                   >
                     <span className="mr-2 text-xs text-slate-400">{a.wbsCode}</span>
-                    <span className={a.isCritical ? "font-medium text-red-700" : "font-medium"}>{a.canonicalScope ?? a.name}</span>
+                    <span className={a.isCritical ? "font-medium text-red-700" : "font-medium"}>{a.name}</span>
                     {a.canonicalScope && a.canonicalScope !== a.name && (
-                      <span className="ml-2 text-xs text-slate-400">{a.name}</span>
-                    )}
-                    {!isMilestone && a.durationDays !== null && (
-                      <span className="ml-2 whitespace-nowrap text-xs text-slate-400">{fmtDur(a.durationDays)}</span>
+                      <span className="ml-2 text-xs text-slate-400">{a.canonicalScope}</span>
                     )}
                     {isMilestone && <span className="ml-2 text-xs text-indigo-600">◆</span>}
                     {a.percentComplete === 100 && (
@@ -228,11 +227,14 @@ export function TimelineView({
                       <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">AT RISK</span>
                     )}
                   </button>
-                  <span className={`${DATE_CELL} flex items-center justify-end py-1.5 text-slate-500`}>
+                  <span className={`${DUR_CELL} flex items-center justify-end py-1.5 font-semibold text-black`}>
+                    {!isMilestone && a.durationDays !== null ? fmtDur(a.durationDays) : null}
+                  </span>
+                  <span className={`${DATE_CELL} flex items-center justify-end py-1.5 font-semibold text-black`}>
                     {isMilestone ? null : rosWarning}
                     {fmtDate(rowStart)}
                   </span>
-                  <span className={`${DATE_CELL} flex items-center justify-end py-1.5 text-slate-500`}>
+                  <span className={`${DATE_CELL} flex items-center justify-end py-1.5 font-semibold text-black`}>
                     {isMilestone ? rosWarning : null}
                     {fmtDate(rowFinish)}
                   </span>
