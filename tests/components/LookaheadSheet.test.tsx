@@ -95,4 +95,17 @@ describe("lookaheadCss", () => {
     expect(lookaheadCss("tabloid")).toContain("break-inside: avoid");
     expect(lookaheadCss("tabloid")).toContain("print-color-adjust: exact");
   });
+  it("leads the band with the trade partner and tints at-risk rows", () => {
+    const base = view();
+    const row = base.bands[0].rows[0];
+    const { container } = render(
+      <LookaheadSheet projectName="P" view={{ ...base, bands: [{ ...base.bands[0], rows: [row, { ...row, id: "a2", atRisk: false }] }] }} />,
+    );
+    const hd = container.querySelector(".band-hd")!;
+    expect(hd.firstElementChild!.className).toBe("band-partners");
+    expect(hd.textContent).toBe("TDIndustriesMechanical");
+    const rows = container.querySelectorAll(".row");
+    expect(rows[0].classList.contains("at-risk")).toBe(true);
+    expect(rows[1].classList.contains("at-risk")).toBe(false);
+  });
 });

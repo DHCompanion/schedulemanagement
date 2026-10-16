@@ -92,11 +92,11 @@ export function LookaheadSheet({ view, projectName }: { view: LookaheadView; pro
                 data-band={band.trade}
                 style={{ background: band.color.bg, color: band.color.text }}
               >
+                {band.partners.length > 0 && <span className="band-partners">{band.partners.join(" · ")}</span>}
                 <span>{band.trade}</span>
-                <span className="band-partners">{band.partners.join(" · ")}</span>
               </div>
               {band.rows.map((r) => (
-                <div key={r.id} className="row">
+                <div key={r.id} className={r.atRisk ? "row at-risk" : "row"}>
                   <div className="row-name">
                     <span className={r.isCritical ? "crit" : undefined}>{r.name}</span>
                     {r.secondaryName && <span className="alt">{r.secondaryName}</span>}

@@ -36,15 +36,18 @@ export function lookaheadCss(size: "tabloid" | "letter"): string {
 .axis-time { position: relative; flex: 1; height: 14px; }
 .axis-time span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
 .band { break-inside: avoid; margin-top: 8px; }
-.band-hd { display: flex; justify-content: space-between; gap: 12px; padding: 3px 6px; font-weight: 700; border-radius: 3px 3px 0 0; }
-.band-partners { font-weight: 400; font-size: 9px; }
+.band-hd { display: flex; align-items: baseline; gap: 10px; padding: 3px 6px; font-weight: 700; border-radius: 3px 3px 0 0; }
+.band-partners { font-size: 13px; font-weight: 800; }
+.band-partners::after { content: "·"; margin-left: 10px; font-weight: 400; }
 .row { display: flex; align-items: stretch; border-bottom: 1px solid #e2e8f0; break-inside: avoid; }
 .row-name { flex: 0 0 26%; padding: 3px 6px; }
 .row-name .alt { color: #94a3b8; font-size: 9px; margin-left: 4px; }
 .row-name .risk { color: #b45309; font-weight: 700; font-size: 9px; margin-left: 4px; }
 .row-name .crit { color: #b91c1c; font-weight: 600; }
+.row.at-risk { background: #fef3c7; }
 .row-time { position: relative; flex: 1; min-height: 16px; }
-.wknd { position: absolute; top: 0; bottom: 0; background: #f1f5f9; }
+/* Translucent so an at-risk row's amber shows through the weekend shading. */
+.wknd { position: absolute; top: 0; bottom: 0; background: rgba(15, 23, 42, .05); }
 .today { position: absolute; top: 0; bottom: 0; width: 1px; background: #0891b2; }
 .bar { position: absolute; top: 5px; height: 8px; border-radius: 2px; background: #67aebf; overflow: hidden; }
 .bar-fill { height: 100%; background: #155e75; }
