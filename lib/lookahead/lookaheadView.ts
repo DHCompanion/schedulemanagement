@@ -1,4 +1,4 @@
-import { resolveWindow, spanPct, pointPct, axisTicks, weekendBands } from "@/lib/schedule/timelineGeometry";
+import { resolveWindow, spanPct, pointPct, axisTicks, gridLines, weekendBands } from "@/lib/schedule/timelineGeometry";
 import type { ScheduleRow } from "@/lib/schedule/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -54,6 +54,7 @@ export interface LookaheadView {
   bands: LookaheadBand[];
   ticks: { leftPct: number; label: string }[];
   weekends: { leftPct: number; widthPct: number }[];
+  grid: { leftPct: number; isMajor: boolean }[];
   todayPct: number | null;
 }
 
@@ -196,6 +197,7 @@ export function buildLookaheadView(input: {
     bands,
     ticks: axisTicks(win),
     weekends: weekendBands(win),
+    grid: gridLines(win),
     todayPct: pointPct(today.toISOString(), win),
   };
 }

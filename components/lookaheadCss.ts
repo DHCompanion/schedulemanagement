@@ -48,6 +48,9 @@ export function lookaheadCss(size: "tabloid" | "letter"): string {
 .row-time { position: relative; flex: 1; min-height: 16px; }
 /* Translucent so an at-risk row's amber shows through the weekend shading. */
 .wknd { position: absolute; top: 0; bottom: 0; background: rgba(15, 23, 42, .05); }
+/* Day lines (Mondays darker) so a bar can be read against the calendar. */
+.gl { position: absolute; top: 0; bottom: 0; width: 1px; background: #cbd5e1; }
+.gl.major { background: #64748b; }
 .today { position: absolute; top: 0; bottom: 0; width: 1px; background: #0891b2; }
 .bar { position: absolute; top: 5px; height: 8px; border-radius: 2px; background: #67aebf; overflow: hidden; }
 .bar-fill { height: 100%; background: #155e75; }
