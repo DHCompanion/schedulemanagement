@@ -105,9 +105,9 @@ describe("attention sentences", () => {
   it("names the procurement flag, the drift cause, and the stale update", () => {
     const v = build(
       [
-        row({ id: "a1", atRisk: true, partnerName: "TDIndustries", canonicalScope: "Overhead MEP",
+        row({ id: "a1", atRisk: true, partnerName: "TDIndustries", name: "Overhead MEP",
               procurement: { itemCount: 9, behindCount: 3, submittalLateCount: 1, projectedLateCount: 2, releasedAtRiskCount: 0, missingDatesCount: 0 } }),
-        row({ id: "a2", canonicalScope: "In-Wall Rough-In", driftDays: 3, pushedByName: "MEP Rough-In",
+        row({ id: "a2", name: "In-Wall Rough-In", driftDays: 3, pushedByName: "MEP Rough-In",
               expectedFinish: "2026-08-12T17:00:00.000Z" }),
       ],
       { lastUpdateDaysAgo: 12 },
@@ -121,8 +121,13 @@ describe("attention sentences", () => {
     expect(build([row()]).attention).toEqual(["Nothing flagged — in-window work is on plan."]);
   });
 
+  it("leads a grid row with the activity's own name, canonical scope second", () => {
+    const r = build([row()]).bands[0].rows[0];
+    expect([r.name, r.secondaryName]).toEqual(["MEP R/I L2", "Overhead MEP Rough-In"]);
+  });
+
   it("attributes unexplained drift to the activity itself", () => {
-    const v = build([row({ canonicalScope: "Slab Pour", driftDays: 2, pushedByName: null, expectedFinish: "2026-08-11T17:00:00.000Z" })]);
+    const v = build([row({ name: "Slab Pour", driftDays: 2, pushedByName: null, expectedFinish: "2026-08-11T17:00:00.000Z" })]);
     expect(v.attention).toContain("Slab Pour is running +2d late.");
   });
 });

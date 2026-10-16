@@ -58,15 +58,19 @@ export interface LookaheadView {
 }
 
 // Print-safe pairs: light fill, dark ink — legible in greyscale too.
+// No amber (that is the at-risk row tint) and only one red-family entry, so
+// two different trades never both read as "red".
 const TRADE_COLORS: TradeColor[] = [
   { bg: "#e0e7ff", text: "#312e81" },
-  { bg: "#fef3c7", text: "#78350f" },
   { bg: "#d1fae5", text: "#064e3b" },
   { bg: "#ffe4e6", text: "#881337" },
   { bg: "#e0f2fe", text: "#0c4a6e" },
   { bg: "#ede9fe", text: "#4c1d95" },
-  { bg: "#fce7f3", text: "#831843" },
   { bg: "#ecfccb", text: "#365314" },
+  { bg: "#99f6e4", text: "#134e4a" },
+  { bg: "#d6d3d1", text: "#292524" },
+  { bg: "#f5d0fe", text: "#701a75" },
+  { bg: "#bfdbfe", text: "#1e3a8a" },
 ];
 const NEUTRAL: TradeColor = { bg: "#f1f5f9", text: "#334155" };
 
@@ -84,10 +88,6 @@ function fmtDay(iso: string | number): string {
 
 function fmtFull(iso: string | number): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-}
-
-function displayName(r: ScheduleRow): string {
-  return r.canonicalScope ?? r.name;
 }
 
 /** "Aug 3–23, 2026" inside one month, "Aug 3–Sep 13, 2026" across two — same shape as bucketLabel. */
@@ -122,8 +122,8 @@ export function buildLookaheadView(input: {
       row: r,
       grid: {
         id: r.id,
-        name: displayName(r),
-        secondaryName: r.canonicalScope && r.canonicalScope !== r.name ? r.name : null,
+        name: r.name,
+        secondaryName: r.canonicalScope && r.canonicalScope !== r.name ? r.canonicalScope : null,
         driftDays: r.driftDays,
         percentComplete: Math.min(100, Math.max(0, r.percentComplete ?? 0)),
         isMilestone,
@@ -167,7 +167,7 @@ export function buildLookaheadView(input: {
   const milestones: LookaheadMilestone[] = rows
     .filter((r) => r.type === "milestone")
     .map((r) => ({
-      name: displayName(r),
+      name: r.name,
       planned: r.plannedFinish ?? r.plannedStart,
       expected: r.expectedFinish ?? r.expectedStart,
       driftDays: r.driftDays,
@@ -212,7 +212,7 @@ function attentionSentences(rows: ScheduleRow[], lastUpdateDaysAgo: number | nul
   for (const r of rows) {
     if (!r.atRisk || !r.partnerName || !r.procurement) continue;
     const e = byPartner.get(r.partnerName) ?? { behind: r.procurement.behindCount, names: [] };
-    e.names.push(displayName(r));
+    e.names.push(r.name);
     byPartner.set(r.partnerName, e);
   }
   for (const [partner, e] of [...byPartner.entries()].sort((a, b) => b[1].behind - a[1].behind)) {
@@ -225,8 +225,8 @@ function attentionSentences(rows: ScheduleRow[], lastUpdateDaysAgo: number | nul
   for (const r of drifting) {
     out.push(
       r.pushedByName
-        ? `${displayName(r)} pushed +${r.driftDays}d by ${r.pushedByName}.`
-        : `${displayName(r)} is running +${r.driftDays}d late.`,
+        ? `${r.name} pushed +${r.driftDays}d by ${r.pushedByName}.`
+        : `${r.name} is running +${r.driftDays}d late.`,
     );
   }
 

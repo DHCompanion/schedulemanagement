@@ -34,13 +34,14 @@ describe("TimelineView", () => {
     expect(screen.getByText("5d")).toBeTruthy(); // duration shown in the left column
     expect(container.querySelectorAll('[data-grid="day"]').length).toBeGreaterThan(0); // day gridlines in a 28-day window
   });
-  it("prefers the canonical name and keeps the raw name muted; AT RISK pill carries over", () => {
-    render(
+  it("leads with the activity's own name, keeps the canonical scope muted, and tints an at-risk row", () => {
+    const { container } = render(
       <TimelineView items={[item(base({ atRisk: true }))]} window={win} todayIso="2026-08-05T00:00:00.000Z" openId={null} onToggleOpen={noop} collapsed={new Set()} onToggleCollapsed={noop} />,
     );
-    expect(screen.getByText("Overhead MEP Rough-In")).toBeTruthy();
-    expect(screen.getByText("MEP R/I L2")).toBeTruthy();
+    expect(screen.getByText("MEP R/I L2").className).toContain("font-medium");
+    expect(screen.getByText("Overhead MEP Rough-In").className).toContain("text-slate-400");
     expect(screen.getByText("AT RISK")).toBeTruthy();
+    expect(container.querySelector("li")!.className).toContain("bg-amber-100");
   });
   it("draws milestones as diamonds, not bars", () => {
     const ms = base({ id: "m1", type: "milestone", durationDays: 0, plannedFinish: "2026-08-03T08:00:00.000Z", expectedFinish: "2026-08-03T08:00:00.000Z", driftDays: 0 });

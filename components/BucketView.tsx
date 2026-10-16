@@ -32,12 +32,12 @@ function driftWords(row: ScheduleRow): string | null {
 function Card({ row, openId, onToggleOpen }: { row: BucketRow; openId: string | null; onToggleOpen(id: string): void }) {
   const words = driftWords(row);
   return (
-    <div className={`mb-2 rounded border border-slate-200 border-l-4 bg-white ${edgeClass(row)}`}>
+    <div className={`mb-2 rounded border border-slate-200 border-l-4 ${row.atRisk ? "bg-amber-100" : "bg-white"} ${edgeClass(row)}`}>
       <button onClick={() => onToggleOpen(row.id)} className="w-full px-3 py-2 text-left">
         <div className="flex items-start justify-between gap-2">
           <span className={`text-sm font-medium ${row.isCritical ? "text-red-700" : "text-slate-900"}`}>
             {row.type === "milestone" && <span className="mr-1 text-indigo-600">◆</span>}
-            {row.canonicalScope ?? row.name}
+            {row.name}
           </span>
           {words ? (
             <span className="whitespace-nowrap text-xs font-semibold text-amber-700">{words}</span>
