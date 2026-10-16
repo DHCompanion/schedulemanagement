@@ -21,6 +21,7 @@ const view = (over: Partial<LookaheadView> = {}): LookaheadView => ({
   }],
   ticks: [{ leftPct: 5, label: "8/3" }],
   weekends: [{ leftPct: 60, widthPct: 9 }],
+  grid: [{ leftPct: 20, isMajor: true }, { leftPct: 25, isMajor: false }],
   todayPct: 12,
   ...over,
 });
@@ -107,5 +108,11 @@ describe("lookaheadCss", () => {
     const rows = container.querySelectorAll(".row");
     expect(rows[0].classList.contains("at-risk")).toBe(true);
     expect(rows[1].classList.contains("at-risk")).toBe(false);
+  });
+  it("draws day lines behind every row, Mondays darker", () => {
+    const { container } = render(<LookaheadSheet view={view()} projectName="P" />);
+    const row = container.querySelector(".row-time")!;
+    expect(row.querySelectorAll(".gl").length).toBe(2);
+    expect(row.querySelectorAll(".gl.major").length).toBe(1);
   });
 });

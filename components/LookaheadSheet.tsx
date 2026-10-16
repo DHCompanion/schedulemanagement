@@ -106,6 +106,9 @@ export function LookaheadSheet({ view, projectName }: { view: LookaheadView; pro
                     {view.weekends.map((w, i) => (
                       <div key={i} className="wknd" style={{ left: `${w.leftPct}%`, width: `${w.widthPct}%` }} />
                     ))}
+                    {view.grid.map((g, i) => (
+                      <div key={`g${i}`} className={g.isMajor ? "gl major" : "gl"} style={{ left: `${g.leftPct}%` }} />
+                    ))}
                     {view.todayPct !== null && <div className="today" style={{ left: `${view.todayPct}%` }} />}
                     {r.bar && (
                       <div
