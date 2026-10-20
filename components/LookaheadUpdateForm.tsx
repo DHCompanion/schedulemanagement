@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { appPath, sendJson } from "@/lib/http";
 
@@ -8,6 +8,8 @@ export interface LookaheadFormRow {
   externalUid: number;
   canonicalActivityKey: string;
   wbsCode: string | null;
+  /** Names of the WBS summary rows above this activity, outermost first. */
+  wbsPath: string[];
   name: string;
   type: string;
   plannedStart: string | null;
@@ -69,7 +71,13 @@ export function LookaheadUpdateForm({
       {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
         {data.map((r, i) => (
-          <li key={r.externalUid} className="px-3 py-3">
+          <Fragment key={r.externalUid}>
+          {r.wbsPath.length > 0 && r.wbsPath.join(" › ") !== data[i - 1]?.wbsPath.join(" › ") && (
+            <li className="bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700" data-testid="wbs-header">
+              {r.wbsPath.join(" › ")}
+            </li>
+          )}
+          <li className="px-3 py-3">
             <div className="flex items-start justify-between gap-3">
               <span>
                 <span className="mr-2 text-xs text-slate-400">{r.wbsCode}</span>
@@ -112,6 +120,7 @@ export function LookaheadUpdateForm({
             </div>
             <input disabled={readOnly} value={r.note} onChange={(e) => patch(i, { note: e.target.value })} placeholder="Note (optional)" className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm" />
           </li>
+          </Fragment>
         ))}
       </ul>
       {!readOnly && (
