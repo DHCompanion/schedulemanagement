@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveCurrentProgress, type FinalizedEntry } from "@/lib/lookahead/currentProgress";
+import { resolveCurrentProgress, carryProgressThroughSplits, type FinalizedEntry } from "@/lib/lookahead/currentProgress";
 
 function entry(p: Partial<FinalizedEntry>): FinalizedEntry {
   return {
@@ -26,5 +26,26 @@ describe("resolveCurrentProgress", () => {
   });
   it("returns an empty map for no entries", () => {
     expect(resolveCurrentProgress([]).size).toBe(0);
+  });
+});
+
+describe("carryProgressThroughSplits", () => {
+  const split = { coarseWbsCode: "3.2", coarseName: "Rough-In MEP", finerScopes: ["Rough Plumbing", "Rough Electrical"] };
+
+  it("gives each finer activity the coarse activity's completed progress", () => {
+    const done = entry({ canonicalActivityKey: "3.2|rough-in mep", status: "complete", percentComplete: 100, actualFinish: new Date("2026-06-05T00:00:00Z") });
+    const map = resolveCurrentProgress(carryProgressThroughSplits([done], [split]));
+    for (const key of ["3.2.1|rough plumbing", "3.2.2|rough electrical"]) {
+      expect(map.get(key)).toMatchObject({ status: "complete", percentComplete: 100, actualFinish: done.actualFinish });
+    }
+  });
+
+  it("lets a later entry on a finer activity win over the carried one", () => {
+    const map = resolveCurrentProgress(carryProgressThroughSplits([
+      entry({ canonicalActivityKey: "3.2|rough-in mep", percentComplete: 50 }),
+      entry({ canonicalActivityKey: "3.2.1|rough plumbing", percentComplete: 90, finalizedAt: new Date("2026-06-08T00:00:00Z") }),
+    ], [split]));
+    expect(map.get("3.2.1|rough plumbing")?.percentComplete).toBe(90);
+    expect(map.get("3.2.2|rough electrical")?.percentComplete).toBe(50);
   });
 });
