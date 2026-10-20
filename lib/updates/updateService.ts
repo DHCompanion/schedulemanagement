@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { toDbDate } from "@/lib/import/commitImport";
-import type { FinalizedEntry } from "@/lib/lookahead/currentProgress";
+import { carryProgressThroughSplits, type FinalizedEntry } from "@/lib/lookahead/currentProgress";
 
 export interface EntryInput {
   activityExternalUid: number;
@@ -82,7 +82,8 @@ export async function getFinalizedEntries(projectId: string): Promise<FinalizedE
     where: { projectId, state: "finalized" },
     include: { entries: true },
   });
-  return updates.flatMap((u) =>
+  const splits = await prisma.completenessSplit.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } });
+  const entries = updates.flatMap((u) =>
     u.entries.map((e) => ({
       canonicalActivityKey: e.canonicalActivityKey,
       finalizedAt: (u.finalizedAt ?? u.updatedAt) as Date,
@@ -92,5 +93,9 @@ export async function getFinalizedEntries(projectId: string): Promise<FinalizedE
       percentComplete: e.percentComplete,
       note: e.note,
     })),
+  );
+  return carryProgressThroughSplits(
+    entries,
+    splits.map((sp) => ({ coarseWbsCode: sp.coarseWbsCode, coarseName: sp.coarseName, finerScopes: sp.finerScopes as string[] })),
   );
 }

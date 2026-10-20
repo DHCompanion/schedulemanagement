@@ -1,6 +1,6 @@
 import { Prisma, type Activity, type ScheduleImport, type CompletenessSplit } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { canonicalActivityKey as buildCanonicalActivityKey } from "@/lib/msp/canonicalKey";
+import { finerActivityKey } from "@/lib/msp/canonicalKey";
 import { getSplitRules } from "@/lib/completeness/splitRuleService";
 import { getCompleteness } from "@/lib/completeness/completenessService";
 
@@ -213,7 +213,7 @@ export async function acceptSplit(
             outlineLevel: coarse.outlineLevel,
             parentExternalUid: coarse.parentExternalUid,
             name: scope,
-            canonicalActivityKey: buildCanonicalActivityKey(wbsCode, scope),
+            canonicalActivityKey: finerActivityKey(coarse.wbsCode, scope, i),
             type: coarse.type,
             isMilestone: coarse.isMilestone,
             isSummary: false,
