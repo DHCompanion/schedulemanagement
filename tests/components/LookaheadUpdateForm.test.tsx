@@ -10,6 +10,7 @@ const row: LookaheadFormRow = {
   externalUid: 7,
   canonicalActivityKey: "1.1|hang drywall",
   wbsCode: "1.1",
+  wbsPath: ["Phase 1", "Interiors"],
   name: "Hang Drywall",
   type: "task",
   plannedStart: "2026-08-01",
@@ -25,6 +26,18 @@ const row: LookaheadFormRow = {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 describe("LookaheadUpdateForm", () => {
+  it("shows a WBS header only where the section changes", () => {
+    render(<LookaheadUpdateForm updateId="u1" projectId="p1" readOnly={false} rows={[
+      row,
+      { ...row, externalUid: 8, canonicalActivityKey: "1.2|tape" },
+      { ...row, externalUid: 9, canonicalActivityKey: "2.1|roof", wbsPath: ["Phase 1", "Roofing"] },
+    ]} />);
+    expect(screen.getAllByTestId("wbs-header").map((h) => h.textContent)).toEqual([
+      "Phase 1 › Interiors",
+      "Phase 1 › Roofing",
+    ]);
+  });
+
   it("posts every row's entry to the update's entries endpoint", async () => {
     const { calls } = stubFetch({ ok: true });
     render(<LookaheadUpdateForm updateId="u1" projectId="p1" rows={[row]} readOnly={false} />);

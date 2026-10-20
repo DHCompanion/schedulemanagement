@@ -5,6 +5,7 @@ import { computeLookahead, type LookaheadActivity, type ActivityProgress } from 
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { LookaheadUpdateForm, type LookaheadFormRow } from "@/components/LookaheadUpdateForm";
+import { deriveSectionInfo } from "@/lib/schedule/wbsGrouping";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,21 @@ export default async function UpdateEditorPage(props: { params: Promise<{ id: st
   });
   if (!update || update.projectId !== params.id) notFound();
 
-  const activities: LookaheadActivity[] = update.scheduleImport.activities.map((a) => ({
+  // Document order, so each WBS section's rows stay together under its header.
+  const ordered = [...update.scheduleImport.activities].sort((a, b) =>
+    (a.outlineNumber ?? "").localeCompare(b.outlineNumber ?? "", undefined, { numeric: true }),
+  );
+  const byId = new Map(ordered.map((a) => [a.id, a]));
+  const sections = deriveSectionInfo(ordered);
+  const wbsPathByUid = new Map(ordered.map((a) => [
+    a.externalUid,
+    (sections.get(a.id)?.ancestorIds ?? [])
+      .map((id) => byId.get(id)!)
+      .filter((anc) => anc.type !== "project_summary")
+      .map((anc) => anc.name),
+  ]));
+
+  const activities: LookaheadActivity[] = ordered.map((a) => ({
     externalUid: a.externalUid,
     canonicalActivityKey: a.canonicalActivityKey,
     wbsCode: a.wbsCode,
@@ -52,6 +67,7 @@ export default async function UpdateEditorPage(props: { params: Promise<{ id: st
     externalUid: r.externalUid,
     canonicalActivityKey: r.canonicalActivityKey,
     wbsCode: r.wbsCode,
+    wbsPath: wbsPathByUid.get(r.externalUid) ?? [],
     name: r.name,
     type: r.type,
     plannedStart: isoDay(r.plannedStart) || null,
