@@ -29,7 +29,7 @@ export interface LookaheadFormRow {
 }
 
 /** One not-started activity the unsaved entries would move, as POST /impacts returns it. */
-export type Impact = ImpactCore & { name: string; wbsCode: string | null; drivenByName: string | null };
+export type Impact = ImpactCore & { name: string; wbsCode: string | null; drivenByName: string | null; note: string | null };
 
 type Status = LookaheadFormRow["status"];
 
@@ -137,11 +137,10 @@ export function LookaheadUpdateForm({
       return toEntry(i ? { ...r, forecastStart: i.proposedStart, forecastFinish: i.proposedFinish } : r);
     });
     const inForm = new Set(data.map((r) => r.externalUid));
-    // ponytail: an adjusted activity outside the form saves with no note; carry its note through if that ever matters.
     for (const i of adjusted.filter((i) => !inForm.has(i.externalUid))) {
       entries.push({
         activityExternalUid: i.externalUid, canonicalActivityKey: i.canonicalActivityKey, status: "not_started",
-        actualStart: null, actualFinish: null, percentComplete: null, note: null,
+        actualStart: null, actualFinish: null, percentComplete: null, note: i.note,
         forecastStart: i.proposedStart, forecastFinish: i.proposedFinish,
       });
     }

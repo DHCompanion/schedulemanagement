@@ -20,11 +20,12 @@ export async function POST(req: Request, props: { params: Promise<{ updateId: st
 
   const carry = resolveCurrentProgress(await getFinalizedEntries(update.projectId));
   const { activities, relationships, minutesPerDay } = update.scheduleImport;
+  const after = overlayEntries(carry, storedShape(body.entries ?? []));
   const impacts = computeImpacts({
     activities,
     relationships,
     before: overlayEntries(carry, update.entries),
-    after: overlayEntries(carry, storedShape(body.entries ?? [])),
+    after,
     statusDate: update.asOfDate,
     minutesPerDay,
   });
@@ -34,6 +35,8 @@ export async function POST(req: Request, props: { params: Promise<{ updateId: st
       ...i,
       name: byUid.get(i.externalUid)?.name ?? "",
       wbsCode: byUid.get(i.externalUid)?.wbsCode ?? null,
+      // An adjusted activity outside the form saves a fresh entry; carry its note so accepting dates never erases it.
+      note: after.get(i.canonicalActivityKey)?.note ?? null,
       drivenByName: i.drivenByUid == null ? null : byUid.get(i.drivenByUid)?.name ?? null,
     })),
   });

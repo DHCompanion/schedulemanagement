@@ -28,7 +28,7 @@ const row: LookaheadFormRow = {
 const noImpacts = { ok: true, body: { impacts: [] } };
 const impact = {
   externalUid: 20, canonicalActivityKey: "1.3|paint", name: "Paint", wbsCode: "1.3",
-  kind: "push", drivenByUid: 7, drivenByName: "Hang Drywall",
+  kind: "push", drivenByUid: 7, drivenByName: "Hang Drywall", note: "waiting on drywall",
   currentStart: "2026-08-10T08:00:00.000Z", currentFinish: "2026-08-14T17:00:00.000Z",
   proposedStart: "2026-08-12T08:00:00.000Z", proposedFinish: "2026-08-18T17:00:00.000Z",
 };
@@ -185,7 +185,7 @@ describe("LookaheadUpdateForm", () => {
 
     await waitFor(() => expect(calls).toHaveLength(2));
     expect(entriesOf(calls[1])).toContainEqual(expect.objectContaining({
-      activityExternalUid: 20, canonicalActivityKey: "1.3|paint", status: "not_started",
+      activityExternalUid: 20, canonicalActivityKey: "1.3|paint", status: "not_started", note: "waiting on drywall",
       forecastStart: impact.proposedStart, forecastFinish: impact.proposedFinish,
     }));
   });
