@@ -117,13 +117,20 @@ export function LookaheadUpdateForm({
     setError(null);
     if (invalid) { setShowErrors(true); setError(`Fix ${invalid === 1 ? "the highlighted row" : `the ${invalid} highlighted rows`} before saving.`); return; }
     setBusy(true);
-    const res = await fetch(appPath(`/api/updates/${updateId}/impacts`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entries: data.map(toEntry) }),
-    });
-    if (!res.ok) { setError("Couldn't check which activities move. Try again."); setBusy(false); return; }
-    const impacts = ((await res.json()) as { impacts?: Impact[] }).impacts ?? [];
+    let impacts: Impact[];
+    try {
+      const res = await fetch(appPath(`/api/updates/${updateId}/impacts`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entries: data.map(toEntry) }),
+      });
+      if (!res.ok) throw new Error();
+      impacts = ((await res.json()) as { impacts?: Impact[] }).impacts ?? [];
+    } catch {
+      setError("Couldn't check which activities move. Try again.");
+      setBusy(false);
+      return;
+    }
     if (impacts.length) { setReview({ impacts, adjust: new Set(), finalize }); setBusy(false); return; }
     await persist(data.map(toEntry), finalize);
   }
@@ -153,11 +160,11 @@ export function LookaheadUpdateForm({
     // sendJson's own transport is used here, but its returned message is not —
     // this endpoint has never surfaced the server's wording (see the
     // component test locking in "Failed to save." for any failure body).
-    const entriesErr = await sendJson(`/api/updates/${updateId}/entries`, { entries });
+    const entriesErr = await sendJson(`/api/updates/${updateId}/entries`, { entries }).catch(() => "offline");
     if (entriesErr) { setError("Failed to save."); setBusy(false); return; }
     if (finalize) {
-      const fin = await fetch(appPath(`/api/updates/${updateId}/finalize`), { method: "POST" });
-      if (!fin.ok) { setError("Failed to finalize."); setBusy(false); return; }
+      const fin = await fetch(appPath(`/api/updates/${updateId}/finalize`), { method: "POST" }).catch(() => null);
+      if (!fin?.ok) { setError("Failed to finalize."); setBusy(false); return; }
     }
     setBusy(false);
     setShowErrors(false);

@@ -41,6 +41,11 @@ describe("computeImpacts", () => {
     expect(out).toMatchObject([{ externalUid: 2, kind: "pull", proposedStart: "2026-08-06T08:00:00.000Z", proposedFinish: "2026-08-12T17:00:00.000Z" }]);
   });
 
+  it("offers a pull when the edit also undoes a push the saved draft caused", () => {
+    const out = run(p("1|a", { status: "in_progress", percentComplete: 20 }), p("1|a", { status: "complete", actualFinish: new Date("2026-08-05T17:00:00Z") }));
+    expect(out).toMatchObject([{ kind: "pull", currentStart: "2026-08-10T08:00:00.000Z", proposedStart: "2026-08-06T08:00:00.000Z" }]);
+  });
+
   it("does not re-report a push the saved draft already caused", () => {
     const slip = p("1|a", { status: "in_progress", percentComplete: 20 });
     expect(run(slip, slip)).toEqual([]);

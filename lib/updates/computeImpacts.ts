@@ -59,15 +59,23 @@ export function computeImpacts(input: ImpactInput): Impact[] {
 
     let proposed = current;
     let drivenByUid = current.pushedByUid;
-    if (startDelta(pushBefore.get(a.externalUid), current) === 0) {
-      const pull = startDelta(pullBefore.get(a.externalUid), pullAfter.get(a.externalUid));
+    const pushMoves = startDelta(pushBefore.get(a.externalUid), current) !== 0
+      && workingDaysBetween(currentStart, current.expectedStart) !== 0;
+    if (!pushMoves) {
+      // Shift by what the edit freed up, but never past where the pull forecast lands
+      // (an edit that also undoes an earlier push frees more than the current dates hold).
+      const pa = pullAfter.get(a.externalUid)!;
+      const pull = Math.max(
+        startDelta(pullBefore.get(a.externalUid), pa),
+        workingDaysBetween(current.expectedStart, pa.expectedStart!),
+      );
       if (pull >= 0) continue;
       proposed = {
         ...current,
         expectedStart: addWorkingDays(current.expectedStart, pull),
         expectedFinish: current.expectedFinish ? addWorkingDays(current.expectedFinish, pull) : null,
       };
-      drivenByUid = pullAfter.get(a.externalUid)!.pushedByUid;
+      drivenByUid = pa.pushedByUid;
     }
     const shift = workingDaysBetween(currentStart, proposed.expectedStart!);
     if (shift === 0) continue;
