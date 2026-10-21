@@ -36,7 +36,7 @@ export async function buildExport(
   const progressByUid = new Map<number, ProgressForExport>();
   for (const a of latest.activities) {
     const p = current.get(a.canonicalActivityKey);
-    if (p) progressByUid.set(a.externalUid, { status: p.status, actualStart: p.actualStart, actualFinish: p.actualFinish, percentComplete: p.percentComplete });
+    if (p) progressByUid.set(a.externalUid, { status: p.status, actualStart: p.actualStart, actualFinish: p.actualFinish, percentComplete: p.percentComplete, forecastStart: p.forecastStart, forecastFinish: p.forecastFinish });
   }
 
   const latestUpdate = await prisma.progressUpdate.findFirst({

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { toDbDate } from "@/lib/import/commitImport";
 import { carryProgressThroughSplits, type FinalizedEntry } from "@/lib/lookahead/currentProgress";
+import type { ActivityProgress, ProgressStatus } from "@/lib/lookahead/computeLookahead";
 
 export interface EntryInput {
   activityExternalUid: number;
@@ -10,16 +11,53 @@ export interface EntryInput {
   actualFinish: string | null;
   percentComplete: number | null;
   note: string | null;
+  forecastStart?: string | null;
+  forecastFinish?: string | null;
 }
 
 function isMeaningful(e: EntryInput): boolean {
   return (
     e.status !== "not_started" ||
+    !!e.forecastStart ||
+    !!e.forecastFinish ||
     !!e.actualStart ||
     !!e.actualFinish ||
     e.percentComplete != null ||
     (e.note?.trim().length ?? 0) > 0
   );
+}
+
+type StoredEntry = Pick<FinalizedEntry, "canonicalActivityKey" | "status" | "actualStart" | "actualFinish" | "percentComplete" | "note" | "forecastStart" | "forecastFinish">;
+
+/** Carry-forward progress overridden by one update's own entries — what that update would finalize. */
+export function overlayEntries(carry: Map<string, ActivityProgress>, entries: StoredEntry[]): Map<string, ActivityProgress> {
+  const out = new Map(carry);
+  for (const e of entries) {
+    out.set(e.canonicalActivityKey, {
+      status: e.status as ProgressStatus,
+      actualStart: e.actualStart,
+      actualFinish: e.actualFinish,
+      percentComplete: e.percentComplete,
+      note: e.note,
+      forecastStart: e.forecastStart ?? null,
+      forecastFinish: e.forecastFinish ?? null,
+    });
+  }
+  return out;
+}
+
+/** Unsaved form entries in stored shape, dropping the ones saveEntries would drop. */
+export function storedShape(entries: EntryInput[]): StoredEntry[] {
+  return entries.filter(isMeaningful).map((e) => ({
+    canonicalActivityKey: e.canonicalActivityKey,
+    status: e.status,
+    actualStart: toDbDate(e.actualStart),
+    actualFinish: toDbDate(e.actualFinish),
+    percentComplete: e.percentComplete,
+    note: e.note,
+    forecastStart: toDbDate(e.forecastStart ?? null),
+    forecastFinish: toDbDate(e.forecastFinish ?? null),
+  }));
 }
 
 /** One draft per project: return the existing draft, else create one against the latest import. */
@@ -64,6 +102,8 @@ export async function saveEntries(updateId: string, entries: EntryInput[]): Prom
           actualFinish: toDbDate(e.actualFinish),
           percentComplete: e.percentComplete,
           note: e.note,
+          forecastStart: toDbDate(e.forecastStart ?? null),
+          forecastFinish: toDbDate(e.forecastFinish ?? null),
         })),
       });
     }
@@ -92,6 +132,8 @@ export async function getFinalizedEntries(projectId: string): Promise<FinalizedE
       actualFinish: e.actualFinish,
       percentComplete: e.percentComplete,
       note: e.note,
+      forecastStart: e.forecastStart,
+      forecastFinish: e.forecastFinish,
     })),
   );
   return carryProgressThroughSplits(
