@@ -43,7 +43,8 @@ export interface LookaheadRow {
   dueByDataDate: boolean;
 }
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
 
 export function defaultProgress(): ActivityProgress {
   return { status: "not_started", actualStart: null, actualFinish: null, percentComplete: null, note: null };
@@ -75,6 +76,8 @@ export function computeLookahead(
   alwaysInclude: Set<string> = new Set(),
 ): LookaheadRow[] {
   const windowEnd = new Date(asOfDate.getTime() + weeks * WEEK_MS);
+  // The data date is a calendar day: work planned for any time that day is due by it.
+  const dataDayEnd = new Date(asOfDate.getTime() + DAY_MS);
   const rows: LookaheadRow[] = [];
   for (const a of activities) {
     if (a.type === "summary" || a.type === "project_summary") continue;
@@ -101,7 +104,8 @@ export function computeLookahead(
       plannedFinish: a.plannedFinish,
       progress,
       slippage: computeSlippage(a, progress, asOfDate),
-      dueByDataDate: progress.status !== "complete" && (inProgress || olderNotComplete || pastDueIncomplete),
+      dueByDataDate: progress.status !== "complete"
+        && (inProgress || pastDueIncomplete || (!!plannedStart && plannedStart < dataDayEnd)),
     });
   }
   return rows;

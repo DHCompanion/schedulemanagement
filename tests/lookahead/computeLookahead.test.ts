@@ -116,6 +116,9 @@ describe("computeLookahead dueByDataDate", () => {
   it("is true for an incomplete activity planned to start before the data date", () => {
     expect(due({ plannedStart: new Date("2026-06-10T00:00:00Z") })).toBe(true);
   });
+  it("is true for an activity planned to start on the data date itself", () => {
+    expect(due({ plannedStart: new Date("2026-06-18T08:00:00Z") })).toBe(true);
+  });
   it("is false for an activity planned to start after the data date", () => {
     expect(due({ plannedStart: new Date("2026-06-25T00:00:00Z") })).toBe(false);
   });
