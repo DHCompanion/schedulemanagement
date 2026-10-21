@@ -223,6 +223,8 @@ model ProgressEntry {
   actualFinish         DateTime?
   percentComplete      Int?
   note                 String?
+  forecastStart        DateTime?
+  forecastFinish       DateTime?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 

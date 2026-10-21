@@ -5,6 +5,8 @@ export interface ProgressForExport {
   actualStart: Date | null;
   actualFinish: Date | null;
   percentComplete: number | null;
+  forecastStart?: Date | null;
+  forecastFinish?: Date | null;
 }
 
 type AnyRec = Record<string, unknown>;
@@ -20,7 +22,13 @@ export function injectActuals(doc: AnyRec, progressByUid: Map<number, ProgressFo
   const tasksNode = project?.Tasks as AnyRec | undefined;
   for (const task of asArray(tasksNode?.Task)) {
     const p = progressByUid.get(Number(task.UID));
-    if (!p || p.status === "not_started") continue;
+    if (!p) continue;
+    if (p.status === "not_started") {
+      // Dates accepted on the update review screen; MS Project reschedules from here.
+      if (p.forecastStart) task.Start = toMspdiDate(p.forecastStart);
+      if (p.forecastFinish) task.Finish = toMspdiDate(p.forecastFinish);
+      continue;
+    }
     const ownStart = task.Start as string | undefined;
     const ownFinish = task.Finish as string | undefined;
     const start = p.actualStart ? toMspdiDate(p.actualStart) : ownStart;

@@ -109,3 +109,33 @@ describe("computeSlippage", () => {
     expect(s).toBe("on-track");
   });
 });
+
+describe("computeLookahead dueByDataDate", () => {
+  const due = (p: Partial<LookaheadActivity>, prog = empty) => computeLookahead([act(p)], prog, asOf, 3)[0]?.dueByDataDate;
+
+  it("is true for an incomplete activity planned to start before the data date", () => {
+    expect(due({ plannedStart: new Date("2026-06-10T00:00:00Z") })).toBe(true);
+  });
+  it("is false for an activity planned to start after the data date", () => {
+    expect(due({ plannedStart: new Date("2026-06-25T00:00:00Z") })).toBe(false);
+  });
+  it("is true for in-progress work planned to start later", () => {
+    const prog = new Map<string, ActivityProgress>([["1|a", { ...defaultProgress(), status: "in_progress" }]]);
+    expect(due({ plannedStart: new Date("2026-06-25T00:00:00Z") }, prog)).toBe(true);
+  });
+  it("is false for complete work", () => {
+    const prog = new Map<string, ActivityProgress>([["1|a", { ...defaultProgress(), status: "complete" }]]);
+    expect(due({ plannedStart: new Date("2026-06-17T00:00:00Z"), plannedFinish: new Date("2026-06-20T00:00:00Z") }, prog)).toBe(false);
+  });
+  it("uses forecast dates in place of planned dates", () => {
+    const prog = new Map<string, ActivityProgress>([["1|a", { ...defaultProgress(), forecastStart: new Date("2026-06-25T00:00:00Z") }]]);
+    const rows = computeLookahead([act({ plannedStart: new Date("2026-06-10T00:00:00Z") })], prog, asOf, 3);
+    expect(rows[0].dueByDataDate).toBe(false);
+    expect(rows[0].slippage).toBe("on-track");
+  });
+  it("includes activities named in alwaysInclude even outside the window", () => {
+    const far = act({ plannedStart: new Date("2026-12-01T00:00:00Z") });
+    expect(computeLookahead([far], empty, asOf, 3)).toHaveLength(0);
+    expect(computeLookahead([far], empty, asOf, 3, new Set(["1|a"]))).toHaveLength(1);
+  });
+});

@@ -9,6 +9,8 @@ export interface FinalizedEntry {
   actualFinish: Date | null;
   percentComplete: number | null;
   note: string | null;
+  forecastStart?: Date | null;
+  forecastFinish?: Date | null;
 }
 
 /** Latest finalized entry per canonicalActivityKey wins. */
@@ -26,6 +28,8 @@ export function resolveCurrentProgress(entries: FinalizedEntry[]): Map<string, A
       actualFinish: e.actualFinish,
       percentComplete: e.percentComplete,
       note: e.note,
+      forecastStart: e.forecastStart ?? null,
+      forecastFinish: e.forecastFinish ?? null,
     });
   }
   return out;

@@ -49,3 +49,11 @@ describe("carryProgressThroughSplits", () => {
     expect(map.get("3.2.2|rough electrical")?.percentComplete).toBe(50);
   });
 });
+
+describe("forecast dates", () => {
+  it("carry forward with the latest entry", () => {
+    const f = new Date("2026-06-10T00:00:00Z");
+    const map = resolveCurrentProgress([entry({ status: "not_started", forecastStart: f, forecastFinish: f })]);
+    expect(map.get("1|a")).toMatchObject({ forecastStart: f, forecastFinish: f });
+  });
+});

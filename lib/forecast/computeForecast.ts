@@ -35,6 +35,8 @@ export interface ForecastInput {
   progressByKey: Map<string, ActivityProgress>;
   statusDate: Date;
   minutesPerDay?: number | null;
+  // Update review only: let not-started work move earlier when predecessors finish early.
+  allowPull?: boolean;
 }
 
 interface Edge {
@@ -61,6 +63,7 @@ function forecastOne(
   done: Map<number, ActivityForecast>,
   statusDate: Date,
   skipPush: boolean,
+  allowPull: boolean,
 ): ActivityForecast {
   if (p.status === "complete") {
     const expectedFinish = p.actualFinish ?? a.plannedFinish;
@@ -87,13 +90,18 @@ function forecastOne(
   }
 
   // Not started. Pushes are computed date-granularly as whole working days and
-  // applied by shifting the planned timestamps — so an unpushed activity keeps
-  // its planned dates exactly, and drift propagates undiminished through
-  // zero-lag FS chains.
-  if (!a.plannedStart) {
-    return { expectedStart: null, expectedFinish: a.plannedFinish, driftDays: 0, pushedByUid: null };
+  // applied by shifting the basis timestamps — so an unpushed activity keeps
+  // its basis dates exactly, and drift propagates undiminished through
+  // zero-lag FS chains. The basis is the accepted forecast dates when the
+  // update review set them, else the planned dates; drift is always vs plan.
+  const baseStart = p.forecastStart ?? a.plannedStart;
+  const baseFinish = p.forecastFinish ?? a.plannedFinish;
+  if (!baseStart) {
+    return { expectedStart: null, expectedFinish: baseFinish, driftDays: 0, pushedByUid: null };
   }
-  let pushDays = 0;
+  const drift = (start: Date) => (a.plannedStart ? workingDaysBetween(a.plannedStart, start) : 0);
+  // allowPull lets the shift go negative so successors follow an early finish.
+  let shift = allowPull ? -Infinity : 0;
   let pushedByUid: number | null = null;
   if (!skipPush) {
     for (const e of preds) {
@@ -104,21 +112,21 @@ function forecastOne(
       const basis = e.type === "FS" ? pf.expectedFinish : pf.expectedStart;
       if (!basis) continue;
       const candidate = addWorkingDays(basis, (e.type === "FS" ? 1 : 0) + e.lagDays);
-      const push = workingDaysBetween(a.plannedStart, candidate);
-      if (push > pushDays) {
-        pushDays = push;
+      const push = workingDaysBetween(baseStart, candidate);
+      if (push > shift) {
+        shift = push;
         pushedByUid = e.pred;
       }
     }
   }
-  if (pushDays === 0) {
-    return { expectedStart: a.plannedStart, expectedFinish: a.plannedFinish, driftDays: 0, pushedByUid: null };
+  if (!Number.isFinite(shift) || shift === 0) {
+    return { expectedStart: baseStart, expectedFinish: baseFinish, driftDays: drift(baseStart), pushedByUid: null };
   }
-  const expectedStart = addWorkingDays(a.plannedStart, pushDays);
-  const expectedFinish = a.plannedFinish
-    ? addWorkingDays(a.plannedFinish, pushDays)
+  const expectedStart = addWorkingDays(baseStart, shift);
+  const expectedFinish = baseFinish
+    ? addWorkingDays(baseFinish, shift)
     : addWorkingDays(expectedStart, plannedDuration(a));
-  return { expectedStart, expectedFinish, driftDays: pushDays, pushedByUid };
+  return { expectedStart, expectedFinish, driftDays: drift(expectedStart), pushedByUid };
 }
 
 /**
@@ -172,7 +180,7 @@ export function computeForecast(input: ForecastInput): Map<number, ActivityForec
   for (const uid of order) {
     const a = byUid.get(uid)!;
     const p = input.progressByKey.get(a.canonicalActivityKey) ?? baselineProgress(a);
-    out.set(uid, forecastOne(a, p, incoming.get(uid) ?? [], out, input.statusDate, inCycle.has(uid)));
+    out.set(uid, forecastOne(a, p, incoming.get(uid) ?? [], out, input.statusDate, inCycle.has(uid), !!input.allowPull));
   }
   return out;
 }

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { computeLookahead, type LookaheadActivity, type ActivityProgress } from "@/lib/lookahead/computeLookahead";
+import { computeLookahead, type LookaheadActivity } from "@/lib/lookahead/computeLookahead";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
-import { getFinalizedEntries } from "@/lib/updates/updateService";
+import { getFinalizedEntries, overlayEntries } from "@/lib/updates/updateService";
 import { LookaheadUpdateForm, type LookaheadFormRow } from "@/components/LookaheadUpdateForm";
 import { deriveSectionInfo } from "@/lib/schedule/wbsGrouping";
 
@@ -50,19 +50,13 @@ export default async function UpdateEditorPage(props: { params: Promise<{ id: st
   }));
 
   // Effective progress = carry-forward from finalized updates, overridden by this draft's own entries.
-  const carry = resolveCurrentProgress(await getFinalizedEntries(params.id));
-  const effective = new Map<string, ActivityProgress>(carry);
-  for (const e of update.entries) {
-    effective.set(e.canonicalActivityKey, {
-      status: e.status as ActivityProgress["status"],
-      actualStart: e.actualStart,
-      actualFinish: e.actualFinish,
-      percentComplete: e.percentComplete,
-      note: e.note,
-    });
-  }
+  const effective = overlayEntries(resolveCurrentProgress(await getFinalizedEntries(params.id)), update.entries);
 
-  const lookahead = computeLookahead(activities, effective, update.asOfDate, update.lookaheadWeeks);
+  const lookahead = computeLookahead(
+    activities, effective, update.asOfDate, update.lookaheadWeeks,
+    // Every activity this draft touched stays in the form, so a re-save never drops its entry.
+    new Set(update.entries.map((e) => e.canonicalActivityKey)),
+  );
   const rows: LookaheadFormRow[] = lookahead.map((r) => ({
     externalUid: r.externalUid,
     canonicalActivityKey: r.canonicalActivityKey,
@@ -78,6 +72,9 @@ export default async function UpdateEditorPage(props: { params: Promise<{ id: st
     actualFinish: isoDay(r.progress.actualFinish),
     percentComplete: r.progress.percentComplete,
     note: r.progress.note ?? "",
+    forecastStart: r.progress.forecastStart?.toISOString() ?? null,
+    forecastFinish: r.progress.forecastFinish?.toISOString() ?? null,
+    dueByDataDate: r.dueByDataDate,
   }));
 
   const finalized = update.state === "finalized";

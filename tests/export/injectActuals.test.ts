@@ -68,3 +68,18 @@ describe("injectNames", () => {
     expect(((d.Project as any).Tasks.Task).Name).toBe("Renamed");
   });
 });
+
+describe("injectActuals forecast dates", () => {
+  it("writes Start/Finish for a not-started task with forecast dates", () => {
+    const d = doc();
+    injectActuals(d, new Map([[2, prog({ status: "not_started", forecastStart: new Date("2026-06-09T08:00:00Z"), forecastFinish: new Date("2026-06-11T17:00:00Z") })]]));
+    expect(tasks(d)[1].Start).toBe("2026-06-09T08:00:00");
+    expect(tasks(d)[1].Finish).toBe("2026-06-11T17:00:00");
+    expect(tasks(d)[1].ActualStart).toBeUndefined();
+  });
+  it("leaves a not-started task without forecast dates untouched", () => {
+    const d = doc();
+    injectActuals(d, new Map([[2, prog({ status: "not_started" })]]));
+    expect(tasks(d)[1].Start).toBe("2025-06-04T08:00:00");
+  });
+});

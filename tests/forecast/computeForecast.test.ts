@@ -317,3 +317,33 @@ describe("projectDrift", () => {
     expect(pd).toEqual({ driftDays: 0, activityUid: null });
   });
 });
+
+describe("computeForecast forecast dates and pulls", () => {
+  const early = prog("1|a", { status: "complete", actualStart: new Date("2026-08-03T08:00:00Z"), actualFinish: new Date("2026-08-05T17:00:00Z") });
+
+  it("a not-started activity's forecast dates replace its planned dates; drift stays against plan", () => {
+    const p = prog("2|b", { forecastStart: new Date("2026-08-12T08:00:00Z"), forecastFinish: new Date("2026-08-18T17:00:00Z") });
+    const b = computeForecast({ activities: chain(), relationships: [rel(1, 2)], progressByKey: p, statusDate }).get(2)!;
+    expect(b.expectedStart!.toISOString()).toBe("2026-08-12T08:00:00.000Z");
+    expect(b.expectedFinish!.toISOString()).toBe("2026-08-18T17:00:00.000Z");
+    expect(b.driftDays).toBe(2);
+  });
+
+  it("never pulls by default — an early finish leaves the successor on plan", () => {
+    const b = computeForecast({ activities: chain(), relationships: [rel(1, 2)], progressByKey: early, statusDate }).get(2)!;
+    expect(b.expectedStart!.toISOString()).toBe("2026-08-10T08:00:00.000Z");
+  });
+
+  it("allowPull moves the successor earlier to follow an early finish", () => {
+    const b = computeForecast({ activities: chain(), relationships: [rel(1, 2)], progressByKey: early, statusDate, allowPull: true }).get(2)!;
+    expect(b.expectedStart!.toISOString()).toBe("2026-08-06T08:00:00.000Z");
+    expect(b.expectedFinish!.toISOString()).toBe("2026-08-12T17:00:00.000Z");
+    expect(b.driftDays).toBe(-2);
+    expect(b.pushedByUid).toBe(1);
+  });
+
+  it("allowPull leaves an activity with no predecessors on plan", () => {
+    const a = computeForecast({ activities: chain(), relationships: [], progressByKey: new Map(), statusDate, allowPull: true }).get(2)!;
+    expect(a.expectedStart!.toISOString()).toBe("2026-08-10T08:00:00.000Z");
+  });
+});
