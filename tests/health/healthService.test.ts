@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
-import { getScheduleHealth } from "@/lib/health/healthService";
+import { getScheduleHealth, getImportQuality } from "@/lib/health/healthService";
 
 const hasDb = !!process.env.DATABASE_URL;
 
@@ -67,11 +67,47 @@ describe.runIf(hasDb)("healthService", () => {
     expect(futureIssue?.externalId).toBe(10);
   }, 30000);
 
+  it("scores logic and tiers the latest import", async () => {
+    const p = await prisma.project.create({ data: { name: "Health Logic Test" } });
+    try {
+      const imp = await prisma.scheduleImport.create({
+        data: { projectId: p.id, sourceFormat: "msproject_xml", fileName: "x.xml", fileHash: "h", minutesPerDay: 480 },
+      });
+      // An 11-activity FS chain plus one orphan: 1 of 12 missing logic (8%) fails the 5% limit.
+      await prisma.activity.createMany({
+        data: Array.from({ length: 12 }, (_, i) => ({
+          scheduleImportId: imp.id,
+          externalUid: i + 1,
+          name: `Task ${i + 1}`,
+          canonicalActivityKey: `${i + 1}|task`,
+          type: "task",
+        })),
+      });
+      await prisma.relationship.createMany({
+        data: Array.from({ length: 10 }, (_, i) => ({
+          scheduleImportId: imp.id,
+          predecessorExternalUid: i + 1,
+          successorExternalUid: i + 2,
+          type: "FS",
+        })),
+      });
+
+      const health = await getScheduleHealth(p.id);
+      const missing = health.quality?.logic.metrics.find((m) => m.key === "missing_logic");
+      expect(missing).toMatchObject({ count: 1, denominator: 12, pass: false });
+      expect(health.quality?.tier).toBe("rough");
+      expect(await getImportQuality(imp.id)).toEqual(health.quality);
+    } finally {
+      await prisma.project.delete({ where: { id: p.id } });
+    }
+  }, 30000);
+
   it("reports no import for a project without one", async () => {
     const p = await prisma.project.create({ data: { name: "Health No Import Test" } });
     const health = await getScheduleHealth(p.id);
     expect(health.hasImport).toBe(false);
     expect(health.issues).toEqual([]);
+    expect(health.quality).toBeNull();
     expect(health.progress).toEqual({ total: 0, completed: 0, remaining: 0, percentComplete: 0 });
     await prisma.project.delete({ where: { id: p.id } });
   }, 15000);
