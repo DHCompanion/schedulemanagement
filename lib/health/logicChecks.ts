@@ -17,6 +17,11 @@ export const MAX_HIGH_DURATION = 0.05;
 export const MAX_OUT_OF_SEQUENCE = 0.05;
 export const HIGH_DAYS = 44;
 export const MIN_ELIGIBLE_SCORE = 0.6;
+// Benchmark eligibility is looser than DCMA on purpose: a missing successor is an
+// omission (the links that exist are still real), but a missing predecessor usually
+// means a typed-in date, so its timing can't be trusted.
+export const MAX_BENCHMARK_NO_PREDECESSOR = 0.1;
+export const MAX_BENCHMARK_NO_SUCCESSOR = 0.5;
 
 // MSPDI ConstraintType: 2 Must Start On, 3 Must Finish On, 5 Start No Later Than, 7 Finish No Later Than.
 const HARD_CONSTRAINTS = new Set([2, 3, 5, 7]);
@@ -62,6 +67,9 @@ export interface LogicMetric {
 
 export interface LogicScore {
   metrics: LogicMetric[];
+  /** Share of leaves with no predecessor / no successor, after the one allowed open start / finish. */
+  noPredecessorPct: number;
+  noSuccessorPct: number;
   passed: number;
   total: number;
   score: number;
@@ -74,24 +82,18 @@ function metric(key: LogicMetricKey, count: number, denominator: number, thresho
 }
 
 /**
- * Leaves missing a predecessor or successor. One open start and one open finish
- * are allowed — every network has a first and last activity.
+ * Leaves missing a predecessor, a successor, or either. One open start and one
+ * open finish are allowed — every network has a first and last activity.
  */
-function countMissingLogic(leaves: LogicActivity[], rels: LogicRelationship[]): number {
+function countOpenEnds(leaves: LogicActivity[], rels: LogicRelationship[]): { either: number; noPred: number; noSucc: number } {
   const hasPred = new Set(rels.map((r) => r.successorExternalUid));
   const hasSucc = new Set(rels.map((r) => r.predecessorExternalUid));
-  let missing = 0;
-  let openStart = false;
-  let openFinish = false;
-  for (const a of leaves) {
-    const noPred = !hasPred.has(a.externalUid);
-    const noSucc = !hasSucc.has(a.externalUid);
-    if (!noPred && !noSucc) continue;
-    if (noPred && !noSucc && !openStart) openStart = true;
-    else if (noSucc && !noPred && !openFinish) openFinish = true;
-    else missing++;
-  }
-  return missing;
+  const noPred = leaves.filter((a) => !hasPred.has(a.externalUid));
+  const noSucc = leaves.filter((a) => !hasSucc.has(a.externalUid));
+  const openStart = noPred.some((a) => hasSucc.has(a.externalUid)) ? 1 : 0;
+  const openFinish = noSucc.some((a) => hasPred.has(a.externalUid)) ? 1 : 0;
+  const either = new Set([...noPred, ...noSucc]).size - openStart - openFinish;
+  return { either, noPred: noPred.length - openStart, noSucc: noSucc.length - openFinish };
 }
 
 function countOutOfSequence(byUid: Map<number, LogicActivity>, rels: LogicRelationship[]): { count: number; denominator: number } {
@@ -117,9 +119,10 @@ export function scoreLogic(activities: LogicActivity[], relationships: LogicRela
   const leafCount = (pred: (a: LogicActivity) => boolean) => leaves.filter(pred).length;
   const relCount = (pred: (r: LogicRelationship) => boolean) => rels.filter(pred).length;
   const oos = countOutOfSequence(byUid, rels);
+  const ends = countOpenEnds(leaves, rels);
 
   const metrics: LogicMetric[] = [
-    metric("missing_logic", countMissingLogic(leaves, rels), leaves.length, MAX_MISSING_LOGIC),
+    metric("missing_logic", ends.either, leaves.length, MAX_MISSING_LOGIC),
     metric("leads", relCount((r) => (r.lagMinutes ?? 0) < 0), rels.length, MAX_LEADS),
     metric("lags", relCount((r) => (r.lagMinutes ?? 0) > 0), rels.length, MAX_LAGS),
     metric("non_fs", relCount((r) => r.type !== "FS"), rels.length, MAX_NON_FS),
@@ -134,6 +137,10 @@ export function scoreLogic(activities: LogicActivity[], relationships: LogicRela
   const scored = oos.denominator === 0 ? metrics.filter((m) => m.key !== "out_of_sequence") : metrics;
   const passed = scored.filter((m) => m.pass).length;
   const score = scored.length === 0 ? 0 : passed / scored.length;
-  const logicPass = metrics[0].pass;
-  return { metrics, passed, total: scored.length, score, benchmarkEligible: logicPass && score >= MIN_ELIGIBLE_SCORE };
+  const share = (n: number) => (leaves.length === 0 ? 0 : n / leaves.length);
+  const noPredecessorPct = share(ends.noPred);
+  const noSuccessorPct = share(ends.noSucc);
+  const benchmarkEligible =
+    noPredecessorPct <= MAX_BENCHMARK_NO_PREDECESSOR && noSuccessorPct <= MAX_BENCHMARK_NO_SUCCESSOR && score >= MIN_ELIGIBLE_SCORE;
+  return { metrics, noPredecessorPct, noSuccessorPct, passed, total: scored.length, score, benchmarkEligible };
 }

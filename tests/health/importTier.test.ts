@@ -4,7 +4,9 @@ import type { LogicScore } from "@/lib/health/logicChecks";
 
 function logic(overrides: Partial<LogicScore> = {}): LogicScore {
   return {
-    metrics: [{ key: "missing_logic", count: 0, denominator: 100, pct: 0, threshold: 0.05, pass: true }],
+    metrics: [],
+    noPredecessorPct: 0,
+    noSuccessorPct: 0,
     passed: 8,
     total: 8,
     score: 1,
@@ -29,12 +31,11 @@ describe("classifyImport", () => {
     expect(r.reasons.join(" ")).toMatch(/3 of 8/);
   });
 
-  it("names missing logic as the reason when that is what failed", () => {
-    const failing = logic({
-      benchmarkEligible: false,
-      metrics: [{ key: "missing_logic", count: 42, denominator: 100, pct: 0.42, threshold: 0.05, pass: false }],
-    });
-    expect(classifyImport(input({ logic: failing })).reasons.join(" ")).toMatch(/42%/);
+  it("names loose predecessors and successors as reasons", () => {
+    const r = classifyImport(input({ logic: logic({ benchmarkEligible: false, noPredecessorPct: 0.42, noSuccessorPct: 0.6 }) }));
+    expect(r.tier).toBe("rough");
+    expect(r.reasons.join(" ")).toMatch(/42% of activities have no predecessor/);
+    expect(r.reasons.join(" ")).toMatch(/60% of activities have no successor/);
   });
 
   it("calls a thinly linked file rough at the links-per-activity boundary", () => {

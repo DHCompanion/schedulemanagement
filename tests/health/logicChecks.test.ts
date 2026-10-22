@@ -56,14 +56,44 @@ describe("scoreLogic", () => {
     expect(metric(scoreLogic(activities, relationships, DAY), "missing_logic").count).toBe(0);
   });
 
-  it("fails missing logic for an orphan and makes the import ineligible even when everything else passes", () => {
+  it("fails strict missing logic for an orphan but stays benchmark-eligible", () => {
     const { activities, relationships } = chain(10);
     activities.push(act(99));
     const s = scoreLogic(activities, relationships, DAY);
     const m = metric(s, "missing_logic");
     expect(m.count).toBe(1);
     expect(m.pass).toBe(false);
-    expect(s.metrics.filter((x) => x.key !== "missing_logic").every((x) => x.pass)).toBe(true);
+    expect(s.benchmarkEligible).toBe(true);
+  });
+
+  it("stays eligible with up to half the activities missing a successor", () => {
+    // 1 → 2..11 fan-out: 10 leaves end with no successor, one is the allowed open finish.
+    const activities = Array.from({ length: 20 }, (_, i) => act(i + 1));
+    const relationships = [
+      ...Array.from({ length: 10 }, (_, i) => rel(1, i + 2)),
+      ...Array.from({ length: 9 }, (_, i) => rel(i + 11, i + 12)),
+    ];
+    const s = scoreLogic(activities, relationships, DAY);
+    expect(s.noPredecessorPct).toBe(0);
+    expect(s.noSuccessorPct).toBe(9 / 20);
+    expect(metric(s, "missing_logic").pass).toBe(false);
+    expect(s.benchmarkEligible).toBe(true);
+  });
+
+  it("is ineligible past half missing a successor", () => {
+    const activities = Array.from({ length: 10 }, (_, i) => act(i + 1));
+    const relationships = Array.from({ length: 9 }, (_, i) => rel(1, i + 2));
+    const s = scoreLogic(activities, relationships, DAY);
+    expect(s.noSuccessorPct).toBe(0.8);
+    expect(s.benchmarkEligible).toBe(false);
+  });
+
+  it("is ineligible past 10% missing a predecessor", () => {
+    const { activities, relationships } = chain(10);
+    activities.push(act(20), act(21));
+    relationships.push(rel(20, 5), rel(21, 6));
+    const s = scoreLogic(activities, relationships, DAY);
+    expect(s.noPredecessorPct).toBe(2 / 12);
     expect(s.benchmarkEligible).toBe(false);
   });
 
