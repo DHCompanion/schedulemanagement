@@ -34,14 +34,14 @@ describe.runIf(hasDb)("buildExport", () => {
     });
 
     // no finalized progress yet -> throws
-    await expect(buildExport(project.id, xml, "minimal.xml")).rejects.toThrow(/no finalized progress/i);
+    await expect(buildExport(project.id, { xml, fileName: "minimal.xml" })).rejects.toThrow(/no finalized progress/i);
 
     // finalize an update marking UID 2 (canonicalKey "2|electrical rough-in") in progress
     const { id } = await getOrCreateDraft(project.id, "2026-06-18", 1);
     await saveEntries(id, [{ activityExternalUid: 2, canonicalActivityKey: "2|electrical rough-in", status: "in_progress", actualStart: "2026-06-16", actualFinish: null, percentComplete: 50, note: null }]);
     await finalizeUpdate(id);
 
-    const out = await buildExport(project.id, xml, "minimal.xml");
+    const out = await buildExport(project.id, { xml, fileName: "minimal.xml" });
     expect(out.fileName).toBe("minimal-updated-2026-06-18.xml");
     const doc = parseForExport(out.xml);
     expect(findTask(doc, "2").ActualStart).toBe("2026-06-16T00:00:00");
@@ -50,15 +50,24 @@ describe.runIf(hasDb)("buildExport", () => {
     expect(findTask(doc, "2").Name).toBe("Electrical Rough-In (Standard)");
     expect(findTask(doc, "1").Name).toBe("Mobilize"); // unmapped — untouched
 
+    // no upload -> exports from the stored original, identically
+    const fromStore = await buildExport(project.id, null);
+    expect(fromStore.fileName).toBe(out.fileName);
+    expect(fromStore.xml).toBe(out.xml);
+
+    // an import made before originals were kept -> asks for the upload
+    await prisma.scheduleImport.updateMany({ where: { projectId: project.id }, data: { sourceObjectKey: null } });
+    await expect(buildExport(project.id, null)).rejects.toThrow(/upload minimal\.xml/i);
+
     // hash mismatch -> throws
-    await expect(buildExport(project.id, xml + "<!-- changed -->", "minimal.xml")).rejects.toThrow(/match/i);
+    await expect(buildExport(project.id, { xml: xml + "<!-- changed -->", fileName: "minimal.xml" })).rejects.toThrow(/match/i);
 
     await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: "electrical rough-in" } });
   }, 30000);
 
   it("throws when the project has no import", async () => {
     const p = await prisma.project.create({ data: { name: "No Import Export" } });
-    await expect(buildExport(p.id, xml, "minimal.xml")).rejects.toThrow(/no imported schedule/i);
+    await expect(buildExport(p.id, { xml, fileName: "minimal.xml" })).rejects.toThrow(/no imported schedule/i);
     await prisma.project.delete({ where: { id: p.id } });
   });
 
@@ -110,7 +119,7 @@ describe.runIf(hasDb)("buildExport", () => {
 
     await acceptSplit(project.id, coarse);
 
-    const out = await buildExport(project.id, xml, "minimal.xml");
+    const out = await buildExport(project.id, { xml, fileName: "minimal.xml" });
     const doc = parseForExport(out.xml);
     const taskUids = ((doc.Project as any).Tasks.Task as any[]).map((t) => String(t.UID));
     expect(taskUids).not.toContain("2");
@@ -181,7 +190,7 @@ describe.runIf(hasDb)("buildExport", () => {
     await saveEntries(draftId, [{ activityExternalUid: 1, canonicalActivityKey: "1|mobilize", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-16", percentComplete: 100, note: null }]);
     await finalizeUpdate(draftId);
 
-    const { xml: out } = await buildExport(project.id, xml, "minimal.xml");
+    const { xml: out } = await buildExport(project.id, { xml, fileName: "minimal.xml" });
     const reparsed = parseMspXml(out);
 
     const electrical = reparsed.activities.find((a) => a.externalUid === 2)!;
