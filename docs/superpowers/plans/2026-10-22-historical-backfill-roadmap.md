@@ -169,6 +169,7 @@ Mobile: a single column, and the pill wraps. No new colors beyond the existing s
 
 ## Phase 4 — Review queues + admin metadata/grouping table
 
+- **Historical library (Q51, 2026-10-22):** backfilled projects (`status = historical`, `externalProjectKey = backfill:<name>`) live in a **completely separate, read-only area of the app**. They don't appear in the live project list; there's no editing, updates or export. Their data must also be **queryable by an agent** (mechanism to be decided before Phase 4 is built).
 - **Dictionary suggestions:** a cross-project queue of unmapped names, sorted by frequency, pre-filled by local-model suggestions with `suggestScopes.ts` (Jaccard) as the fallback.
 - **Split-rule mining:** WBS parent→children patterns, matched against the existing `ScopeSplitRule`s first; only novel ones get queued.
 - **Admin project table:** metadata pre-filled from the manifest. Tier override is `tierOverride String?` on `ScheduleImport`, an additive migration.
