@@ -120,9 +120,8 @@ describe("checkPercentContradictions", () => {
     expect(issues[0].check).toBe("percent_contradiction");
   });
 
-  it("flags an actual finish with percent complete under 100", () => {
-    const issues = checkPercentContradictions(act({ percentComplete: 50, actualFinish: d("2026-03-07") }));
-    expect(issues).toHaveLength(1);
+  it("trusts an actual finish even when percent complete is under 100", () => {
+    expect(checkPercentContradictions(act({ percentComplete: 50, actualFinish: d("2026-03-07") }))).toEqual([]);
   });
 
   it("does not flag a consistent completed task", () => {

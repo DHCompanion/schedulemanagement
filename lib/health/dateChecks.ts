@@ -176,20 +176,8 @@ export function checkPercentContradictions(a: HealthActivity): HealthIssue[] {
       },
     ];
   }
-  // Only flag when percent is explicitly recorded — null means "not entered", which is
-  // common on imported completed tasks and would otherwise produce noisy false positives.
-  if (a.actualFinish && a.percentComplete !== null && a.percentComplete < 100) {
-    return [
-      {
-        ...base(a),
-        check: "percent_contradiction",
-        severity: "warning",
-        field: "actualFinish",
-        value: iso(a.actualFinish),
-        message: `Has an actual finish date but percent complete is ${a.percentComplete}%.`,
-      },
-    ];
-  }
+  // The reverse (an actual finish with percent below 100) is deliberately not flagged:
+  // an actual date alone confirms the work, and making people also bump percent is double entry.
   return [];
 }
 
