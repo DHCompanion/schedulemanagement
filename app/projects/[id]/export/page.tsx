@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { ExportPanel } from "@/components/ExportPanel";
+import { resolveExportBase } from "@/lib/completeness/acceptSplit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function ExportPage(props: { params: Promise<{ id: string }
 
   const latest = await prisma.scheduleImport.findFirst({ where: { projectId: project.id }, orderBy: { importedAt: "desc" } });
   const current = resolveCurrentProgress(await getFinalizedEntries(project.id));
+  // Exports patch the base (non-synthetic) import's file, so that's the one that must be on file.
+  const hasStoredOriginal = latest ? !!(await resolveExportBase(latest.id)).baseImport.sourceObjectKey : false;
   let complete = 0;
   let inProgress = 0;
   for (const p of current.values()) {
@@ -33,9 +36,13 @@ export default async function ExportPage(props: { params: Promise<{ id: string }
         <>
           <p className="mb-4 text-sm text-slate-600">
             {current.size} activities have reported progress — {complete} complete, {inProgress} in progress.
-            Re-upload <span className="font-medium">{latest.fileName}</span> to inject these actuals.
+            {hasStoredOriginal ? (
+              <>These actuals will be written into the original <span className="font-medium">{latest.fileName}</span>.</>
+            ) : (
+              <>Re-upload <span className="font-medium">{latest.fileName}</span> to inject these actuals.</>
+            )}
           </p>
-          <ExportPanel projectId={project.id} />
+          <ExportPanel projectId={project.id} hasStoredOriginal={hasStoredOriginal} />
         </>
       )}
     </main>

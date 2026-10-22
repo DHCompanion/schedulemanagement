@@ -10,14 +10,15 @@ import { resolveExportBase } from "@/lib/completeness/acceptSplit";
 import { injectSplits, type SplitForExport } from "@/lib/export/injectSplits";
 import { injectTrades, type TradeForExport } from "@/lib/export/injectTrades";
 import { resolveActivityTrades } from "@/lib/trades/activityTrades";
+import { getImportFile } from "@/lib/storage/importFiles";
+
+/** A re-uploaded copy of the imported file; null means use the stored original. */
+export type ExportUpload = { xml: string; fileName: string } | null;
 
 export async function buildExport(
   projectId: string,
-  uploadedXml: string,
-  uploadedFileName: string,
+  upload: ExportUpload,
 ): Promise<{ fileName: string; xml: string; deletedTasks: { name: string; wbsCode: string | null }[] }> {
-  const fileHash = crypto.createHash("sha256").update(uploadedXml).digest("hex");
-
   const latest = await prisma.scheduleImport.findFirst({
     where: { projectId },
     orderBy: { importedAt: "desc" },
@@ -26,8 +27,20 @@ export async function buildExport(
   if (!latest) throw new Error("No imported schedule to export.");
 
   const { baseImport, splits } = await resolveExportBase(latest.id);
-  if (baseImport.fileHash !== fileHash) {
-    throw new Error("This file doesn't match the current imported schedule — export the file you most recently imported.");
+  let uploadedXml: string;
+  let uploadedFileName: string;
+  if (upload) {
+    const fileHash = crypto.createHash("sha256").update(upload.xml).digest("hex");
+    if (baseImport.fileHash !== fileHash) {
+      throw new Error("This file doesn't match the current imported schedule — export the file you most recently imported.");
+    }
+    uploadedXml = upload.xml;
+    uploadedFileName = upload.fileName;
+  } else {
+    const stored = baseImport.sourceObjectKey ? await getImportFile(baseImport.sourceObjectKey) : null;
+    if (stored === null) throw new Error(`The original file isn't on file — upload ${baseImport.fileName} to export.`);
+    uploadedXml = stored;
+    uploadedFileName = baseImport.fileName;
   }
 
   const current = resolveCurrentProgress(await getFinalizedEntries(projectId));

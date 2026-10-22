@@ -54,6 +54,9 @@ model ScheduleImport {
   sourceFormat           String
   fileName               String
   fileHash               String
+  // Private storage key for the original file (lib/storage/importFiles.ts).
+  // Null for imports made before files were kept, and for synthetic imports.
+  sourceObjectKey        String?
   importedAt             DateTime  @default(now())
   importedBy             String?
   // OS person who performed this, from the verified launch scope (contract Q11).
