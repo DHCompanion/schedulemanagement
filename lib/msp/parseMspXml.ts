@@ -68,6 +68,7 @@ export function parseMspXml(xml: string): ParsedSchedule {
   const activities: ParsedActivity[] = [];
   const relationships: ParsedRelationship[] = [];
   let milestoneCount = 0;
+  let unnamedCount = 0;
 
   for (const t of rawTasks) {
     const uid = num(t.UID);
@@ -75,6 +76,9 @@ export function parseMspXml(xml: string): ParsedSchedule {
 
     const isMilestone = bool(t.Milestone);
     const isSummary = bool(t.Summary);
+    // A nameless leaf can't be named, mapped or benchmarked. MS Project's own XML
+    // save drops these; MPXJ's .mpp conversion keeps them.
+    if (!isSummary && !str(t.Name)) { unnamedCount++; continue; }
     const outlineLevel = num(t.OutlineLevel) ?? 0;
     const isProjectSummary = outlineLevel === 0;
     let type: CanonicalActivityType = "task";
@@ -179,6 +183,8 @@ export function parseMspXml(xml: string): ParsedSchedule {
   const calendars: ParsedCalendar[] = toArray((project.Calendars as Any)?.Calendar as Any)
     .filter((c: Any) => num(c.UID) !== null)
     .map((c: Any) => ({ externalUid: num(c.UID) as number, name: str(c.Name), raw: c }));
+
+  if (unnamedCount) warnings.push(`Skipped ${unnamedCount} task${unnamedCount === 1 ? "" : "s"} with no name.`);
 
   return {
     header,
