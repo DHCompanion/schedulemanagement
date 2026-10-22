@@ -142,28 +142,41 @@ Mobile: a single column, and the pill wraps. No new colors beyond the existing s
 
 ---
 
-## Phase 2 — Raw file storage + `.mpp` intake
+## Phase 2 — Raw file storage ✅ (PR #40)
 
-- **Raw XML to private S3** in `commitImport` (key: `imports/<projectId>/<fileHash>.xml`), plus a `sourceObjectKey String?` column on `ScheduleImport` (additive migration, safe to roll back). Downloads go through signed URLs only. Re-export can then read the stored original instead of asking for a re-upload. Reuse the private-bucket/signed-URL pattern from Connect's New Project Intake. Check first whether Schedule Manager's host (Vercel) already has an S3 client configured, and only add `@aws-sdk/client-s3` + `s3-request-presigner` if not.
-- **`.mpp`:** no code. Write a one-page admin how-to (open in MS Project → Save As XML). The MPXJ converter is deferred until volume or Primavera XER files show up.
+- Original XML goes to a private S3 bucket (`imports/<projectId>/<fileHash>.xml`) before the snapshot is saved. `ScheduleImport.sourceObjectKey` is an additive migration. Server-only reads; no signed URLs until a download button is wanted.
+- Export uses the stored original. Only imports from before this change ask for a re-upload.
 
-## Phase 3 — Backfill script + pilot (9 cath lab files)
+## Scale decisions (2026-10-22, Q42–Q46)
 
-- `scripts/backfill.ts` (tsx). It takes a folder and a project map CSV (`file,projectName`), creates or looks up the project, and calls `commitImport` for each file, skipping duplicate `fileHash`es. It prints a table: file → project, tier, score, failed metrics, reasons (from `getImportQuality`). Use `isBaseline` from `previewImport`'s suggestion.
-- Run it on `Schedulecomparisions/` XMLs, after the `.mpp` files are saved as XML and junk files (`hello.*`, `world.txt`, `steam%20engines.md`) are removed.
-- **Calibration:** review the table with an admin and adjust the Phase 1 and 2 constants. That's the point of the pilot.
-- The script is deleted after Phase 6.
+2020 alone is 200+ files, mostly incremental saves; 2020–2026 will be 1000+.
+
+- **Keep only key versions per project:** the earliest, the latest, and one per month in between. Skipped files stay listed in the manifest.
+- **Benchmarks count projects, not files:** actuals from the latest eligible import, planned durations from the earliest.
+- **Local manifest step before any import** (replaces the hand-made project map). It runs on the user's machine, outside the app:
+  1. MPXJ batch-converts `.mpp` → MSPDI XML (needs Java). This supersedes the manual Save As.
+  2. A script writes one CSV row per file: hash (dupes), title from file, file-name date, activity count, date range, proposed project group, keep/skip.
+  3. Local model (see the `delegating-to-local-model` skill) proposes groupings for mismatched titles and guesses project metadata (building type, client, sector) into the CSV. Claude reviews the summary and low-confidence rows, not raw files.
+  4. Admins correct the CSV. The backfill imports only `keep` rows.
+- The local model also suggests activity-name → scope mappings, but in Phase 4.
+
+## Phase 3 — Manifest + backfill script + pilot
+
+- `scripts/manifest.ts` and the MPXJ conversion step, as above.
+- `scripts/backfill.ts` (tsx) reads the corrected manifest, creates or looks up projects, and calls `commitImport` for each `keep` row, skipping duplicate hashes. It is resumable, and prints tier, score and reasons per file (`getImportQuality`).
+- Pilot on 2020 first (200+ files), then calibrate the Phase 1 constants with an admin.
+- Delete the scripts after Phase 6.
 
 ## Phase 4 — Review queues + admin metadata/grouping table
 
-- **Dictionary suggestions:** extend the existing `DictionaryPanel` / `NormalizePanel` flow with a cross-project queue of unmapped names sorted by frequency. Reuse `suggestScopes.ts`. The LLM classifier is added only if the Jaccard match is weak on the pilot names.
-- **Split-rule mining:** WBS parent→children patterns matched against the existing `ScopeSplitRule`s first; only novel patterns get queued in `SplitRulesPanel`.
-- **Admin project table:** bulk edit of `Project` metadata, prefilled from filename/`rawProjectProps`. Confirm grouping (duplicate hash, then name + date overlap). Tier override: `tierOverride String?` on `ScheduleImport`, an additive migration.
-- **Sub identity:** a raw-text capture rule plus a suggested trade-partner match. Shown only, not scored.
+- **Dictionary suggestions:** a cross-project queue of unmapped names, sorted by frequency, pre-filled by local-model suggestions with `suggestScopes.ts` (Jaccard) as the fallback.
+- **Split-rule mining:** WBS parent→children patterns, matched against the existing `ScopeSplitRule`s first; only novel ones get queued.
+- **Admin project table:** metadata pre-filled from the manifest. Tier override is `tierOverride String?` on `ScheduleImport`, an additive migration.
+- **Sub identity:** raw text plus a suggested trade-partner match. Shown, not scored.
 
 ## Phase 5 — Benchmarks + surfacing
 
-- `lib/benchmarks/` pure aggregation: span per canonical scope per project; median, P25 and P75; n ≥ 5; split by buildingType, falling back to sector. It filters out `isSynthetic`, imports that aren't benchmark-eligible, and actuals from unfinished scopes. Computed at read time, like Phase 1.
+- `lib/benchmarks/` pure aggregation, **one contribution per project** (latest eligible import for actuals, earliest for planned): span per canonical scope; median, P25 and P75; n ≥ 5; split by buildingType, falling back to sector. It filters out `isSynthetic`, imports that aren't benchmark-eligible, and actuals from unfinished scopes. Computed at read time, like Phase 1.
 - Also store sequencing-pair, criticality-frequency and milestone-gap aggregates here (spec Q17 #3–5).
 - **Surfacing:** a range beside the duration in `ActivityDetail`, a new Data Health check (duration outside historical range), and a "usually critical" marker.
 
