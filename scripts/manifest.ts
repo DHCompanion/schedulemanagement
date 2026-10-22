@@ -120,6 +120,14 @@ function main() {
       },
     ]),
   );
+  // A job with every row at "no" was dropped by the reviewer — otherwise its script-skipped
+  // rows would be promoted to earliest/latest on the rerun and the job would come back.
+  const byGroup = new Map<string, Record<string, string>[]>();
+  for (const r of previous) if (r.group) byGroup.set(r.group, [...(byGroup.get(r.group) ?? []), r]);
+  for (const members of byGroup.values()) {
+    const dropped = members.every((r) => r.keep?.trim().toLowerCase() === "no") && members.some((r) => reviews.get(r.file)?.reviewerSkip);
+    if (dropped) for (const r of members) reviews.get(r.file)!.reviewerSkip = true;
+  }
   const rows = walk(mppDir).filter((p) => /\.mpp$/i.test(p)).map((p) => readRow(mppDir, xmlDir, p, reviews));
   const placed = placeFiles(rows);
   const columns = ["project", "group", "keep", "reason", "checkGrouping", "kind", "file", "title", "creationDate", "lastSaved", "projectStart", "projectFinish", "statusDate", "leaves", "relationships", "withActuals", "sha256"] as const;
