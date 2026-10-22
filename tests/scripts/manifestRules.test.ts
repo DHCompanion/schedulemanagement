@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { nameStem, placeFiles, type ManifestFile } from "@/scripts/manifestRules";
 
 function f(file: string, lastSaved: string, over: Partial<ManifestFile> = {}): ManifestFile {
-  return { file, title: file, project: null, sha256: file, creationDate: "2020-05-01T00:49:00", lastSaved, error: null, ...over };
+  return { file, title: file, project: null, reviewerSkip: false, sha256: file, creationDate: "2020-05-01T00:49:00", lastSaved, error: null, ...over };
 }
 
 describe("nameStem", () => {
@@ -69,6 +69,16 @@ describe("placeFiles", () => {
     expect(p.get("Landry 1")?.reason).toBe("earliest version");
     expect(p.get("Landry stray")?.reason).toBe("last save of 2020-06");
     expect(p.get("Landry 2")?.reason).toBe("latest version");
+  });
+
+  it("honours a reviewer's skip and picks earliest/latest from what's left", () => {
+    const p = placeFiles([
+      f("a 5.02", "2020-05-02T10:00:00"),
+      f("a 6.10", "2020-06-10T10:00:00"),
+      f("a 7.01", "2020-07-01T10:00:00", { reviewerSkip: true }),
+    ]);
+    expect(p.get("a 7.01")).toMatchObject({ keep: false, reason: "skipped by reviewer" });
+    expect(p.get("a 6.10")?.reason).toBe("latest version");
   });
 
   it("names a proposed group after its latest file's title", () => {

@@ -63,12 +63,19 @@ function readCsv(text: string): Record<string, string>[] {
 // Short-term working schedules: imported for their task names, never benchmarked (plan Q48).
 const SHORT_TERM = /pull plan|look ?-?ahead/i;
 
-function readRow(mppDir: string, xmlDir: string, mppPath: string, projectByFile: Map<string, string>): Row {
+interface Review { project: string | null; reviewerSkip: boolean; kind: string }
+
+function readRow(mppDir: string, xmlDir: string, mppPath: string, reviews: Map<string, Review>): Row {
   const file = relative(mppDir, mppPath);
-  const project = projectByFile.get(file) || null;
+  const review = reviews.get(file);
+  const project = review?.project ?? null;
+  const reviewerSkip = review?.reviewerSkip ?? false;
   const sha256 = crypto.createHash("sha256").update(readFileSync(mppPath)).digest("hex");
-  const kindOf = (title: string) => (SHORT_TERM.test(file) || SHORT_TERM.test(title) ? "short-term" : "master") as Row["kind"];
-  const empty = { project, kind: kindOf(""), title: "", projectStart: "", projectFinish: "", statusDate: "", leaves: 0, relationships: 0, withActuals: 0, creationDate: null, lastSaved: null };
+  const kindOf = (title: string): Row["kind"] => {
+    if (review?.kind === "master" || review?.kind === "short-term") return review.kind;
+    return SHORT_TERM.test(file) || SHORT_TERM.test(title) ? "short-term" : "master";
+  };
+  const empty = { project, reviewerSkip, kind: kindOf(""), title: "", projectStart: "", projectFinish: "", statusDate: "", leaves: 0, relationships: 0, withActuals: 0, creationDate: null, lastSaved: null };
   const xmlPath = join(xmlDir, file.replace(/\.[^.]+$/, ".xml"));
   if (!existsSync(xmlPath)) return { ...empty, file, sha256, error: "not converted (see _failed.txt)" };
   try {
@@ -78,6 +85,7 @@ function readRow(mppDir: string, xmlDir: string, mppPath: string, projectByFile:
       file,
       sha256,
       project,
+      reviewerSkip,
       kind: kindOf(parsed.header.titleFromFile),
       error: null,
       title: parsed.header.titleFromFile,
@@ -99,9 +107,20 @@ function main() {
   const [mppDir, xmlDir, outCsv] = process.argv.slice(2);
   if (!mppDir || !xmlDir || !outCsv) throw new Error("usage: tsx scripts/manifest.ts <mpp-dir> <xml-dir> <out.csv>");
 
-  const previous = existsSync(outCsv) ? readCsv(readFileSync(outCsv, "utf8")) : [];
-  const projectByFile = new Map(previous.filter((r) => r.project).map((r) => [r.file, r.project]));
-  const rows = walk(mppDir).filter((p) => /\.mpp$/i.test(p)).map((p) => readRow(mppDir, xmlDir, p, projectByFile));
+  // Spreadsheet apps add a BOM and change case ("No", "TRUE"); normalise both.
+  const previous = existsSync(outCsv) ? readCsv(readFileSync(outCsv, "utf8").replace(/^\uFEFF/, "")) : [];
+  const reviews = new Map<string, Review>(
+    previous.map((r) => [
+      r.file,
+      {
+        project: r.project?.trim() || null,
+        // A "no" the script didn't decide is the reviewer's; the script's own skips get recomputed.
+        reviewerSkip: r.keep?.trim().toLowerCase() === "no" && !/^(duplicate of|superseded|conversion failed)/.test(r.reason ?? ""),
+        kind: r.kind?.trim().toLowerCase() ?? "",
+      },
+    ]),
+  );
+  const rows = walk(mppDir).filter((p) => /\.mpp$/i.test(p)).map((p) => readRow(mppDir, xmlDir, p, reviews));
   const placed = placeFiles(rows);
   const columns = ["project", "group", "keep", "reason", "checkGrouping", "kind", "file", "title", "creationDate", "lastSaved", "projectStart", "projectFinish", "statusDate", "leaves", "relationships", "withActuals", "sha256"] as const;
   const lines = rows

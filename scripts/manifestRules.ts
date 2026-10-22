@@ -7,6 +7,8 @@ export interface ManifestFile {
   title: string;
   /** Reviewer's project name from a previous manifest; overrides the proposed grouping. */
   project: string | null;
+  /** Reviewer set keep=no: never imported, and not considered when picking versions. */
+  reviewerSkip: boolean;
   sha256: string;
   /** Header CreationDate — survives every incremental save of the same file. */
   creationDate: string | null;
@@ -93,6 +95,7 @@ function placeGroups(files: ManifestFile[]): Map<string, Placement> {
     const seen = new Map<string, string>();
     const unique: ManifestFile[] = [];
     for (const f of sorted) {
+      if (f.reviewerSkip) { place(f, false, "skipped by reviewer"); continue; }
       const dup = seen.get(f.sha256);
       if (dup) place(f, false, `duplicate of ${dup}`);
       else {
