@@ -95,7 +95,6 @@ export interface TierInput {
   leafCount: number;
   relationshipCount: number;
   leavesWithActuals: number;   // actualStart or actualFinish set
-  hasStatusDate: boolean;
   logic: LogicScore;
 }
 export function classifyImport(input: TierInput): { tier: ImportTier; reasons: string[] };
@@ -104,7 +103,7 @@ export function classifyImport(input: TierInput): { tier: ImportTier; reasons: s
 Rules, evaluated in order (constants at the top of the file, marked `ponytail:` for calibration):
 1. `leafCount < MIN_LEAVES` (10) → **junk**
 2. `!logic.benchmarkEligible` or `relationshipCount / leafCount < MIN_LINKS_PER_LEAF` (0.8) → **rough**
-3. `hasStatusDate && leavesWithActuals / leafCount >= MIN_ACTUALS_SHARE` (0.1) → **as_built**
+3. `leavesWithActuals / leafCount >= MIN_ACTUALS_SHARE` (0.1) → **as_built** (status date ignored — too spotty in MSP files; decided 2026-10-22)
 4. otherwise → **baseline**
 
 `reasons` are plain sentences for the UI and the backfill report (e.g. "Only 42% of activities have both a predecessor and successor").

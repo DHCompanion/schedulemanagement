@@ -16,7 +16,7 @@ function logic(overrides: Partial<LogicScore> = {}): LogicScore {
 }
 
 function input(overrides: Partial<TierInput> = {}): TierInput {
-  return { leafCount: 100, relationshipCount: 120, leavesWithActuals: 0, hasStatusDate: false, logic: logic(), ...overrides };
+  return { leafCount: 100, relationshipCount: 120, leavesWithActuals: 0, logic: logic(), ...overrides };
 }
 
 describe("classifyImport", () => {
@@ -43,17 +43,13 @@ describe("classifyImport", () => {
     expect(classifyImport(input({ relationshipCount: 80 })).tier).toBe("baseline");
   });
 
-  it("calls a statused file with enough actuals as-built", () => {
-    expect(classifyImport(input({ hasStatusDate: true, leavesWithActuals: 10 })).tier).toBe("as_built");
-    expect(classifyImport(input({ hasStatusDate: true, leavesWithActuals: 9 })).tier).toBe("baseline");
-  });
-
-  it("needs a status date to be as-built", () => {
-    expect(classifyImport(input({ hasStatusDate: false, leavesWithActuals: 80 })).tier).toBe("baseline");
+  it("calls a file with enough actuals as-built", () => {
+    expect(classifyImport(input({ leavesWithActuals: 10 })).tier).toBe("as_built");
+    expect(classifyImport(input({ leavesWithActuals: 9 })).tier).toBe("baseline");
   });
 
   it("always gives at least one reason", () => {
-    for (const i of [input({ leafCount: 3 }), input(), input({ hasStatusDate: true, leavesWithActuals: 50 })]) {
+    for (const i of [input({ leafCount: 3 }), input(), input({ leavesWithActuals: 50 })]) {
       expect(classifyImport(i).reasons.length).toBeGreaterThan(0);
     }
   });

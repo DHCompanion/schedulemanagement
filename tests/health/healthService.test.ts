@@ -73,7 +73,8 @@ describe.runIf(hasDb)("healthService", () => {
       const imp = await prisma.scheduleImport.create({
         data: { projectId: p.id, sourceFormat: "msproject_xml", fileName: "x.xml", fileHash: "h", minutesPerDay: 480 },
       });
-      // An 11-activity FS chain plus one orphan: 1 of 12 missing logic (8%) fails the 5% limit.
+      // An 11-activity FS chain plus one orphan: 1 of 12 missing logic (8%) fails strict DCMA (5%)
+      // but stays inside the looser benchmark limits, so the import is still a baseline.
       await prisma.activity.createMany({
         data: Array.from({ length: 12 }, (_, i) => ({
           scheduleImportId: imp.id,
@@ -95,7 +96,7 @@ describe.runIf(hasDb)("healthService", () => {
       const health = await getScheduleHealth(p.id);
       const missing = health.quality?.logic.metrics.find((m) => m.key === "missing_logic");
       expect(missing).toMatchObject({ count: 1, denominator: 12, pass: false });
-      expect(health.quality?.tier).toBe("rough");
+      expect(health.quality?.tier).toBe("baseline");
       expect(await getImportQuality(imp.id)).toEqual(health.quality);
     } finally {
       await prisma.project.delete({ where: { id: p.id } });

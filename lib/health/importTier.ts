@@ -15,14 +15,13 @@ export interface TierInput {
   leafCount: number;
   relationshipCount: number;
   leavesWithActuals: number;
-  hasStatusDate: boolean;
   logic: LogicScore;
 }
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 export function classifyImport(input: TierInput): { tier: ImportTier; reasons: string[] } {
-  const { leafCount, relationshipCount, leavesWithActuals, hasStatusDate, logic } = input;
+  const { leafCount, relationshipCount, leavesWithActuals, logic } = input;
 
   if (leafCount < MIN_LEAVES) {
     return { tier: "junk", reasons: [`Only ${leafCount} activities — too few to learn from.`] };
@@ -39,11 +38,12 @@ export function classifyImport(input: TierInput): { tier: ImportTier; reasons: s
   if (rough.length) return { tier: "rough", reasons: rough };
 
   const actualsShare = leavesWithActuals / leafCount;
-  if (hasStatusDate && actualsShare >= MIN_ACTUALS_SHARE) {
+  // Status date is deliberately ignored: it's set too inconsistently in MS Project files to decide anything.
+  if (actualsShare >= MIN_ACTUALS_SHARE) {
     return { tier: "as_built", reasons: [`${pct(actualsShare)} of activities have actual dates.`] };
   }
   return {
     tier: "baseline",
-    reasons: [hasStatusDate ? `Only ${pct(actualsShare)} of activities have actual dates.` : "No status date — treated as a plan, not progress."],
+    reasons: [actualsShare === 0 ? "No actual dates — treated as a plan, not progress." : `Only ${pct(actualsShare)} of activities have actual dates.`],
   };
 }

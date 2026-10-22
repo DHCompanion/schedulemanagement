@@ -34,7 +34,6 @@ export interface ScheduleHealth {
 
 interface QualitySource {
   minutesPerDay: number | null;
-  statusDate: Date | null;
   activities: LogicActivity[];
   relationships: LogicRelationship[];
 }
@@ -47,7 +46,6 @@ function importQuality(imp: QualitySource): ImportQuality {
     leafCount: leaves.length,
     relationshipCount: imp.relationships.filter((r) => leafUids.has(r.predecessorExternalUid) && leafUids.has(r.successorExternalUid)).length,
     leavesWithActuals: leaves.filter((a) => a.actualStart || a.actualFinish).length,
-    hasStatusDate: imp.statusDate !== null,
     logic,
   });
   return { logic, tier, reasons };
