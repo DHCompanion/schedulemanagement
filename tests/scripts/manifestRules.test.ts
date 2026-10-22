@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { nameStem, placeFiles, type ManifestFile } from "@/scripts/manifestRules";
 
 function f(file: string, lastSaved: string, over: Partial<ManifestFile> = {}): ManifestFile {
-  return { file, sha256: file, creationDate: "2020-05-01T00:49:00", lastSaved, error: null, ...over };
+  return { file, title: file, project: null, sha256: file, creationDate: "2020-05-01T00:49:00", lastSaved, error: null, ...over };
 }
 
 describe("nameStem", () => {
@@ -46,6 +46,22 @@ describe("placeFiles", () => {
   it("always flags groups made by name because the file had no creation date", () => {
     const p = placeFiles([f("Parker South 1.mpp", "2020-05-02T10:00:00", { creationDate: null })]);
     expect(p.get("Parker South 1.mpp")?.checkGrouping).toBe(true);
+  });
+
+  it("regroups by the reviewer's project names and recomputes keep/skip per project", () => {
+    const p = placeFiles([
+      f("WCWH 1", "2020-05-02T10:00:00", { project: "WCWH Pharmacy" }),
+      f("WCWH 2", "2020-05-10T10:00:00", { project: "WCWH Pharmacy" }),
+      f("Laredo 1", "2020-05-05T10:00:00", { project: "Laredo Pharmacy" }),
+    ]);
+    expect(p.get("WCWH 1")).toMatchObject({ group: "WCWH Pharmacy", keep: true, reason: "earliest version", checkGrouping: false });
+    expect(p.get("WCWH 2")?.reason).toBe("latest version");
+    expect(p.get("Laredo 1")).toMatchObject({ group: "Laredo Pharmacy", reason: "only version" });
+  });
+
+  it("names a proposed group after its latest file's title", () => {
+    const p = placeFiles([f("a", "2020-05-02T10:00:00", { title: "Old" }), f("b", "2020-06-02T10:00:00", { title: "Parker South" })]);
+    expect(p.get("a")?.group).toBe("Parker South");
   });
 
   it("skips failed conversions with the error as the reason", () => {

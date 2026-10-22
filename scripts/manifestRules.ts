@@ -4,6 +4,9 @@
 
 export interface ManifestFile {
   file: string;
+  title: string;
+  /** Reviewer's project name from a previous manifest; overrides the proposed grouping. */
+  project: string | null;
   sha256: string;
   /** Header CreationDate — survives every incremental save of the same file. */
   creationDate: string | null;
@@ -13,6 +16,7 @@ export interface ManifestFile {
 }
 
 export interface Placement {
+  /** Proposed project name: the reviewer's, else the latest file's title. */
   group: string;
   keep: boolean;
   reason: string;
@@ -45,6 +49,7 @@ function jaccard(a: string, b: string): number {
 const SAME_NAME_JACCARD = 0.3;
 
 function groupKey(f: ManifestFile): string {
+  if (f.project) return `project ${f.project}`;
   // CreationDate to the minute is shared by every save of one file, and rarely by different jobs.
   // Without it, fall back to the name — weaker, so those groups always get checked.
   return f.creationDate ? `created ${f.creationDate.slice(0, 16)}` : `name ${nameStem(f.file)}`;
@@ -65,9 +70,11 @@ export function placeFiles(files: ManifestFile[]): Map<string, Placement> {
   for (const [key, members] of groups) {
     const stems = [...new Set(members.map((m) => nameStem(m.file)))];
     const dissimilar = stems.some((a) => stems.some((b) => jaccard(a, b) < SAME_NAME_JACCARD));
-    const checkGrouping = key.startsWith("name ") || dissimilar;
+    const reviewed = key.startsWith("project ");
+    const checkGrouping = !reviewed && (key.startsWith("name ") || dissimilar);
     const sorted = [...members].sort((a, b) => (a.lastSaved ?? "").localeCompare(b.lastSaved ?? "") || a.file.localeCompare(b.file));
-    const place = (f: ManifestFile, keep: boolean, reason: string) => out.set(f.file, { group: key, keep, reason, checkGrouping });
+    const label = reviewed ? key.slice("project ".length) : sorted[sorted.length - 1].title || nameStem(sorted[sorted.length - 1].file);
+    const place = (f: ManifestFile, keep: boolean, reason: string) => out.set(f.file, { group: label, keep, reason, checkGrouping });
 
     const seen = new Map<string, string>();
     const unique: ManifestFile[] = [];
