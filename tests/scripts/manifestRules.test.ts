@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nameStem, placeFiles, type ManifestFile } from "@/scripts/manifestRules";
+import { backfillPlan, nameStem, placeFiles, type ManifestFile } from "@/scripts/manifestRules";
 
 function f(file: string, lastSaved: string, over: Partial<ManifestFile> = {}): ManifestFile {
   return { file, title: file, project: null, reviewerSkip: false, sha256: file, creationDate: "2020-05-01T00:49:00", lastSaved, error: null, ...over };
@@ -89,5 +89,27 @@ describe("placeFiles", () => {
   it("skips failed conversions with the error as the reason", () => {
     const p = placeFiles([f("bad.mpp", "", { error: "unreadable" })]);
     expect(p.get("bad.mpp")).toMatchObject({ keep: false, reason: "conversion failed: unreadable" });
+  });
+});
+
+describe("backfillPlan", () => {
+  const row = (file: string, lastSaved: string, over: Record<string, string> = {}) => ({ file, group: "Job", keep: "yes", kind: "master", lastSaved, ...over });
+
+  it("imports kept rows oldest first with the earliest master file as baseline", () => {
+    const [job] = backfillPlan([
+      row("late", "2020-07-01T00:00:00"),
+      row("pull plan", "2020-04-01T00:00:00", { kind: "short-term" }),
+      row("early", "2020-05-01T00:00:00"),
+      row("skipped", "2020-06-01T00:00:00", { keep: "no" }),
+    ]);
+    expect(job.files).toEqual([
+      { file: "pull plan", isBaseline: false, tierOverride: "rough" },
+      { file: "early", isBaseline: true, tierOverride: null },
+      { file: "late", isBaseline: false, tierOverride: null },
+    ]);
+  });
+
+  it("ignores rows with no group (failed conversions) and accepts YES in any case", () => {
+    expect(backfillPlan([row("x", "", { group: "" }), row("y", "", { keep: "YES" })]).map((p) => p.files.length)).toEqual([1]);
   });
 });

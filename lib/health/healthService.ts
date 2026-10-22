@@ -12,7 +12,7 @@ import {
 } from "@/lib/health/dateChecks";
 import { isLeafActive } from "@/lib/msp/types";
 import { scoreLogic, type LogicActivity, type LogicRelationship, type LogicScore } from "@/lib/health/logicChecks";
-import { classifyImport, type ImportTier } from "@/lib/health/importTier";
+import { classifyImport, isImportTier, type ImportTier } from "@/lib/health/importTier";
 
 const DEFAULT_MINUTES_PER_DAY = 480;
 
@@ -34,6 +34,7 @@ export interface ScheduleHealth {
 
 interface QualitySource {
   minutesPerDay: number | null;
+  tierOverride: string | null;
   activities: LogicActivity[];
   relationships: LogicRelationship[];
 }
@@ -48,6 +49,9 @@ function importQuality(imp: QualitySource): ImportQuality {
     leavesWithActuals: leaves.filter((a) => a.actualStart || a.actualFinish).length,
     logic,
   });
+  if (isImportTier(imp.tierOverride) && imp.tierOverride !== tier) {
+    return { logic, tier: imp.tierOverride, reasons: [`Set to ${imp.tierOverride.replace("_", "-")} in review.`, ...reasons] };
+  }
   return { logic, tier, reasons };
 }
 

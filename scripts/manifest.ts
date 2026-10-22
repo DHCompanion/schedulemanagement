@@ -14,7 +14,7 @@ import { readFileSync, readdirSync, statSync, existsSync, writeFileSync } from "
 import { join, relative } from "node:path";
 import { parseMspXml } from "@/lib/msp/parseMspXml";
 import { isLeafActive } from "@/lib/msp/types";
-import { placeFiles, type ManifestFile } from "./manifestRules";
+import { placeFiles, readCsv, type ManifestFile } from "./manifestRules";
 
 interface Row extends ManifestFile {
   kind: "master" | "short-term";
@@ -36,28 +36,6 @@ function walk(dir: string): string[] {
 function csv(value: string | number | boolean): string {
   const s = String(value);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-/** Minimal CSV reader for the file this script writes (quoted fields, doubled quotes). */
-function readCsv(text: string): Record<string, string>[] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quoted) {
-      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') quoted = false;
-      else field += c;
-    } else if (c === '"') quoted = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else if (c !== "\r") field += c;
-  }
-  if (field || row.length) { row.push(field); rows.push(row); }
-  const [head, ...body] = rows;
-  return body.map((r) => Object.fromEntries(head.map((h, i) => [h, r[i] ?? ""])));
 }
 
 // Short-term working schedules: imported for their task names, never benchmarked (plan Q48).

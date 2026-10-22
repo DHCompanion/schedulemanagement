@@ -123,6 +123,12 @@ describe.runIf(hasDb)("healthService", () => {
       expect(missing).toMatchObject({ count: 1, denominator: 12, pass: false });
       expect(health.quality?.tier).toBe("baseline");
       expect(await getImportQuality(imp.id)).toEqual(health.quality);
+
+      // A reviewer override wins, and says so first.
+      await prisma.scheduleImport.update({ where: { id: imp.id }, data: { tierOverride: "rough" } });
+      const overridden = await getImportQuality(imp.id);
+      expect(overridden.tier).toBe("rough");
+      expect(overridden.reasons[0]).toBe("Set to rough in review.");
     } finally {
       await prisma.project.delete({ where: { id: p.id } });
     }

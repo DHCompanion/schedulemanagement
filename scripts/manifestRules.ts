@@ -117,3 +117,49 @@ function placeGroups(files: ManifestFile[]): Map<string, Placement> {
   }
   return out;
 }
+
+/** Minimal CSV reader for the file this script writes (quoted fields, doubled quotes). */
+export function readCsv(text: string): Record<string, string>[] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else field += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+    else if (c !== "\r") field += c;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  const [head, ...body] = rows;
+  return body.map((r) => Object.fromEntries(head.map((h, i) => [h, r[i] ?? ""])));
+}
+
+export interface BackfillFile {
+  file: string;
+  isBaseline: boolean;
+  /** Short-term schedules feed names only (plan Q48). */
+  tierOverride: "rough" | null;
+}
+
+/** Reviewed manifest → per-project import order: kept rows, oldest save first, earliest master file as the baseline. */
+export function backfillPlan(rows: Record<string, string>[]): { project: string; files: BackfillFile[] }[] {
+  const byProject = new Map<string, Record<string, string>[]>();
+  for (const r of rows) {
+    if (r.keep?.trim().toLowerCase() !== "yes" || !r.group) continue;
+    byProject.set(r.group, [...(byProject.get(r.group) ?? []), r]);
+  }
+  return [...byProject].map(([project, members]) => {
+    const sorted = [...members].sort((a, b) => (a.lastSaved ?? "").localeCompare(b.lastSaved ?? ""));
+    const baseline = sorted.find((r) => r.kind !== "short-term");
+    return {
+      project,
+      files: sorted.map((r) => ({ file: r.file, isBaseline: r === baseline, tierOverride: r.kind === "short-term" ? "rough" : null })),
+    };
+  });
+}
