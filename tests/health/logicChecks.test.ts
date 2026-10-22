@@ -210,16 +210,22 @@ describe("scoreLogic", () => {
     expect(metric(s, "missing_logic").denominator).toBe(5);
   });
 
-  it("is ineligible below the minimum score even when logic passes", () => {
+  it("stays eligible when only style checks fail", () => {
     const { activities, relationships } = chain(10);
     relationships.forEach((r) => (r.type = "SS"));
     relationships[0].lagMinutes = -DAY;
     relationships[1].lagMinutes = DAY;
-    activities[0].constraintType = 2;
-    activities[1].totalSlackMinutes = -DAY;
+    activities[1].totalSlackMinutes = 60 * DAY;
     const s = scoreLogic(activities, relationships, DAY);
-    expect(metric(s, "missing_logic").pass).toBe(true);
     expect(s.score).toBeLessThan(0.6);
-    expect(s.benchmarkEligible).toBe(false);
+    expect(s.benchmarkEligible).toBe(true);
+  });
+
+  it("is ineligible on a hard constraint, negative float or placeholder duration", () => {
+    for (const over of [{ constraintType: 2 }, { totalSlackMinutes: -DAY }, { durationMinutes: 60 * DAY }]) {
+      const { activities, relationships } = chain(10);
+      Object.assign(activities[4], over);
+      expect(scoreLogic(activities, relationships, DAY).benchmarkEligible).toBe(false);
+    }
   });
 });

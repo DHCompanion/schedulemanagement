@@ -68,7 +68,7 @@ export function scoreLogic(activities: LogicActivity[], relationships: LogicRela
 | `high_duration` | non-milestone with duration > 44 working days | ≤ 5% |
 | `out_of_sequence` | FS relationships where the successor has an actual start and the predecessor has no actual finish, or finished after it | ≤ 5% (denominator = FS relationships with a started successor; if that is 0, the metric passes and is excluded from `total`) |
 
-`benchmarkEligible = noPredecessorPct <= 10% && noSuccessorPct <= 50% && score >= 0.6` (loosened from strict DCMA missing logic after the first 5 pilot files all failed it; decided 2026-10-22). Missing successors are omissions, so existing links still feed sequencing; missing predecessors usually mean typed-in dates. Eligible files feed durations, names and sequencing. The strict DCMA metric still shows on Schedule Health.
+`benchmarkEligible = noPredecessorPct <= 10% && noSuccessorPct <= 50% && hard_constraints, negative_float and high_duration all pass`. Loosened twice: first from strict DCMA missing logic (all 5 cath files failed it), then from a 60%-of-checks floor (2020 pilot: only 16 of 27 projects usable; lags, leads, non-FS, float and out-of-sequence are style or side effects of loose ends). Decided 2026-10-22. The full DCMA score still shows on Schedule Health.
 
 - [ ] **Step 1: Write failing tests.** Build tiny fixtures with `act()`/`rel()` helpers, as in `dateChecks.test.ts`:
   - a clean 5-activity FS chain → every metric passes, score 1, eligible
