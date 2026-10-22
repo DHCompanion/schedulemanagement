@@ -67,6 +67,31 @@ describe.runIf(hasDb)("healthService", () => {
     expect(futureIssue?.externalId).toBe(10);
   }, 30000);
 
+  it("judges future actuals against the import date, not a stale status date", async () => {
+    const p = await prisma.project.create({ data: { name: "Health Stale Status Date Test" } });
+    try {
+      const imp = await prisma.scheduleImport.create({
+        data: {
+          projectId: p.id, sourceFormat: "msproject_xml", fileName: "x.xml", fileHash: "h",
+          statusDate: new Date("2026-01-30"), importedAt: new Date("2026-10-22"),
+        },
+      });
+      await prisma.activity.createMany({
+        data: [
+          // real progress recorded after a stale status date — fine
+          { scheduleImportId: imp.id, externalUid: 1, name: "Real", canonicalActivityKey: "1|real", type: "task", actualFinish: new Date("2026-08-15") },
+          // genuinely in the future relative to the import — still an error
+          { scheduleImportId: imp.id, externalUid: 2, name: "Future", canonicalActivityKey: "2|future", type: "task", actualFinish: new Date("2026-12-01") },
+        ],
+      });
+      const health = await getScheduleHealth(p.id);
+      expect(health.issues.filter((i) => i.check === "future_actual").map((i) => i.name)).toEqual(["Future"]);
+      expect(health.asOfDate?.toISOString().slice(0, 10)).toBe("2026-01-30");
+    } finally {
+      await prisma.project.delete({ where: { id: p.id } });
+    }
+  }, 30000);
+
   it("scores logic and tiers the latest import", async () => {
     const p = await prisma.project.create({ data: { name: "Health Logic Test" } });
     try {

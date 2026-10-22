@@ -91,7 +91,8 @@ export async function getScheduleHealth(projectId: string): Promise<ScheduleHeal
     percentComplete: a.percentComplete,
   }));
 
-  const issues = runHealthChecks(activities, env, asOfDate);
+  // Status date is too often stale in MS Project files to judge actuals by; the import date is not.
+  const issues = runHealthChecks(activities, env, latest.importedAt);
   const window = computeEnvelope(activities.filter(isLeafActive), env);
   return { hasImport: true, asOfDate, window, issues, summary: summarizeHealth(issues), progress: summarizeProgress(activities), quality: importQuality(latest) };
 }

@@ -141,7 +141,7 @@ export function checkFutureActuals(a: HealthActivity, asOfDate: Date): HealthIss
       severity: "error",
       field: offenders[0].key,
       value: iso(offenders[0].date),
-      message: `${labels} is after the data date (${iso(asOfDate)}) — recorded progress cannot be in the future.`,
+      message: `${labels} is after this schedule was imported (${iso(asOfDate)}) — recorded progress cannot be in the future.`,
     },
   ];
 }
