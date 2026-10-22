@@ -11,6 +11,16 @@ import {
   type ProgressSummary,
 } from "@/lib/health/dateChecks";
 import { isLeafActive } from "@/lib/msp/types";
+import { scoreLogic, type LogicActivity, type LogicRelationship, type LogicScore } from "@/lib/health/logicChecks";
+import { classifyImport, type ImportTier } from "@/lib/health/importTier";
+
+const DEFAULT_MINUTES_PER_DAY = 480;
+
+export interface ImportQuality {
+  logic: LogicScore;
+  tier: ImportTier;
+  reasons: string[];
+}
 
 export interface ScheduleHealth {
   hasImport: boolean;
@@ -19,6 +29,35 @@ export interface ScheduleHealth {
   issues: HealthIssue[];
   summary: HealthSummary;
   progress: ProgressSummary;
+  quality: ImportQuality | null;
+}
+
+interface QualitySource {
+  minutesPerDay: number | null;
+  activities: LogicActivity[];
+  relationships: LogicRelationship[];
+}
+
+function importQuality(imp: QualitySource): ImportQuality {
+  const logic = scoreLogic(imp.activities, imp.relationships, imp.minutesPerDay ?? DEFAULT_MINUTES_PER_DAY);
+  const leaves = imp.activities.filter(isLeafActive);
+  const leafUids = new Set(leaves.map((a) => a.externalUid));
+  const { tier, reasons } = classifyImport({
+    leafCount: leaves.length,
+    relationshipCount: imp.relationships.filter((r) => leafUids.has(r.predecessorExternalUid) && leafUids.has(r.successorExternalUid)).length,
+    leavesWithActuals: leaves.filter((a) => a.actualStart || a.actualFinish).length,
+    logic,
+  });
+  return { logic, tier, reasons };
+}
+
+/** Logic score and tier for one import. Shared by the health page and the backfill report. */
+export async function getImportQuality(importId: string): Promise<ImportQuality> {
+  const imp = await prisma.scheduleImport.findUniqueOrThrow({
+    where: { id: importId },
+    include: { activities: true, relationships: true },
+  });
+  return importQuality(imp);
 }
 
 /**
@@ -29,10 +68,10 @@ export async function getScheduleHealth(projectId: string): Promise<ScheduleHeal
   const latest = await prisma.scheduleImport.findFirst({
     where: { projectId },
     orderBy: { importedAt: "desc" },
-    include: { activities: true },
+    include: { activities: true, relationships: true },
   });
   if (!latest) {
-    return { hasImport: false, asOfDate: null, window: null, issues: [], summary: summarizeHealth([]), progress: summarizeProgress([]) };
+    return { hasImport: false, asOfDate: null, window: null, issues: [], summary: summarizeHealth([]), progress: summarizeProgress([]), quality: null };
   }
 
   const asOfDate = latest.statusDate ?? latest.importedAt;
@@ -52,7 +91,8 @@ export async function getScheduleHealth(projectId: string): Promise<ScheduleHeal
     percentComplete: a.percentComplete,
   }));
 
-  const issues = runHealthChecks(activities, env, asOfDate);
+  // Status date is too often stale in MS Project files to judge actuals by; the import date is not.
+  const issues = runHealthChecks(activities, env, latest.importedAt);
   const window = computeEnvelope(activities.filter(isLeafActive), env);
-  return { hasImport: true, asOfDate, window, issues, summary: summarizeHealth(issues), progress: summarizeProgress(activities) };
+  return { hasImport: true, asOfDate, window, issues, summary: summarizeHealth(issues), progress: summarizeProgress(activities), quality: importQuality(latest) };
 }
