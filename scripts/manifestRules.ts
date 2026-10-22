@@ -55,7 +55,21 @@ function groupKey(f: ManifestFile): string {
   return f.creationDate ? `created ${f.creationDate.slice(0, 16)}` : `name ${nameStem(f.file)}`;
 }
 
+/**
+ * A reviewer joins a row to another job by typing that job's proposed group name
+ * into `project`. Rows left blank in that job then follow it, so the name alone merges.
+ */
 export function placeFiles(files: ManifestFile[]): Map<string, Placement> {
+  const names = new Set(files.map((f) => f.project).filter(Boolean));
+  if (names.size === 0) return placeGroups(files);
+  const proposed = placeGroups(files.map((f) => ({ ...f, project: null })));
+  return placeGroups(files.map((f) => {
+    const label = proposed.get(f.file)?.group;
+    return !f.project && label && names.has(label) ? { ...f, project: label } : f;
+  }));
+}
+
+function placeGroups(files: ManifestFile[]): Map<string, Placement> {
   const out = new Map<string, Placement>();
   const groups = new Map<string, ManifestFile[]>();
   for (const f of files) {

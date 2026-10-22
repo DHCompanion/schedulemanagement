@@ -4,7 +4,8 @@
 //
 //   npx tsx scripts/manifest.ts <mpp-dir> <xml-dir> <out.csv>
 //
-// Review loop: fill the `project` column for rows whose grouping is wrong, save, and
+// Review loop: for a row in the wrong group, type the right job in `project` — an
+// existing `group` name to join that job, or a new name to split it out. Save and
 // rerun with the same <out.csv> — your project names are read back, rows are regrouped
 // and keep/skip is recomputed per project.
 

@@ -59,6 +59,18 @@ describe("placeFiles", () => {
     expect(p.get("Laredo 1")).toMatchObject({ group: "Laredo Pharmacy", reason: "only version" });
   });
 
+  it("merges a row into another job when its project names that job's proposed group", () => {
+    const p = placeFiles([
+      f("Landry 1", "2020-05-02T10:00:00", { title: "Landry Center", creationDate: "2020-01-01T00:00:00" }),
+      f("Landry 2", "2020-07-02T10:00:00", { title: "Landry Center", creationDate: "2020-01-01T00:00:00" }),
+      f("Landry stray", "2020-06-02T10:00:00", { title: "Landry old", creationDate: null, project: "Landry Center" }),
+    ]);
+    expect(new Set([...p.values()].map((v) => v.group))).toEqual(new Set(["Landry Center"]));
+    expect(p.get("Landry 1")?.reason).toBe("earliest version");
+    expect(p.get("Landry stray")?.reason).toBe("last save of 2020-06");
+    expect(p.get("Landry 2")?.reason).toBe("latest version");
+  });
+
   it("names a proposed group after its latest file's title", () => {
     const p = placeFiles([f("a", "2020-05-02T10:00:00", { title: "Old" }), f("b", "2020-06-02T10:00:00", { title: "Parker South" })]);
     expect(p.get("a")?.group).toBe("Parker South");
