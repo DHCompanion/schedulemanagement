@@ -25,10 +25,14 @@ describe("classifyImport", () => {
     expect(classifyImport(input({ leafCount: 10, relationshipCount: 10 })).tier).not.toBe("junk");
   });
 
-  it("calls an ineligible logic score rough", () => {
-    const r = classifyImport(input({ logic: logic({ benchmarkEligible: false, score: 0.4, passed: 3 }) }));
+  it("calls a file with a failing integrity check rough and names it", () => {
+    const failing = logic({
+      benchmarkEligible: false,
+      metrics: [{ key: "negative_float", count: 3, denominator: 100, pct: 0.03, threshold: 0, pass: false }],
+    });
+    const r = classifyImport(input({ logic: failing }));
     expect(r.tier).toBe("rough");
-    expect(r.reasons.join(" ")).toMatch(/3 of 8/);
+    expect(r.reasons.join(" ")).toMatch(/Negative float: 3% of activities/);
   });
 
   it("names loose predecessors and successors as reasons", () => {

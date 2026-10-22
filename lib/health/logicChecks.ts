@@ -16,12 +16,15 @@ export const MAX_NEGATIVE_FLOAT = 0;
 export const MAX_HIGH_DURATION = 0.05;
 export const MAX_OUT_OF_SEQUENCE = 0.05;
 export const HIGH_DAYS = 44;
-export const MIN_ELIGIBLE_SCORE = 0.6;
 // Benchmark eligibility is looser than DCMA on purpose: a missing successor is an
 // omission (the links that exist are still real), but a missing predecessor usually
 // means a typed-in date, so its timing can't be trusted.
 export const MAX_BENCHMARK_NO_PREDECESSOR = 0.1;
 export const MAX_BENCHMARK_NO_SUCCESSOR = 0.5;
+// Only checks that distort dates or durations gate benchmarks. Lags, leads, non-FS links,
+// float and out-of-sequence progress are scheduling style or side effects of loose ends
+// (2020 pilot: gating on them left 16 of 27 projects usable; this rule, 26).
+export const BENCHMARK_INTEGRITY_CHECKS: readonly LogicMetricKey[] = ["hard_constraints", "negative_float", "high_duration"];
 
 // MSPDI ConstraintType: 2 Must Start On, 3 Must Finish On, 5 Start No Later Than, 7 Finish No Later Than.
 const HARD_CONSTRAINTS = new Set([2, 3, 5, 7]);
@@ -140,7 +143,7 @@ export function scoreLogic(activities: LogicActivity[], relationships: LogicRela
   const share = (n: number) => (leaves.length === 0 ? 0 : n / leaves.length);
   const noPredecessorPct = share(ends.noPred);
   const noSuccessorPct = share(ends.noSucc);
-  const benchmarkEligible =
-    noPredecessorPct <= MAX_BENCHMARK_NO_PREDECESSOR && noSuccessorPct <= MAX_BENCHMARK_NO_SUCCESSOR && score >= MIN_ELIGIBLE_SCORE;
+  const integrity = metrics.filter((m) => BENCHMARK_INTEGRITY_CHECKS.includes(m.key)).every((m) => m.pass);
+  const benchmarkEligible = noPredecessorPct <= MAX_BENCHMARK_NO_PREDECESSOR && noSuccessorPct <= MAX_BENCHMARK_NO_SUCCESSOR && integrity;
   return { metrics, noPredecessorPct, noSuccessorPct, passed, total: scored.length, score, benchmarkEligible };
 }
