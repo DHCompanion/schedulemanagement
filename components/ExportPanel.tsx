@@ -8,19 +8,19 @@ interface DeletedTask {
   wbsCode: string | null;
 }
 
-export function ExportPanel({ projectId }: { projectId: string }) {
+export function ExportPanel({ projectId, hasStoredOriginal }: { projectId: string; hasStoredOriginal: boolean }) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletedTasks, setDeletedTasks] = useState<DeletedTask[] | null>(null);
 
   async function generate() {
-    if (!file) return;
+    if (!file && !hasStoredOriginal) return;
     setBusy(true);
     setError(null);
     setDeletedTasks(null);
     const fd = new FormData();
-    fd.append("file", file);
+    if (file) fd.append("file", file);
     fd.append("projectId", projectId);
     const res = await fetch(appPath("/api/export"), { method: "POST", body: fd });
     if (!res.ok) {
@@ -47,9 +47,16 @@ export function ExportPanel({ projectId }: { projectId: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <input type="file" accept=".xml" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
+      {hasStoredOriginal ? (
+        <details className="text-sm text-slate-600">
+          <summary className="cursor-pointer">Use a different copy of the file</summary>
+          <input type="file" accept=".xml" aria-label="Schedule XML file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="mt-2 text-sm" />
+        </details>
+      ) : (
+        <input type="file" accept=".xml" aria-label="Schedule XML file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
+      )}
       {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      <button disabled={!file || busy} onClick={generate} className="self-start rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+      <button disabled={(!file && !hasStoredOriginal) || busy} onClick={generate} className="self-start rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
         {busy ? "Generating…" : "Generate updated file"}
       </button>
       {deletedTasks && (

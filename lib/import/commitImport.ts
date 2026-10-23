@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { parseMspXml } from "@/lib/msp/parseMspXml";
 import type { ParsedSchedule } from "@/lib/msp/types";
+import { importFileKey, putImportFile } from "@/lib/storage/importFiles";
 
 /** MSPDI datetimes are naive local; store wall-clock deterministically as UTC. */
 export function toDbDate(s: string | null): Date | null {
@@ -33,6 +34,10 @@ export async function commitImport(opts: CommitOptions): Promise<{ id: string }>
   const { parsed, fileHash, suggestedIsBaseline } = previewImport(opts.xml);
   const statusDate = opts.statusDateOverride ?? parsed.header.statusDate;
   const isBaseline = opts.isBaseline ?? suggestedIsBaseline;
+  // Stored before the snapshot so no import exists without its original. Keyed by
+  // content hash, so a failed transaction just leaves a harmless, reusable object.
+  const sourceObjectKey = importFileKey(opts.projectId, fileHash);
+  await putImportFile(sourceObjectKey, opts.xml);
 
   const imp = await prisma.$transaction(async (tx) => {
     const created = await tx.scheduleImport.create({
@@ -41,6 +46,7 @@ export async function commitImport(opts: CommitOptions): Promise<{ id: string }>
         sourceFormat: "msproject_xml",
         fileName: opts.fileName,
         fileHash,
+        sourceObjectKey,
         importedBy: opts.importedBy ?? null,
         personId: opts.personId ?? null,
         projectTitleFromFile: parsed.header.titleFromFile,

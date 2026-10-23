@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "@/lib/db";
 import { commitImport, previewImport, toDbDate } from "@/lib/import/commitImport";
+import { getImportFile } from "@/lib/storage/importFiles";
 
 const xml = readFileSync(resolve(__dirname, "../fixtures/minimal.xml"), "utf8");
 const hasDb = !!process.env.DATABASE_URL;
@@ -41,5 +42,7 @@ describe.runIf(hasDb)("commitImport", () => {
     expect(imp?.activities.length).toBe(4);
     expect(imp?.relationships.length).toBe(2);
     expect(imp?.statusDate?.toISOString()).toBe("2025-06-05T17:00:00.000Z");
+    expect(imp?.sourceObjectKey).toBe(`imports/${project.id}/${imp?.fileHash}.xml`);
+    expect(await getImportFile(imp!.sourceObjectKey!)).toBe(xml);
   });
 });
