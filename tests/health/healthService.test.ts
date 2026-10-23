@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
-import { getScheduleHealth } from "@/lib/health/healthService";
+import { getScheduleHealth, getImportQuality } from "@/lib/health/healthService";
 
 const hasDb = !!process.env.DATABASE_URL;
 
@@ -67,11 +67,73 @@ describe.runIf(hasDb)("healthService", () => {
     expect(futureIssue?.externalId).toBe(10);
   }, 30000);
 
+  it("judges future actuals against the import date, not a stale status date", async () => {
+    const p = await prisma.project.create({ data: { name: "Health Stale Status Date Test" } });
+    try {
+      const imp = await prisma.scheduleImport.create({
+        data: {
+          projectId: p.id, sourceFormat: "msproject_xml", fileName: "x.xml", fileHash: "h",
+          statusDate: new Date("2026-01-30"), importedAt: new Date("2026-10-22"),
+        },
+      });
+      await prisma.activity.createMany({
+        data: [
+          // real progress recorded after a stale status date — fine
+          { scheduleImportId: imp.id, externalUid: 1, name: "Real", canonicalActivityKey: "1|real", type: "task", actualFinish: new Date("2026-08-15") },
+          // genuinely in the future relative to the import — still an error
+          { scheduleImportId: imp.id, externalUid: 2, name: "Future", canonicalActivityKey: "2|future", type: "task", actualFinish: new Date("2026-12-01") },
+        ],
+      });
+      const health = await getScheduleHealth(p.id);
+      expect(health.issues.filter((i) => i.check === "future_actual").map((i) => i.name)).toEqual(["Future"]);
+      expect(health.asOfDate?.toISOString().slice(0, 10)).toBe("2026-01-30");
+    } finally {
+      await prisma.project.delete({ where: { id: p.id } });
+    }
+  }, 30000);
+
+  it("scores logic and tiers the latest import", async () => {
+    const p = await prisma.project.create({ data: { name: "Health Logic Test" } });
+    try {
+      const imp = await prisma.scheduleImport.create({
+        data: { projectId: p.id, sourceFormat: "msproject_xml", fileName: "x.xml", fileHash: "h", minutesPerDay: 480 },
+      });
+      // An 11-activity FS chain plus one orphan: 1 of 12 missing logic (8%) fails strict DCMA (5%)
+      // but stays inside the looser benchmark limits, so the import is still a baseline.
+      await prisma.activity.createMany({
+        data: Array.from({ length: 12 }, (_, i) => ({
+          scheduleImportId: imp.id,
+          externalUid: i + 1,
+          name: `Task ${i + 1}`,
+          canonicalActivityKey: `${i + 1}|task`,
+          type: "task",
+        })),
+      });
+      await prisma.relationship.createMany({
+        data: Array.from({ length: 10 }, (_, i) => ({
+          scheduleImportId: imp.id,
+          predecessorExternalUid: i + 1,
+          successorExternalUid: i + 2,
+          type: "FS",
+        })),
+      });
+
+      const health = await getScheduleHealth(p.id);
+      const missing = health.quality?.logic.metrics.find((m) => m.key === "missing_logic");
+      expect(missing).toMatchObject({ count: 1, denominator: 12, pass: false });
+      expect(health.quality?.tier).toBe("baseline");
+      expect(await getImportQuality(imp.id)).toEqual(health.quality);
+    } finally {
+      await prisma.project.delete({ where: { id: p.id } });
+    }
+  }, 30000);
+
   it("reports no import for a project without one", async () => {
     const p = await prisma.project.create({ data: { name: "Health No Import Test" } });
     const health = await getScheduleHealth(p.id);
     expect(health.hasImport).toBe(false);
     expect(health.issues).toEqual([]);
+    expect(health.quality).toBeNull();
     expect(health.progress).toEqual({ total: 0, completed: 0, remaining: 0, percentComplete: 0 });
     await prisma.project.delete({ where: { id: p.id } });
   }, 15000);

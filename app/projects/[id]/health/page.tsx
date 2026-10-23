@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { getScheduleHealth } from "@/lib/health/healthService";
 import { HealthCheckSection } from "@/components/HealthCheckSection";
 import type { HealthCheck } from "@/lib/health/dateChecks";
+import type { LogicMetricKey } from "@/lib/health/logicChecks";
+import type { ImportTier } from "@/lib/health/importTier";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,27 @@ const SECTIONS: { check: HealthCheck; title: string }[] = [
   { check: "missing_dates", title: "Missing dates" },
   { check: "percent_contradiction", title: "Percent contradictions" },
 ];
+
+const METRIC_LABELS: Record<LogicMetricKey, string> = {
+  missing_logic: "Missing logic",
+  leads: "Leads (negative lag)",
+  lags: "Lags",
+  non_fs: "Non finish-to-start links",
+  hard_constraints: "Hard constraints",
+  high_float: "High float (> 44 days)",
+  negative_float: "Negative float",
+  high_duration: "Long durations (> 44 days, lead times excluded)",
+  out_of_sequence: "Out-of-sequence progress",
+};
+
+const TIERS: Record<ImportTier, { label: string; className: string }> = {
+  as_built: { label: "As-built", className: "bg-green-100 text-green-700" },
+  baseline: { label: "Baseline", className: "bg-blue-100 text-blue-700" },
+  rough: { label: "Rough", className: "bg-amber-100 text-amber-700" },
+  junk: { label: "Too small", className: "bg-slate-100 text-slate-600" },
+};
+
+const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 export default async function HealthPage(
   props: { params: Promise<{ id: string }>; searchParams: Promise<{ wizard?: string }> }
@@ -54,6 +77,37 @@ export default async function HealthPage(
               <div><span className="font-medium">{health.progress.percentComplete}%</span> complete</div>
             </div>
           </section>
+          {health.quality && (
+            <section className="mb-6 rounded border border-slate-200 bg-white p-3">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-700">Schedule logic</h2>
+                <span className={`rounded px-2 py-0.5 text-xs font-medium ${TIERS[health.quality.tier].className}`}>
+                  {TIERS[health.quality.tier].label}
+                </span>
+                <span className="text-xs text-slate-500">
+                  {health.quality.logic.passed} of {health.quality.logic.total} checks pass
+                </span>
+              </div>
+              <ul className="mb-2 text-xs text-slate-600">
+                {health.quality.reasons.map((r) => <li key={r}>{r}</li>)}
+              </ul>
+              {health.quality.logic.metrics.some((m) => !m.pass) && (
+                <ul className="divide-y divide-slate-200 rounded border border-slate-200 text-sm">
+                  {health.quality.logic.metrics.filter((m) => !m.pass).map((m) => (
+                    <li key={m.key} className="flex flex-wrap justify-between gap-2 px-3 py-2">
+                      <span>{METRIC_LABELS[m.key]}</span>
+                      <span className="text-slate-600">{pct(m.pct)} (limit {pct(m.threshold)})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!health.quality.logic.benchmarkEligible && (
+                <p className="mt-2 text-xs text-slate-500">
+                  This schedule won&apos;t feed historical durations or sequencing — only its activity names and breakdowns.
+                </p>
+              )}
+            </section>
+          )}
           {SECTIONS.map(({ check, title }) => (
             <HealthCheckSection key={check} title={title} issues={health.issues.filter((i) => i.check === check)} />
           ))}
