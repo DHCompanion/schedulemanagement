@@ -43,6 +43,32 @@ describe("placeFiles", () => {
     expect(p.get("Parker South 1.mpp")?.checkGrouping).toBe(true);
   });
 
+  it("splits files that share a creation date but not a name (a job started from another job's file)", () => {
+    const created = "2020-01-01T00:00:00";
+    const p = placeFiles([
+      f("Santa Fe MOB Master 1.mpp", "2022-05-02T10:00:00", { creationDate: created, title: "Santa Fe MOB" }),
+      f("Santa Fe MOB Master 2.mpp", "2022-06-02T10:00:00", { creationDate: created, title: "Santa Fe MOB" }),
+      f("Coryell Health Clinic 10.19.mpp", "2025-10-19T10:00:00", { creationDate: created, title: "Santa Fe MOB" }),
+    ]);
+    expect(p.get("Santa Fe MOB Master 1.mpp")?.group).toBe(p.get("Santa Fe MOB Master 2.mpp")?.group);
+    expect(p.get("Coryell Health Clinic 10.19.mpp")?.group).not.toBe(p.get("Santa Fe MOB Master 1.mpp")?.group);
+    expect(p.get("Coryell Health Clinic 10.19.mpp")).toMatchObject({ reason: "only version", checkGrouping: true });
+  });
+
+  it("keeps conflict copies and generic names with their job when splitting", () => {
+    const created = "2020-01-01T00:00:00";
+    const p = placeFiles([
+      f("D2 Admin Renovations.mpp", "2022-05-02T10:00:00", { creationDate: created }),
+      f("D2 Admin Renovations (conflict copy from a@b.com).mpp", "2022-05-03T10:00:00", { creationDate: created }),
+      f("Schedule DD 2.3.22.mpp", "2022-05-04T10:00:00", { creationDate: created }),
+      f("Coryell Clinic.mpp", "2022-06-04T10:00:00", { creationDate: created }),
+    ]);
+    const g = p.get("D2 Admin Renovations.mpp")?.group;
+    expect(p.get("D2 Admin Renovations (conflict copy from a@b.com).mpp")?.group).toBe(g);
+    expect(p.get("Schedule DD 2.3.22.mpp")?.group).toBe(g);
+    expect(p.get("Coryell Clinic.mpp")?.group).not.toBe(g);
+  });
+
   it("always flags groups made by name because the file had no creation date", () => {
     const p = placeFiles([f("Parker South 1.mpp", "2020-05-02T10:00:00", { creationDate: null })]);
     expect(p.get("Parker South 1.mpp")?.checkGrouping).toBe(true);
@@ -84,6 +110,11 @@ describe("placeFiles", () => {
   it("names a proposed group after its latest file's title", () => {
     const p = placeFiles([f("a", "2020-05-02T10:00:00", { title: "Old" }), f("b", "2020-06-02T10:00:00", { title: "Parker South" })]);
     expect(p.get("a")?.group).toBe("Parker South");
+  });
+
+  it("names a group after the file, not a title that is a file path", () => {
+    const p = placeFiles([f("2023/OR7 Schedule.mpp", "2020-05-02T10:00:00", { title: "\\\\EgnyteDrive\\Jobs\\OR7 Schedule" })]);
+    expect(p.get("2023/OR7 Schedule.mpp")?.group).toBe("OR7 Schedule");
   });
 
   it("skips failed conversions with the error as the reason", () => {

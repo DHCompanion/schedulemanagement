@@ -30,7 +30,8 @@ const NOISE = new Set(["schedule", "update", "updated", "rev", "revised", "copy"
 
 /** File name reduced to its project words: no extension, dates, numbers or filler. */
 export function nameStem(file: string): string {
-  const base = file.split("/").pop()!.replace(/\.[^.]+$/, "").toLowerCase();
+  // Parentheticals are sync noise: "(conflict copy from someone@…)", "(2)".
+  const base = file.split("/").pop()!.replace(/\.[^.]+$/, "").replace(/\(.*?\)/g, " ").toLowerCase();
   return base
     .replace(/[^a-z]+/g, " ")
     .split(" ")
@@ -83,39 +84,67 @@ function placeGroups(files: ManifestFile[]): Map<string, Placement> {
     groups.set(key, [...(groups.get(key) ?? []), f]);
   }
 
-  for (const [key, members] of groups) {
-    const stems = [...new Set(members.map((m) => nameStem(m.file)))];
-    const dissimilar = stems.some((a) => stems.some((b) => jaccard(a, b) < SAME_NAME_JACCARD));
-    const reviewed = key.startsWith("project ");
-    const checkGrouping = !reviewed && (key.startsWith("name ") || dissimilar);
-    const sorted = [...members].sort((a, b) => (a.lastSaved ?? "").localeCompare(b.lastSaved ?? "") || a.file.localeCompare(b.file));
-    const label = reviewed ? key.slice("project ".length) : sorted[sorted.length - 1].title || nameStem(sorted[sorted.length - 1].file);
-    const place = (f: ManifestFile, keep: boolean, reason: string) => out.set(f.file, { group: label, keep, reason, checkGrouping });
-
-    const seen = new Map<string, string>();
-    const unique: ManifestFile[] = [];
-    for (const f of sorted) {
-      if (f.reviewerSkip) { place(f, false, "skipped by reviewer"); continue; }
-      const dup = seen.get(f.sha256);
-      if (dup) place(f, false, `duplicate of ${dup}`);
-      else {
-        seen.set(f.sha256, f.file);
-        unique.push(f);
-      }
-    }
-
-    // Last save of each calendar month wins its month; the first and last versions always stay.
-    const lastOfMonth = new Map<string, ManifestFile>();
-    for (const f of unique) lastOfMonth.set((f.lastSaved ?? "").slice(0, 7), f);
-    const monthly = new Set(lastOfMonth.values());
-    unique.forEach((f, i) => {
-      if (i === 0) place(f, true, unique.length === 1 ? "only version" : "earliest version");
-      else if (i === unique.length - 1) place(f, true, "latest version");
-      else if (monthly.has(f)) place(f, true, `last save of ${(f.lastSaved ?? "").slice(0, 7)}`);
-      else place(f, false, "superseded within its month");
-    });
+  for (const [key, all] of groups) {
+    // A shared creation date with unrelated names means a job was started from a copy of
+    // another job's file (FY2022+ is full of these): split it by name. The copies keep the
+    // template's title too, so name the pieces after their latest file instead.
+    const pieces = key.startsWith("created ") ? splitByName(all) : [all];
+    for (const members of pieces) placeGroup(key, members, pieces.length > 1, out);
   }
   return out;
+}
+
+/**
+ * Single-linkage clusters of files whose name stems look alike. Generic names
+ * ("Project1", "Schedule DD") say nothing about the job, so they stay with the biggest cluster.
+ */
+function splitByName(files: ManifestFile[]): ManifestFile[][] {
+  const generic = (f: ManifestFile) => nameStem(f.file).split(" ").filter(Boolean).length <= 1;
+  const clusters: ManifestFile[][] = [];
+  for (const f of files.filter((x) => !generic(x))) {
+    const stem = nameStem(f.file);
+    const near = clusters.filter((c) => c.some((m) => jaccard(nameStem(m.file), stem) >= SAME_NAME_JACCARD));
+    clusters.splice(0, clusters.length, ...clusters.filter((c) => !near.includes(c)), [...near.flat(), f]);
+  }
+  const rest = files.filter(generic);
+  if (clusters.length === 0) return [rest];
+  clusters.sort((a, b) => b.length - a.length)[0].push(...rest);
+  return clusters;
+}
+
+function placeGroup(key: string, members: ManifestFile[], split: boolean, out: Map<string, Placement>): void {
+  const stems = [...new Set(members.map((m) => nameStem(m.file)))];
+  const dissimilar = stems.some((a) => stems.some((b) => jaccard(a, b) < SAME_NAME_JACCARD));
+  const reviewed = key.startsWith("project ");
+  const checkGrouping = !reviewed && (key.startsWith("name ") || dissimilar || split);
+  const sorted = [...members].sort((a, b) => (a.lastSaved ?? "").localeCompare(b.lastSaved ?? "") || a.file.localeCompare(b.file));
+  const latest = sorted[sorted.length - 1];
+  const fileName = latest.file.split("/").pop()!.replace(/\.[^.]+$/, "");
+  const label = reviewed ? key.slice("project ".length) : (split || /[\\/]/.test(latest.title) ? fileName : latest.title) || nameStem(latest.file);
+  const place = (f: ManifestFile, keep: boolean, reason: string) => out.set(f.file, { group: label, keep, reason, checkGrouping });
+
+  const seen = new Map<string, string>();
+  const unique: ManifestFile[] = [];
+  for (const f of sorted) {
+    if (f.reviewerSkip) { place(f, false, "skipped by reviewer"); continue; }
+    const dup = seen.get(f.sha256);
+    if (dup) place(f, false, `duplicate of ${dup}`);
+    else {
+      seen.set(f.sha256, f.file);
+      unique.push(f);
+    }
+  }
+
+  // Last save of each calendar month wins its month; the first and last versions always stay.
+  const lastOfMonth = new Map<string, ManifestFile>();
+  for (const f of unique) lastOfMonth.set((f.lastSaved ?? "").slice(0, 7), f);
+  const monthly = new Set(lastOfMonth.values());
+  unique.forEach((f, i) => {
+    if (i === 0) place(f, true, unique.length === 1 ? "only version" : "earliest version");
+    else if (i === unique.length - 1) place(f, true, "latest version");
+    else if (monthly.has(f)) place(f, true, `last save of ${(f.lastSaved ?? "").slice(0, 7)}`);
+    else place(f, false, "superseded within its month");
+  });
 }
 
 /** Minimal CSV reader for the file this script writes (quoted fields, doubled quotes). */
