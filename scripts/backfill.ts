@@ -4,7 +4,10 @@
 // Prints and writes each file's tier and logic score for calibration.
 // Throwaway; delete after the historical backfill (plan Phase 6).
 //
-//   npx tsx scripts/backfill.ts <manifest.csv> <xml-dir>
+//   npx tsx scripts/backfill.ts <manifest.csv> <xml-dir> <fiscal-year>
+//
+// Projects belong to the fiscal year they were created in, so the same name in two
+// years is two projects: the key is backfill:FY<year>:<name>.
 //
 // Writes to whatever DATABASE_URL points at. Anything but a local database needs
 // BACKFILL_DB_OK=1 — this creates real projects.
@@ -29,8 +32,8 @@ function csv(value: string | number): string {
 }
 
 async function main() {
-  const [manifestPath, xmlDir] = process.argv.slice(2);
-  if (!manifestPath || !xmlDir) throw new Error("usage: tsx scripts/backfill.ts <manifest.csv> <xml-dir>");
+  const [manifestPath, xmlDir, fiscalYear] = process.argv.slice(2);
+  if (!manifestPath || !xmlDir || !/^\d{4}$/.test(fiscalYear ?? "")) throw new Error("usage: tsx scripts/backfill.ts <manifest.csv> <xml-dir> <fiscal-year>");
   requireSafeDatabase();
 
   const plan = backfillPlan(readCsv(readFileSync(manifestPath, "utf8").replace(/^﻿/, "")));
@@ -40,10 +43,10 @@ async function main() {
   let failed = 0;
 
   for (const { project, files } of plan) {
-    const externalProjectKey = `backfill:${project}`;
+    const externalProjectKey = `backfill:FY${fiscalYear}:${project}`;
     const existing = await prisma.project.findFirst({ where: { externalProjectKey } });
     const { id: projectId } = existing ?? (await prisma.project.create({ data: { name: project, externalProjectKey, status: "historical" } }));
-    const done = new Set((await prisma.scheduleImport.findMany({ where: { projectId }, select: { fileHash: true } })).map((i) => i.fileHash));
+    const done = new Map((await prisma.scheduleImport.findMany({ where: { projectId }, select: { id: true, fileHash: true } })).map((i) => [i.fileHash, i.id]));
 
     for (const f of files) {
       const xmlName = f.file.replace(/\.[^.]+$/, ".xml");
@@ -58,9 +61,10 @@ async function main() {
       };
       try {
         const xml = readFileSync(join(xmlDir, xmlName), "utf8");
-        if (done.has(crypto.createHash("sha256").update(xml).digest("hex"))) {
+        const doneId = done.get(crypto.createHash("sha256").update(xml).digest("hex"));
+        if (doneId) {
           skipped++;
-          record("skipped");
+          record("skipped", await getImportQuality(doneId));
           continue;
         }
         const { id } = await commitImport({ projectId, fileName: basename(xmlName), xml, isBaseline: f.isBaseline, importedBy: "backfill" });
