@@ -23,6 +23,8 @@ import { NormalizePanel, type UnmappedRow } from "@/components/NormalizePanel";
 import { CompletenessIssuesTable } from "@/components/CompletenessIssuesTable";
 import { TradesPanel, type DisciplineRow, type AssignmentRow } from "@/components/TradesPanel";
 import { ProjectTabs } from "@/components/ProjectTabs";
+import { TierBadge } from "@/components/TierBadge";
+import { getImportQuality } from "@/lib/health/healthService";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +56,7 @@ export default async function DataHealthPage(
     orderBy: { importedAt: "desc" },
     include: { activities: true },
   });
+  const quality = latest ? await getImportQuality(latest.id) : null;
   const leaves = (latest?.activities ?? []).filter((a) => a.type !== "summary" && a.type !== "project_summary");
 
   const jar = await cookies();
@@ -155,6 +158,13 @@ export default async function DataHealthPage(
             <div>Imported: {latest.importedAt.toISOString().slice(0, 16).replace("T", " ")}</div>
             <div>Status date: {latest.statusDate ? latest.statusDate.toISOString().slice(0, 10) : "—"}</div>
             <div>{latest.isBaseline ? "Baseline import" : "Update import"} · {latest.activityCount} activities · {latest.relationshipCount} relationships</div>
+            {quality && (
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                Schedule logic: <TierBadge tier={quality.tier} />
+                <span>{quality.logic.passed} of {quality.logic.total} checks pass</span>
+                <Link href={`/projects/${project.id}/health`} className="text-blue-700 underline">Details</Link>
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-slate-500">No schedule imported yet.</p>
