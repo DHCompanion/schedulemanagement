@@ -169,6 +169,8 @@ Mobile: a single column, and the pill wraps. No new colors beyond the existing s
 
 ## Phase 4 — Review queues + admin metadata/grouping table
 
+- **Historical library (Q51, 2026-10-22):** backfilled projects (`status = historical`, `externalProjectKey = backfill:FY<year>:<name>` — projects live only in the fiscal year they were created, so the same name in two years is two projects) live in a **completely separate, read-only area of the app**. They don't appear in the live project list; there's no editing, updates or export. Their data must also be **queryable by an agent** (mechanism to be decided before Phase 4 is built).
+- **Agent access to history (Q52, 2026-10-22): both.** Connect is replacing its built-in assistant with an MCP server for Claude and ChatGPT (reads and writes). For the historical library: (1) **read-only MCP tools** in Schedule Manager (historical projects, activities, benchmarks), and (2) **read-only published DB views** behind a read-only role for ad-hoc analysis. History stays read-only through both. MCP scope for the rest of the tool (live projects, writes) is undecided and will be worked out separately.
 - **Dictionary suggestions:** a cross-project queue of unmapped names, sorted by frequency, pre-filled by local-model suggestions with `suggestScopes.ts` (Jaccard) as the fallback.
 - **Split-rule mining:** WBS parent→children patterns, matched against the existing `ScopeSplitRule`s first; only novel ones get queued.
 - **Admin project table:** metadata pre-filled from the manifest. Tier override is `tierOverride String?` on `ScheduleImport`, an additive migration.
@@ -176,17 +178,25 @@ Mobile: a single column, and the pill wraps. No new colors beyond the existing s
 
 ## Phase 5 — Benchmarks + surfacing
 
-- `lib/benchmarks/` pure aggregation, **one contribution per project** (latest eligible import for actuals, earliest for planned): span per canonical scope; median, P25 and P75; n ≥ 5; split by buildingType, falling back to sector. It filters out `isSynthetic`, imports that aren't benchmark-eligible, and actuals from unfinished scopes. Computed at read time, like Phase 1.
+- `lib/benchmarks/` pure aggregation, **one contribution per project** (latest eligible import for actuals, earliest for planned): span per canonical scope; median, P25 and P75, blended by buildingType and sector (below). It filters out `isSynthetic`, imports that aren't benchmark-eligible, and actuals from unfinished scopes. Computed at read time, like Phase 1.
+- **Bayesian blending (Q54, 2026-10-23)** replaces the hard "n ≥ 5 by buildingType, else sector" switch. Each statistic is shrunk toward the sector's value in proportion to how little buildingType data there is (empirical Bayes):
+
+  ```
+  blended = (n × buildingType value + k × sector value) / (n + k)
+  ```
+
+  `n` = projects of that buildingType contributing to the scope; `k` = prior strength, start at 5 (a buildingType with 5 projects counts half). Applied to median, P25 and P75 alike. The sector value still needs n ≥ 5; below that the scope has no benchmark. Plain arithmetic — no stats library. Show `n` and the blend share beside every range so a thin number is visibly thin. Tune `k` against the full backfill.
 - Also store sequencing-pair, criticality-frequency and milestone-gap aggregates here (spec Q17 #3–5).
 - **Surfacing:** a range beside the duration in `ActivityDetail`, a new Data Health check (duration outside historical range), and a "usually critical" marker.
 
-## Phase 6 — Full ~200-file backfill
+## Phase 6 — Full FY2020–2026 backfill
 
 - The Phase 3 script on the full set, with the admin review queues worked in batches. Delete `scripts/backfill.ts` afterwards.
 
 ## Phase 7 — Draft baseline generator
 
 - Inputs: building type, SF, start date, scope checklist.
+- Durations come from the Phase 5 blended statistics, so a thin buildingType leans on its sector instead of failing.
 - Assembly from statistics: links that appear in ≥ 50% of the projects containing both scopes; cycle break; open-end tie-off; P75 durations.
 - Hard error when there are fewer than 5 qualifying projects; warnings on thin scopes and links; confidence summary.
 - Output: a synthetic import with lineage, exported through the existing `lib/export`.

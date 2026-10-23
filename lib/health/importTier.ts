@@ -9,7 +9,12 @@ export const MIN_LEAVES = 10;
 export const MIN_LINKS_PER_LEAF = 0.8;
 export const MIN_ACTUALS_SHARE = 0.1;
 
-export type ImportTier = "as_built" | "baseline" | "rough" | "junk";
+export const IMPORT_TIERS = ["as_built", "baseline", "rough", "junk"] as const;
+export type ImportTier = (typeof IMPORT_TIERS)[number];
+
+export function isImportTier(value: string | null | undefined): value is ImportTier {
+  return (IMPORT_TIERS as readonly string[]).includes(value ?? "");
+}
 
 export interface TierInput {
   leafCount: number;

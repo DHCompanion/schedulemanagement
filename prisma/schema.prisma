@@ -64,6 +64,8 @@ model ScheduleImport {
   projectTitleFromFile   String?
   statusDate             DateTime?
   isBaseline             Boolean   @default(false)
+  // Reviewer-set ImportTier overriding the computed one (lib/health/healthService.ts).
+  tierOverride           String?
   projectStart           DateTime?
   projectFinish          DateTime?
   minutesPerDay          Int?
