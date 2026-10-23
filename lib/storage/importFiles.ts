@@ -19,12 +19,12 @@ function requiredEnv(name: string): string {
 }
 
 function s3Store(): ImportFileStore {
-  const bucket = requiredEnv("IMPORT_STORAGE_BUCKET");
+  const bucket = requiredEnv("AWS_BUCKET");
   const client = new S3Client({
-    region: process.env.IMPORT_STORAGE_REGION || "us-east-1",
+    region: requiredEnv("AWS_REGION"),
     credentials: {
-      accessKeyId: requiredEnv("IMPORT_STORAGE_ACCESS_KEY_ID"),
-      secretAccessKey: requiredEnv("IMPORT_STORAGE_SECRET_ACCESS_KEY"),
+      accessKeyId: requiredEnv("AWS_ACCESS_KEY_ID"),
+      secretAccessKey: requiredEnv("AWS_SECRET_ACCESS_KEY"),
     },
   });
   return {
@@ -58,10 +58,9 @@ function memoryStore(): ImportFileStore {
 
 function getStore(): ImportFileStore {
   if (store) return store;
-  const provider = process.env.IMPORT_STORAGE_PROVIDER;
-  if (provider === "s3") store = s3Store();
-  else if (provider === "memory" || (!provider && process.env.NODE_ENV !== "production")) store = memoryStore();
-  else throw new Error("IMPORT_STORAGE_PROVIDER must be set to s3 in production so imports keep their original file.");
+  if (process.env.AWS_BUCKET) store = s3Store();
+  else if (process.env.NODE_ENV !== "production") store = memoryStore();
+  else throw new Error("AWS_BUCKET must be set in production so imports keep their original file.");
   return store;
 }
 
