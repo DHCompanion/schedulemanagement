@@ -17,15 +17,16 @@ describe("importFiles", () => {
     expect(await getImportFile("imports/p1/missing.xml")).toBeNull();
   });
 
-  it("refuses to run in production without a configured provider", async () => {
+  it("refuses to run in production without a bucket", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("IMPORT_STORAGE_PROVIDER", "");
-    await expect(putImportFile("k", "x")).rejects.toThrow(/IMPORT_STORAGE_PROVIDER/);
+    vi.stubEnv("AWS_BUCKET", "");
+    await expect(putImportFile("k", "x")).rejects.toThrow(/AWS_BUCKET/);
   });
 
-  it("requires bucket and credentials for s3", async () => {
-    vi.stubEnv("IMPORT_STORAGE_PROVIDER", "s3");
-    vi.stubEnv("IMPORT_STORAGE_BUCKET", "");
-    await expect(putImportFile("k", "x")).rejects.toThrow(/IMPORT_STORAGE_BUCKET/);
+  it("requires region and credentials once a bucket is set", async () => {
+    vi.stubEnv("AWS_BUCKET", "b");
+    vi.stubEnv("AWS_REGION", "us-east-1");
+    vi.stubEnv("AWS_ACCESS_KEY_ID", "");
+    await expect(putImportFile("k", "x")).rejects.toThrow(/AWS_ACCESS_KEY_ID/);
   });
 });
