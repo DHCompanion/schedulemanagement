@@ -5,7 +5,7 @@ import { getScheduleHealth } from "@/lib/health/healthService";
 import { HealthCheckSection } from "@/components/HealthCheckSection";
 import type { HealthCheck } from "@/lib/health/dateChecks";
 import type { LogicMetricKey } from "@/lib/health/logicChecks";
-import type { ImportTier } from "@/lib/health/importTier";
+import { TierBadge } from "@/components/TierBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -26,13 +26,6 @@ const METRIC_LABELS: Record<LogicMetricKey, string> = {
   negative_float: "Negative float",
   high_duration: "Long durations (> 44 days, lead times excluded)",
   out_of_sequence: "Out-of-sequence progress",
-};
-
-const TIERS: Record<ImportTier, { label: string; className: string }> = {
-  as_built: { label: "As-built", className: "bg-green-100 text-green-700" },
-  baseline: { label: "Baseline", className: "bg-blue-100 text-blue-700" },
-  rough: { label: "Rough", className: "bg-amber-100 text-amber-700" },
-  junk: { label: "Too small", className: "bg-slate-100 text-slate-600" },
 };
 
 const pct = (n: number) => `${Math.round(n * 100)}%`;
@@ -81,9 +74,7 @@ export default async function HealthPage(
             <section className="mb-6 rounded border border-slate-200 bg-white p-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <h2 className="text-sm font-semibold text-slate-700">Schedule logic</h2>
-                <span className={`rounded px-2 py-0.5 text-xs font-medium ${TIERS[health.quality.tier].className}`}>
-                  {TIERS[health.quality.tier].label}
-                </span>
+                <TierBadge tier={health.quality.tier} />
                 <span className="text-xs text-slate-500">
                   {health.quality.logic.passed} of {health.quality.logic.total} checks pass
                 </span>
