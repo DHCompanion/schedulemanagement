@@ -23,7 +23,7 @@ const pct = (n: number) => `${Math.round(n * 100)}%`;
 const INTEGRITY_LABELS: Partial<Record<LogicMetricKey, string>> = {
   hard_constraints: "Hard date constraints",
   negative_float: "Negative float",
-  high_duration: "Placeholder-length durations (> 44 days)",
+  high_duration: "Placeholder-length durations (> 44 days, lead times excluded)",
 };
 
 export function classifyImport(input: TierInput): { tier: ImportTier; reasons: string[] } {

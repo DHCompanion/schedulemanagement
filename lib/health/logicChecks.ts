@@ -16,6 +16,9 @@ export const MAX_NEGATIVE_FLOAT = 0;
 export const MAX_HIGH_DURATION = 0.05;
 export const MAX_OUT_OF_SEQUENCE = 0.05;
 export const HIGH_DAYS = 44;
+// Lead times are long by nature, not placeholders, and aren't benchmarked (plan Q14, Q53).
+// Matched on the activity's name or any parent summary's ("Doors" under "Procurement").
+const LEAD_TIME = /procure|deliver|submittal|shop drawing|permit|long lead|lead time|buyout|fabricat/i;
 // Benchmark eligibility is looser than DCMA on purpose: a missing successor is an
 // omission (the links that exist are still real), but a missing predecessor usually
 // means a typed-in date, so its timing can't be trusted.
@@ -31,6 +34,8 @@ const HARD_CONSTRAINTS = new Set([2, 3, 5, 7]);
 
 export interface LogicActivity {
   externalUid: number;
+  name: string;
+  parentExternalUid: number | null;
   type: string;
   isActive: boolean;
   isMilestone: boolean;
@@ -122,6 +127,8 @@ export function scoreLogic(activities: LogicActivity[], relationships: LogicRela
   const leafCount = (pred: (a: LogicActivity) => boolean) => leaves.filter(pred).length;
   const relCount = (pred: (r: LogicRelationship) => boolean) => rels.filter(pred).length;
   const oos = countOutOfSequence(byUid, rels);
+  const all = new Map(activities.map((a) => [a.externalUid, a]));
+  const isLeadTime = (a: LogicActivity | undefined): boolean => !!a && (LEAD_TIME.test(a.name) || isLeadTime(all.get(a.parentExternalUid ?? NaN)));
   const ends = countOpenEnds(leaves, rels);
 
   const metrics: LogicMetric[] = [
@@ -132,7 +139,7 @@ export function scoreLogic(activities: LogicActivity[], relationships: LogicRela
     metric("hard_constraints", leafCount((a) => HARD_CONSTRAINTS.has(a.constraintType ?? 0)), leaves.length, MAX_HARD_CONSTRAINTS),
     metric("high_float", leafCount((a) => (days(a.totalSlackMinutes) ?? 0) > HIGH_DAYS), leaves.length, MAX_HIGH_FLOAT),
     metric("negative_float", leafCount((a) => (a.totalSlackMinutes ?? 0) < 0), leaves.length, MAX_NEGATIVE_FLOAT),
-    metric("high_duration", leafCount((a) => !a.isMilestone && (days(a.durationMinutes) ?? 0) > HIGH_DAYS), leaves.length, MAX_HIGH_DURATION),
+    metric("high_duration", leafCount((a) => !a.isMilestone && !isLeadTime(a) && (days(a.durationMinutes) ?? 0) > HIGH_DAYS), leaves.length, MAX_HIGH_DURATION),
     metric("out_of_sequence", oos.count, oos.denominator, MAX_OUT_OF_SEQUENCE),
   ];
 
