@@ -13,6 +13,8 @@ const DAY = 480;
 function act(uid: number, overrides: Partial<LogicActivity> = {}): LogicActivity {
   return {
     externalUid: uid,
+    name: `Task ${uid}`,
+    parentExternalUid: null,
     type: "task",
     isActive: true,
     isMilestone: false,
@@ -169,6 +171,18 @@ describe("scoreLogic", () => {
     activities[1].isMilestone = true;
     activities[1].durationMinutes = 100 * DAY;
     expect(metric(scoreLogic(activities, relationships, DAY), "high_duration").count).toBe(0);
+  });
+
+  it("exempts procurement, delivery, submittal and permit lead times from high duration", () => {
+    const { activities, relationships } = chain(5);
+    activities[1] = { ...activities[1], name: "RTU Procurement", durationMinutes: 130 * DAY };
+    activities[2] = { ...activities[2], name: "Building Permit", durationMinutes: 50 * DAY };
+    activities[3] = { ...activities[3], name: "Doors", parentExternalUid: 99, durationMinutes: 80 * DAY };
+    const summary = act(99, { name: "Long Lead Procurement", type: "summary" });
+    const score = scoreLogic([...activities, summary], relationships, DAY);
+    expect(metric(score, "high_duration").count).toBe(0);
+    activities[4] = { ...activities[4], name: "Construction", durationMinutes: 108 * DAY };
+    expect(metric(scoreLogic([...activities, summary], relationships, DAY), "high_duration").count).toBe(1);
   });
 
   it("fails negative float on any activity", () => {

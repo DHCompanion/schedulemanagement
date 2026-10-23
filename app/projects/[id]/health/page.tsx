@@ -24,7 +24,7 @@ const METRIC_LABELS: Record<LogicMetricKey, string> = {
   hard_constraints: "Hard constraints",
   high_float: "High float (> 44 days)",
   negative_float: "Negative float",
-  high_duration: "Long durations (> 44 days)",
+  high_duration: "Long durations (> 44 days, lead times excluded)",
   out_of_sequence: "Out-of-sequence progress",
 };
 
