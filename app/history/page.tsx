@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { BUILDING_TYPES, SECTORS, fiscalYear } from "@/lib/historical";
+import { PROJECT_TYPES, SECTORS, fiscalYear } from "@/lib/historical";
 
 export const dynamic = "force-dynamic";
 
@@ -38,9 +38,13 @@ export default async function HistoryPage(props: { searchParams: Promise<{ fy?: 
           <option value="">All sectors</option>
           {SECTORS.map((s) => <option key={s}>{s}</option>)}
         </select>
-        <select name="buildingType" defaultValue={buildingType ?? ""} aria-label="Building type" className={select}>
-          <option value="">All building types</option>
-          {BUILDING_TYPES.map((b) => <option key={b}>{b}</option>)}
+        <select name="buildingType" defaultValue={buildingType ?? ""} aria-label="Project type" className={select}>
+          <option value="">All project types</option>
+          {SECTORS.map((s) => (
+            <optgroup key={s} label={s}>
+              {PROJECT_TYPES[s].map((t) => <option key={t}>{t}</option>)}
+            </optgroup>
+          ))}
         </select>
         <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Filter</button>
       </form>

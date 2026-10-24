@@ -171,10 +171,10 @@ Mobile: a single column, and the pill wraps. No new colors beyond the existing s
 
 Phases 1–3 are merged (#39, #40, #41, plus #42 for the logic tier on Data Health); the task checkboxes above predate that. Phase 4 decisions, 2026-10-23:
 
-- **Historical library (Q51):** backfilled projects (`status = historical`, `externalProjectKey = backfill:FY<year>:<name>` — projects live only in the fiscal year they were created, so the same name in two years is two projects) live in a **separate, read-only area**: `/history` (list, filter by FY, sector, building type) and `/history/[id]` (details, each import with tier and reasons). They're off the live project list; `/projects/<id>` redirects to the library page; every project-scoped API route refuses them (`denyIfHistorical` in `lib/historical.ts`), so no edits, updates or export.
+- **Historical library (Q51):** backfilled projects (`status = historical`, `externalProjectKey = backfill:FY<year>:<name>` — projects live only in the fiscal year they were created, so the same name in two years is two projects) live in a **separate, read-only area**: `/history` (list, filter by FY, sector, project type) and `/history/[id]` (details, each import with tier and reasons). They're off the live project list; `/projects/<id>` redirects to the library page; every project-scoped API route refuses them (`denyIfHistorical` in `lib/historical.ts`), so no edits, updates or export.
 - **Who (Q55):** standalone sessions and OS-launched tool admins. Other OS-launched sessions stay locked to their project. Only admins edit details or tier overrides.
 - **No tier filter on the list (Q56):** tiers are computed at read time (Phase 1); doing all 1,109 imports on one page load is too slow. Tiers show on each project page. Revisit only if tiers get stored.
-- **Details (Q57):** sector and building type are fixed dropdowns (`SECTORS`, `BUILDING_TYPES` in `lib/historical.ts`); size is optional. Pre-filled from a reviewed `<year>-projects.csv` that `scripts/backfill.ts` applies.
+- **Details (Q57):** sector and project type use Skiles' standard lists from Fibery (Database Standards/Project Type: 6 market sectors, 32 project types, plus "Special Procedure (EP, Cath, IR)" added here, since Fibery files cath labs under imaging). Each type belongs to one sector, so the sector follows from the type (`PROJECT_TYPES` in `lib/historical.ts`; stored in `Project.sector` / `Project.buildingType`). Size is optional. Contract value stays out of the scheduling tool. Pre-filled from a reviewed `<year>-projects.csv` that `scripts/backfill.ts` applies (blank cells leave values alone).
 - **Tier override (Q58):** admins set automatic, rough or junk; as-built and baseline must come from the data.
 - **Order (Q59):** PR 1 (library + details), then the production backfill (Phase 6, run by the user), then PR 2 (name review) against production data, then split mining, then agent access.
 - **Agent access to history (Q52, revised):** (1) read-only Schedule Manager endpoints exposed as tools by **Connect's existing MCP server**, not a standalone MCP server here; (2) **read-only `history_*` DB views** behind a read-only role (role SQL run by the user in the Neon console). History stays read-only through both.
@@ -185,7 +185,17 @@ Phases 1–3 are merged (#39, #40, #41, plus #42 for the logic tier on Data Heal
 
 ## Phase 5 — Benchmarks + surfacing
 
-- `lib/benchmarks/` pure aggregation, **one contribution per project** (latest eligible import for actuals, earliest for planned): span per canonical scope; median, P25 and P75, blended by buildingType and sector (below). It filters out `isSynthetic`, imports that aren't benchmark-eligible, and actuals from unfinished scopes. Computed at read time, like Phase 1.
+Decisions, 2026-10-23 (Q65–Q71):
+
+- **Order (Q65):** production backfill, then the Phase 4 name review, then Phase 5. Benchmarks key on standard scopes, so they wait for names to be mapped.
+- **Measure (Q66):** per project and standard scope, the span from first start to last finish of its mapped activities, in working days. Two ranges: **planned** (earliest eligible import) and **actual** (latest eligible import, finished scopes only); actual shown first.
+- **No size normalisation (Q67):** SF is nearly always blank; project type and sector grouping (with Q54 blending) does the work.
+- **Stored, not read-time (Q68):** one benchmark set in a table, recomputed by an admin "Recompute benchmarks" button that shows when it last ran. Read-time over ~190k activities per Activity Detail view is too slow.
+- **Two PRs (Q69):** A = duration ranges, Activity Detail, Data Health check. B = sequencing pairs and criticality frequency, "usually critical" marker (Phase 7 needs both). Milestone gaps wait until Phase 7 needs them.
+- **Rough files (Q70):** feed no benchmarks (only as-built and baseline count), but their activity names **do** feed the Phase 4 name review, like every other schedule.
+- **Out-of-range check (Q71):** Data Health flags a duration below P25 − 1.5·IQR or above P75 + 1.5·IQR (Tukey fences). Activity Detail shows P25–P75.
+
+- `lib/benchmarks/` pure aggregation, **one contribution per project** (latest eligible import for actuals, earliest for planned): span per canonical scope; median, P25 and P75, blended by buildingType and sector (below). It filters out `isSynthetic`, imports that aren't benchmark-eligible, and actuals from unfinished scopes. Stored and recomputed on demand (Q68), not computed at read time.
 - **Bayesian blending (Q54, 2026-10-23)** replaces the hard "n ≥ 5 by buildingType, else sector" switch. Each statistic is shrunk toward the sector's value in proportion to how little buildingType data there is (empirical Bayes):
 
   ```
