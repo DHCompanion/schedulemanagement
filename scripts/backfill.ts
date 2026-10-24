@@ -10,7 +10,8 @@
 // years is two projects: the key is backfill:FY<year>:<name>.
 //
 // An optional <year>-projects.csv beside the manifest (columns project, sector,
-// buildingType, sizeSqFt) sets each project's details, on reruns too.
+// buildingType, sizeSqFt) sets each project's details, on reruns too. Blank cells
+// leave a value alone, so a rerun never wipes what an admin set on /history.
 //
 // Writes to whatever DATABASE_URL points at. Anything but a local database needs
 // BACKFILL_DB_OK=1 — this creates real projects.
@@ -54,7 +55,8 @@ async function main() {
     const existing = await prisma.project.findFirst({ where: { externalProjectKey } });
     const { id: projectId } = existing ?? (await prisma.project.create({ data: { name: project, externalProjectKey, status: "historical" } }));
     const d = details.get(project);
-    if (d) await prisma.project.update({ where: { id: projectId }, data: d });
+    const filled = Object.fromEntries(Object.entries(d ?? {}).filter(([, v]) => v !== null));
+    if (Object.keys(filled).length) await prisma.project.update({ where: { id: projectId }, data: filled });
     const done = new Map((await prisma.scheduleImport.findMany({ where: { projectId }, select: { id: true, fileHash: true } })).map((i) => [i.fileHash, i.id]));
 
     for (const f of files) {
