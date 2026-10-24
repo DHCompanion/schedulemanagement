@@ -51,7 +51,7 @@ describe.runIf(!!process.env.DATABASE_URL)("name review with a database", () => 
   it("counts distinct projects per name across historical and live projects, by normalized name", async () => {
     await projectWith("H1", "historical", [`Frame ${tag}`, `Frame ${tag}`]);
     await projectWith("H2", "historical", [`frame  ${tag}`]);
-    await projectWith("L1", "active", [`FRAME ${tag}`, `Once ${tag}`]);
+    await projectWith("L1", "active", [`\tFRAME ${tag}\n`, `Once ${tag}`]);
     const review = (await getNameReview(2)).filter((r) => r.normalizedName.includes(tag));
     expect(review).toHaveLength(1);
     expect(review[0]).toMatchObject({ normalizedName: `frame ${tag}`, projects: 3 });

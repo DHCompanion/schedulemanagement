@@ -24,7 +24,8 @@ export function buildNameReview(counts: NameCount[], dict: Map<string, string>, 
     .map((c) => ({ ...c, suggestion: suggestScopes(c.sampleName, knownScopes, 1)[0] ?? "" }));
 }
 
-// The SQL key must equal normalizeName(): trim, lowercase, collapse whitespace.
+// The SQL key must equal normalizeName(): collapse every whitespace run (tabs and
+// newlines too) to one space first, so the trim catches them, then lowercase.
 // Leaves only, from every non-synthetic import, so rough and live schedules count too (Q70).
 export async function getNameReview(minProjects: number): Promise<NameReviewRow[]> {
   const counts = await prisma.$queryRaw<NameCount[]>`
@@ -33,7 +34,7 @@ export async function getNameReview(minProjects: number): Promise<NameReviewRow[
            count(DISTINCT project_id)::int AS projects,
            (array_agg(DISTINCT project_name))[1:3] AS "sampleProjects"
     FROM (
-      SELECT lower(regexp_replace(trim(a.name), '\\s+', ' ', 'g')) AS key, trim(a.name) AS name,
+      SELECT lower(btrim(regexp_replace(a.name, '\\s+', ' ', 'g'))) AS key, btrim(regexp_replace(a.name, '\\s+', ' ', 'g')) AS name,
              p.id AS project_id, p.name AS project_name
       FROM "Activity" a
       JOIN "ScheduleImport" i ON i.id = a."scheduleImportId"
