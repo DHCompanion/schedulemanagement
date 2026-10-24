@@ -11,37 +11,39 @@ export async function denyIfHistorical(projectId: string): Promise<NextResponse 
   return NextResponse.json({ error: { message: "Historical projects are read-only." } }, { status: 403 });
 }
 
-// Fixed lists so benchmarks group cleanly (plan Phase 4). Nearly every project is
-// healthcare, so "building type" here is really the kind of project.
-export const SECTORS = ["Healthcare", "Education", "Commercial", "Community", "Other"] as const;
-export const BUILDING_TYPES = [
-  "Ground-up building",
-  "Clinic / MOB finish-out",
-  "ASC",
-  "Cath / IR / EP",
-  "Imaging",
-  "Surgery",
-  "Emergency department",
-  "Patient units",
-  "Pharmacy",
-  "Lab",
-  "Support / admin / food service",
-  "MEP / infrastructure",
-  "Exterior / site",
-  "Other",
-] as const;
+// Skiles' standard market sectors and project types, from Fibery (Database
+// Standards/Project Type). Each type belongs to one sector, so a project's sector
+// follows from its type. Stored in Project.sector / Project.buildingType.
+export const PROJECT_TYPES = {
+  Healthcare: [
+    "ASC (Ambulatory Surgery Center)", "Behavioral", "Cancer Center", "Clinic", "Emergency Department",
+    "FSED (Freestanding Emergency Department)", "Healthcare - Misc.", "Hospital - New Build", "ICU/NICU",
+    "Imaging & Radiology", "Lab/Pharmacy", "Med/Surgery", "MEP Upgrade", "MOB (Medical Office Building)",
+    "Obstetrics", "OR Suite", "Outpatient Surgery Center", "Patient Care", "POB",
+    "Rehab/LTAC (Long Term Acute Care)", "Vertical Expansion",
+  ],
+  Institutional: ["Athletic Facilities", "Schools", "Student Housing"],
+  Hospitality: ["Hoteling"],
+  Commercial: ["Core & Shell", "Kitchen", "Office Building", "Warehouse"],
+  "Mission Critical": ["Data Centers"],
+  "Higher Education": ["Higher Education - Misc.", "Middle School"],
+} as const;
+export const SECTORS = Object.keys(PROJECT_TYPES) as (keyof typeof PROJECT_TYPES)[];
+const SECTOR_OF = new Map<string, string>(SECTORS.flatMap((s) => PROJECT_TYPES[s].map((t) => [t, s] as const)));
 // As-built and baseline have to come from the data; review can only demote.
 export const TIER_OVERRIDES = ["rough", "junk"] as const;
 
 export interface ProjectDetails { sector: string | null; buildingType: string | null; sizeSqFt: number | null }
 
-/** Validates submitted details against the lists; blanks become null. Throws a user-facing message. */
+/** Validates submitted details against the lists; the sector comes from the project type. Blanks become null. Throws a user-facing message. */
 export function parseDetails(raw: { sector?: string; buildingType?: string; sizeSqFt?: string }): ProjectDetails {
-  const sector = raw.sector?.trim() || null;
   const buildingType = raw.buildingType?.trim() || null;
   const size = raw.sizeSqFt?.replace(/,/g, "").trim() || null;
-  if (sector && !(SECTORS as readonly string[]).includes(sector)) throw new Error(`Unknown sector "${sector}".`);
-  if (buildingType && !(BUILDING_TYPES as readonly string[]).includes(buildingType)) throw new Error(`Unknown building type "${buildingType}".`);
+  const given = raw.sector?.trim() || null;
+  if (buildingType && !SECTOR_OF.has(buildingType)) throw new Error(`Unknown project type "${buildingType}".`);
+  const sector = buildingType ? SECTOR_OF.get(buildingType)! : given;
+  if (given && given !== sector) throw new Error(`"${buildingType}" is a ${sector} project type, not ${given}.`);
+  if (sector && !(SECTORS as string[]).includes(sector)) throw new Error(`Unknown sector "${sector}".`);
   if (size && !/^\d+$/.test(size)) throw new Error(`Size "${raw.sizeSqFt}" isn't a whole number of square feet.`);
   return { sector, buildingType, sizeSqFt: size ? Number(size) : null };
 }

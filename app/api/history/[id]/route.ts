@@ -4,7 +4,7 @@ import { appUrl } from "@/lib/http";
 import { isAdminRequest } from "@/lib/scope";
 import { TIER_OVERRIDES, parseDetails } from "@/lib/historical";
 
-// Admin edits on a historical project: its details (sector, building type, size)
+// Admin edits on a historical project: its details (project type, which sets the sector; size)
 // or one import's tier override. The only writes the library allows. Cross-project
 // on purpose, so there is no scope check — an OS-launched tool admin may edit any.
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {

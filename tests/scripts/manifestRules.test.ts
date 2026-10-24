@@ -148,11 +148,11 @@ describe("backfillPlan", () => {
 describe("projectDetails", () => {
   it("reads sector, building type and size per project, blanks as null", () => {
     const d = projectDetails([
-      { project: "BSW Plano Cath", sector: "Healthcare", buildingType: "Cath / IR / EP", sizeSqFt: "4,200" },
-      { project: "TCU", sector: "Education", buildingType: "", sizeSqFt: "" },
+      { project: "BSW Plano Cath", sector: "", buildingType: "Imaging & Radiology", sizeSqFt: "4,200" },
+      { project: "TCU", sector: "Higher Education", buildingType: "", sizeSqFt: "" },
     ]);
-    expect(d.get("BSW Plano Cath")).toEqual({ sector: "Healthcare", buildingType: "Cath / IR / EP", sizeSqFt: 4200 });
-    expect(d.get("TCU")).toEqual({ sector: "Education", buildingType: null, sizeSqFt: null });
+    expect(d.get("BSW Plano Cath")).toEqual({ sector: "Healthcare", buildingType: "Imaging & Radiology", sizeSqFt: 4200 });
+    expect(d.get("TCU")).toEqual({ sector: "Higher Education", buildingType: null, sizeSqFt: null });
   });
 
   it("refuses values outside the app's lists, naming the row", () => {

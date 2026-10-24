@@ -43,13 +43,20 @@ describe.runIf(!!process.env.DATABASE_URL)("POST /api/history/[id]", () => {
 
   it("saves details for a standalone or OS-launched admin", async () => {
     const { id } = await historical();
-    const res = await post(id, { sector: "Healthcare", buildingType: "Cath / IR / EP", sizeSqFt: "4,200" }, await admin());
+    const res = await post(id, { buildingType: "OR Suite", sizeSqFt: "4,200" }, await admin());
     expect(res.status).toBe(303);
-    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ sector: "Healthcare", buildingType: "Cath / IR / EP", sizeSqFt: 4200 });
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ sector: "Healthcare", buildingType: "OR Suite", sizeSqFt: 4200 });
 
     const osAdmin = `${SCOPE_COOKIE}=${await signScope({ projectId: "x", osProjectId: 1, personId: 1, toolLevel: "admin" }, now())}`;
     expect((await post(id, { sector: "", buildingType: "", sizeSqFt: "" }, osAdmin)).status).toBe(303);
     expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ sector: null, buildingType: null, sizeSqFt: null });
+  });
+
+  it("takes the sector from the project type", async () => {
+    const { id } = await historical();
+    expect((await post(id, { buildingType: "Schools" }, await admin())).status).toBe(303);
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ sector: "Institutional", buildingType: "Schools" });
+    expect((await post(id, { sector: "Healthcare", buildingType: "Schools" }, await admin())).status).toBe(422);
   });
 
   it("rejects values outside the lists", async () => {

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { appPath } from "@/lib/http";
 import { isAdminSession } from "@/lib/adminSession";
 import { getImportQuality } from "@/lib/health/healthService";
-import { BUILDING_TYPES, SECTORS, TIER_OVERRIDES, fiscalYear } from "@/lib/historical";
+import { PROJECT_TYPES, SECTORS, TIER_OVERRIDES, fiscalYear } from "@/lib/historical";
 import { TierBadge } from "@/components/TierBadge";
 
 export const dynamic = "force-dynamic";
@@ -34,22 +34,21 @@ export default async function HistoricalProjectPage(props: { params: Promise<{ i
 
       {admin ? (
         <form action={action} method="post" className="mb-6 flex flex-wrap items-end gap-2 rounded border border-slate-200 bg-white p-3">
-          <label className="flex flex-col text-xs text-slate-600">Sector
-            <select name="sector" defaultValue={project.sector ?? ""} className={input}>
-              <option value="">—</option>
-              {SECTORS.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </label>
-          <label className="flex flex-col text-xs text-slate-600">Building type
+          <label className="flex flex-col text-xs text-slate-600">Project type
             <select name="buildingType" defaultValue={project.buildingType ?? ""} className={input}>
               <option value="">—</option>
-              {BUILDING_TYPES.map((b) => <option key={b}>{b}</option>)}
+              {SECTORS.map((s) => (
+                <optgroup key={s} label={s}>
+                  {PROJECT_TYPES[s].map((t) => <option key={t}>{t}</option>)}
+                </optgroup>
+              ))}
             </select>
           </label>
           <label className="flex flex-col text-xs text-slate-600">Size (sq ft)
             <input name="sizeSqFt" inputMode="numeric" defaultValue={project.sizeSqFt ?? ""} className={`${input} w-28`} />
           </label>
           <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Save</button>
+          {project.sector && <span className="text-xs text-slate-500">Sector: {project.sector}</span>}
         </form>
       ) : (
         <p className="mb-6 text-sm text-slate-700">
