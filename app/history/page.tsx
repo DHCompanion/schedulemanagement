@@ -28,7 +28,10 @@ export default async function HistoryPage(props: { searchParams: Promise<{ fy?: 
   return (
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <Link href="/" className="text-sm text-slate-500">← Projects</Link>
-      <h1 className="mb-4 mt-1 text-xl font-semibold">Historical schedules</h1>
+      <div className="mb-4 mt-1 flex items-baseline justify-between">
+        <h1 className="text-xl font-semibold">Historical schedules</h1>
+        <Link href="/history/names" className="text-sm text-slate-600 underline hover:text-slate-900">Name review</Link>
+      </div>
       <form className="mb-4 flex flex-wrap items-end gap-2">
         <select name="fy" defaultValue={fy ?? ""} aria-label="Fiscal year" className={select}>
           <option value="">All years</option>
