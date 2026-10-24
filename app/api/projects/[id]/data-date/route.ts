@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/http";
 import { denyIfOutOfScope } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 
 // Sets the project's data date by hand from the schedule screen. An empty value
 // clears it, handing the data date back to the latest import or progress update.
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const denied = await denyIfOutOfScope(req, params.id);
+  const denied = (await denyIfOutOfScope(req, params.id)) ?? (await denyIfHistorical(params.id));
   if (denied) return denied;
 
   const raw = String((await req.formData()).get("dataDate") ?? "").trim();

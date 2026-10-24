@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readUploadedXml } from "@/lib/http";
 import { buildExport, type ExportUpload } from "@/lib/export/buildExport";
 import { denyIfOutOfScope } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -11,7 +12,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: { message: "projectId is required." } }, { status: 400 });
   }
 
-  const denied = await denyIfOutOfScope(req, projectId);
+  const denied = (await denyIfOutOfScope(req, projectId)) ?? (await denyIfHistorical(projectId));
   if (denied) return denied;
   // No file means export from the stored original.
   let exportUpload: ExportUpload = null;

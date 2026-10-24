@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { osAppOrigins } from "@/lib/http";
 import { SCOPE_COOKIE, readScope } from "@/lib/scope";
+import { isToolAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,9 +23,10 @@ export default async function ProjectLayout({
 
   const project = await prisma.project.findUnique({
     where: { id },
-    select: { name: true, client: true },
+    select: { name: true, client: true, status: true },
   });
   if (!project) notFound();
+  if (project.status === "historical") redirect(`/history/${id}`);
 
   const scope = await readScope((await cookies()).get(SCOPE_COOKIE)?.value, Math.floor(Date.now() / 1000));
   const person = scope?.personName ?? null;
@@ -46,6 +48,12 @@ export default async function ProjectLayout({
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
             {person && <span className="truncate">{person}</span>}
+            {/* An OS-launched admin can't reach the project list, so the library link lives here. */}
+            {isToolAdmin(scope?.toolLevel) && (
+              <Link href="/history" className="whitespace-nowrap underline hover:text-slate-900">
+                History
+              </Link>
+            )}
             {connectHref ? (
               <a href={connectHref} className="whitespace-nowrap underline hover:text-slate-900">
                 Back to Connect

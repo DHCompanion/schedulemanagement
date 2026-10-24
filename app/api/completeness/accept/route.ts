@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { acceptSplit } from "@/lib/completeness/acceptSplit";
 import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 
 interface AcceptBody {
   projectId?: string;
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
   // body.acceptedBy is a client-supplied label, not identity — the verified
   // person comes off the signed scope.
   const scope = await scopeFromRequest(req, Math.floor(Date.now() / 1000));
-  const denied = denyOutOfScope(scope, body.projectId);
+  const denied = denyOutOfScope(scope, body.projectId) ?? (await denyIfHistorical(body.projectId));
   if (denied) return denied;
 
   try {

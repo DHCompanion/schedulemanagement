@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { assignTradePartner } from "@/lib/trades/tradesService";
 import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 
 interface DriftBody {
   projectId?: string;
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   }
 
   const scope = await scopeFromRequest(req, Math.floor(Date.now() / 1000));
-  const denied = denyOutOfScope(scope, body.projectId);
+  const denied = denyOutOfScope(scope, body.projectId) ?? (await denyIfHistorical(body.projectId));
   if (denied) return denied;
 
   const projectId = body.projectId;

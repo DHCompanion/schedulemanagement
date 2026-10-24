@@ -6,6 +6,7 @@ import { lookaheadCss } from "@/components/lookaheadCss";
 import { getLookahead, parseSize, parseWeeks } from "@/lib/lookahead/getLookahead";
 import { lookaheadDocument, pdfFileName } from "@/lib/lookahead/pdfDocument";
 import { denyIfOutOfScope } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 
 // Chromium cold-starts slowly on a first invocation; the platform default is not
 // enough room for the launch plus the render.
@@ -18,7 +19,7 @@ export async function GET(req: Request) {
   if (!projectId) {
     return NextResponse.json({ error: { message: "projectId is required." } }, { status: 400 });
   }
-  const denied = await denyIfOutOfScope(req, projectId);
+  const denied = (await denyIfOutOfScope(req, projectId)) ?? (await denyIfHistorical(projectId));
   if (denied) return denied;
 
   const weeks = parseWeeks(url.searchParams.get("weeks") ?? undefined);

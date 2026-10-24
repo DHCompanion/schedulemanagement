@@ -91,3 +91,21 @@ describe("session required", () => {
     expect((await middleware(req)).headers.get("location")).toContain("/login");
   });
 });
+
+// Phase 4 (Q51): the historical library is cross-project, so a scoped session
+// reaches it only when the OS made that person a tool admin.
+describe("the /history area", () => {
+  it("redirects a scoped non-admin to their own project", async () => {
+    for (const level of ["user", "viewer"] as const) {
+      const res = await scopedRequest(level, "GET", "/history");
+      expect(res.headers.get("location"), level).toContain("/projects/p1");
+    }
+  });
+
+  it("lets a scoped tool admin in", async () => {
+    for (const path of ["/history", "/history/abc"]) {
+      const res = await scopedRequest("admin", "GET", path);
+      expect(res.headers.get("location"), path).toBeNull();
+    }
+  });
+});

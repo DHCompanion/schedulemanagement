@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { dismissScope } from "@/lib/trades/tradesService";
 import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 
 export async function POST(req: Request) {
   const body = (await req.json()) as { projectId?: string; canonicalScope?: string };
@@ -9,7 +10,7 @@ export async function POST(req: Request) {
   }
 
   const scope = await scopeFromRequest(req, Math.floor(Date.now() / 1000));
-  const denied = denyOutOfScope(scope, body.projectId);
+  const denied = denyOutOfScope(scope, body.projectId) ?? (await denyIfHistorical(body.projectId));
   if (denied) return denied;
   try {
     await dismissScope(body.projectId, body.canonicalScope, undefined, scope?.personId);

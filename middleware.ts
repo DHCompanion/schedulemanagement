@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { SESSION_COOKIE, canWrite } from "@/lib/auth";
+import { SESSION_COOKIE, canWrite, isToolAdmin } from "@/lib/auth";
 import { SCOPE_COOKIE, readScope, readSession } from "@/lib/scope";
 
 // Reached before a session exists: the login form, the OS launch handoff (which
@@ -55,10 +55,14 @@ export async function middleware(req: NextRequest) {
 
   // URL-level project scoping. Every page lives under /projects/<id>, so one
   // check here covers all of them; API routes carry the project in the body and
-  // are guarded individually (lib/scope.ts denyIfOutOfScope).
+  // are guarded individually (lib/scope.ts denyIfOutOfScope). The historical
+  // library spans projects, so only an OS tool admin gets into it.
   if (scope && !pathname.startsWith("/api/")) {
     const requested = pathname.match(/^\/projects\/([^/]+)/)?.[1];
-    const outOfScope = requested ? requested !== scope.projectId : pathname === "/";
+    const history = pathname === "/history" || pathname.startsWith("/history/");
+    const outOfScope = requested
+      ? requested !== scope.projectId
+      : pathname === "/" || (history && !isToolAdmin(scope.toolLevel));
     if (outOfScope) {
       const url = req.nextUrl.clone();
       url.pathname = `/projects/${scope.projectId}`;

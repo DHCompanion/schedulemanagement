@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { denyIfOutOfScope } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 import { finalizeUpdate } from "@/lib/updates/updateService";
 
 export async function POST(req: Request, props: { params: Promise<{ updateId: string }> }) {
@@ -12,7 +13,7 @@ export async function POST(req: Request, props: { params: Promise<{ updateId: st
     select: { projectId: true },
   });
   if (!update) return NextResponse.json({ error: { message: "Update not found." } }, { status: 404 });
-  const denied = await denyIfOutOfScope(req, update.projectId);
+  const denied = (await denyIfOutOfScope(req, update.projectId)) ?? (await denyIfHistorical(update.projectId));
   if (denied) return denied;
 
   try {
