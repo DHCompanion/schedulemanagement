@@ -13,7 +13,8 @@
 // buildingType, sizeSqFt) sets each project's details, on reruns too.
 //
 // Writes to whatever DATABASE_URL points at. Anything but a local database needs
-// BACKFILL_DB_OK=1 — this creates real projects.
+// BACKFILL_DB_OK=1 — this creates real projects — and AWS_BUCKET, so originals
+// land in S3 like any other import.
 
 import crypto from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -26,8 +27,11 @@ import type { ProjectDetails } from "@/lib/historical";
 
 function requireSafeDatabase(): void {
   const host = new URL(process.env.DATABASE_URL ?? "postgresql://missing").hostname;
-  if (/^(localhost|127\.)/.test(host) || process.env.BACKFILL_DB_OK === "1") return;
-  throw new Error(`DATABASE_URL points at ${host}. Set BACKFILL_DB_OK=1 to backfill a non-local database.`);
+  if (/^(localhost|127\.)/.test(host)) return;
+  if (process.env.BACKFILL_DB_OK !== "1") throw new Error(`DATABASE_URL points at ${host}. Set BACKFILL_DB_OK=1 to backfill a non-local database.`);
+  // Without a bucket the originals go to an in-memory store, and the rows would
+  // point at S3 objects that were never written.
+  if (!process.env.AWS_BUCKET) throw new Error("Set AWS_BUCKET (and the AWS keys) so the original files are stored.");
 }
 
 function csv(value: string | number): string {

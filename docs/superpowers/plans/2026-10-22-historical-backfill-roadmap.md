@@ -185,7 +185,17 @@ Phases 1–3 are merged (#39, #40, #41, plus #42 for the logic tier on Data Heal
 
 ## Phase 5 — Benchmarks + surfacing
 
-- `lib/benchmarks/` pure aggregation, **one contribution per project** (latest eligible import for actuals, earliest for planned): span per canonical scope; median, P25 and P75, blended by buildingType and sector (below). It filters out `isSynthetic`, imports that aren't benchmark-eligible, and actuals from unfinished scopes. Computed at read time, like Phase 1.
+Decisions, 2026-10-23 (Q65–Q71):
+
+- **Order (Q65):** production backfill, then the Phase 4 name review, then Phase 5. Benchmarks key on standard scopes, so they wait for names to be mapped.
+- **Measure (Q66):** per project and standard scope, the span from first start to last finish of its mapped activities, in working days. Two ranges: **planned** (earliest eligible import) and **actual** (latest eligible import, finished scopes only); actual shown first.
+- **No size normalisation (Q67):** SF is nearly always blank; project type and sector grouping (with Q54 blending) does the work.
+- **Stored, not read-time (Q68):** one benchmark set in a table, recomputed by an admin "Recompute benchmarks" button that shows when it last ran. Read-time over ~190k activities per Activity Detail view is too slow.
+- **Two PRs (Q69):** A = duration ranges, Activity Detail, Data Health check. B = sequencing pairs and criticality frequency, "usually critical" marker (Phase 7 needs both). Milestone gaps wait until Phase 7 needs them.
+- **Rough files (Q70):** feed no benchmarks (only as-built and baseline count), but their activity names **do** feed the Phase 4 name review, like every other schedule.
+- **Out-of-range check (Q71):** Data Health flags a duration below P25 − 1.5·IQR or above P75 + 1.5·IQR (Tukey fences). Activity Detail shows P25–P75.
+
+- `lib/benchmarks/` pure aggregation, **one contribution per project** (latest eligible import for actuals, earliest for planned): span per canonical scope; median, P25 and P75, blended by buildingType and sector (below). It filters out `isSynthetic`, imports that aren't benchmark-eligible, and actuals from unfinished scopes. Stored and recomputed on demand (Q68), not computed at read time.
 - **Bayesian blending (Q54, 2026-10-23)** replaces the hard "n ≥ 5 by buildingType, else sector" switch. Each statistic is shrunk toward the sector's value in proportion to how little buildingType data there is (empirical Bayes):
 
   ```
