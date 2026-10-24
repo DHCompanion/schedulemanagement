@@ -12,7 +12,8 @@ export async function denyIfHistorical(projectId: string): Promise<NextResponse 
 }
 
 // Skiles' standard market sectors and project types, from Fibery (Database
-// Standards/Project Type). Each type belongs to one sector, so a project's sector
+// Standards/Project Type), plus "Special Procedure (EP, Cath, IR)", added here.
+// Each type belongs to one sector, so a project's sector
 // follows from its type. Stored in Project.sector / Project.buildingType.
 export const PROJECT_TYPES = {
   Healthcare: [
@@ -20,7 +21,7 @@ export const PROJECT_TYPES = {
     "FSED (Freestanding Emergency Department)", "Healthcare - Misc.", "Hospital - New Build", "ICU/NICU",
     "Imaging & Radiology", "Lab/Pharmacy", "Med/Surgery", "MEP Upgrade", "MOB (Medical Office Building)",
     "Obstetrics", "OR Suite", "Outpatient Surgery Center", "Patient Care", "POB",
-    "Rehab/LTAC (Long Term Acute Care)", "Vertical Expansion",
+    "Rehab/LTAC (Long Term Acute Care)", "Special Procedure (EP, Cath, IR)", "Vertical Expansion",
   ],
   Institutional: ["Athletic Facilities", "Schools", "Student Housing"],
   Hospitality: ["Hoteling"],
