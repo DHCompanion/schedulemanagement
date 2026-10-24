@@ -2,6 +2,8 @@
 // and which versions of each project to keep (plan Q42: earliest, latest, and the
 // last save of each month between). Throwaway backfill tooling; delete after Phase 6.
 
+import { parseDetails, type ProjectDetails } from "@/lib/historical";
+
 export interface ManifestFile {
   file: string;
   title: string;
@@ -191,4 +193,15 @@ export function backfillPlan(rows: Record<string, string>[]): { project: string;
       files: sorted.map((r) => ({ file: r.file, isBaseline: r === baseline, tierOverride: r.kind === "short-term" ? "rough" : null })),
     };
   });
+}
+
+/** Reviewed `<year>-projects.csv` → details per project name. Throws on a value the app's dropdowns don't offer. */
+export function projectDetails(rows: Record<string, string>[]): Map<string, ProjectDetails> {
+  return new Map(rows.map((r) => {
+    try {
+      return [r.project.trim(), parseDetails(r)];
+    } catch (e) {
+      throw new Error(`${r.project}: ${e instanceof Error ? e.message : e}`);
+    }
+  }));
 }

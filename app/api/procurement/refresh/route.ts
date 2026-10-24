@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/http";
 import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 import { refreshProcurementRiskIfStale } from "@/lib/procurement/refresh";
 
 // The "Sync procurement" button. Forces a fresh pull of the OS
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
   if (!projectId) return NextResponse.redirect(appUrl(req, "/"), { status: 303 });
 
   const scope = await scopeFromRequest(req, Math.floor(Date.now() / 1000));
-  const denied = denyOutOfScope(scope, projectId);
+  const denied = denyOutOfScope(scope, projectId) ?? (await denyIfHistorical(projectId));
   if (denied) return denied;
 
   const project = await prisma.project.findUnique({

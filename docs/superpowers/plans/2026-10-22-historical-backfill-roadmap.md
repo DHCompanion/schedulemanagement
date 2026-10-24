@@ -158,7 +158,7 @@ Mobile: a single column, and the pill wraps. No new colors beyond the existing s
   2. A script writes one CSV row per file: hash (dupes), title from file, file-name date, activity count, date range, proposed project group, keep/skip.
   3. Local model (see the `delegating-to-local-model` skill) proposes groupings for mismatched titles and guesses project metadata (building type, client, sector) into the CSV. Claude reviews the summary and low-confidence rows, not raw files.
   4. Admins correct the CSV. The backfill imports only `keep` rows.
-- The local model also suggests activity-name → scope mappings, but in Phase 4.
+- Activity-name → scope mappings are reviewed in the app in Phase 4, without a local model (Q63).
 
 ## Phase 3 — Manifest + backfill script + pilot
 
@@ -169,12 +169,19 @@ Mobile: a single column, and the pill wraps. No new colors beyond the existing s
 
 ## Phase 4 — Review queues + admin metadata/grouping table
 
-- **Historical library (Q51, 2026-10-22):** backfilled projects (`status = historical`, `externalProjectKey = backfill:FY<year>:<name>` — projects live only in the fiscal year they were created, so the same name in two years is two projects) live in a **completely separate, read-only area of the app**. They don't appear in the live project list; there's no editing, updates or export. Their data must also be **queryable by an agent** (mechanism to be decided before Phase 4 is built).
-- **Agent access to history (Q52, 2026-10-22): both.** Connect is replacing its built-in assistant with an MCP server for Claude and ChatGPT (reads and writes). For the historical library: (1) **read-only MCP tools** in Schedule Manager (historical projects, activities, benchmarks), and (2) **read-only published DB views** behind a read-only role for ad-hoc analysis. History stays read-only through both. MCP scope for the rest of the tool (live projects, writes) is undecided and will be worked out separately.
-- **Dictionary suggestions:** a cross-project queue of unmapped names, sorted by frequency, pre-filled by local-model suggestions with `suggestScopes.ts` (Jaccard) as the fallback.
-- **Split-rule mining:** WBS parent→children patterns, matched against the existing `ScopeSplitRule`s first; only novel ones get queued.
-- **Admin project table:** metadata pre-filled from the manifest. Tier override is `tierOverride String?` on `ScheduleImport`, an additive migration.
-- **Sub identity:** raw text plus a suggested trade-partner match. Shown, not scored.
+Phases 1–3 are merged (#39, #40, #41, plus #42 for the logic tier on Data Health); the task checkboxes above predate that. Phase 4 decisions, 2026-10-23:
+
+- **Historical library (Q51):** backfilled projects (`status = historical`, `externalProjectKey = backfill:FY<year>:<name>` — projects live only in the fiscal year they were created, so the same name in two years is two projects) live in a **separate, read-only area**: `/history` (list, filter by FY, sector, building type) and `/history/[id]` (details, each import with tier and reasons). They're off the live project list; `/projects/<id>` redirects to the library page; every project-scoped API route refuses them (`denyIfHistorical` in `lib/historical.ts`), so no edits, updates or export.
+- **Who (Q55):** standalone sessions and OS-launched tool admins. Other OS-launched sessions stay locked to their project. Only admins edit details or tier overrides.
+- **No tier filter on the list (Q56):** tiers are computed at read time (Phase 1); doing all 1,109 imports on one page load is too slow. Tiers show on each project page. Revisit only if tiers get stored.
+- **Details (Q57):** sector and building type are fixed dropdowns (`SECTORS`, `BUILDING_TYPES` in `lib/historical.ts`); size is optional. Pre-filled from a reviewed `<year>-projects.csv` that `scripts/backfill.ts` applies.
+- **Tier override (Q58):** admins set automatic, rough or junk; as-built and baseline must come from the data.
+- **Order (Q59):** PR 1 (library + details), then the production backfill (Phase 6, run by the user), then PR 2 (name review) against production data, then split mining, then agent access.
+- **Agent access to history (Q52, revised):** (1) read-only Schedule Manager endpoints exposed as tools by **Connect's existing MCP server**, not a standalone MCP server here; (2) **read-only `history_*` DB views** behind a read-only role (role SQL run by the user in the Neon console). History stays read-only through both.
+- **Standard names (Q60):** the existing standard list is the set of `canonicalScope` values in `ScopeDictionaryEntry` (plus each scope's own name). No new list is drafted.
+- **Name review (Q61–Q63):** an admin page `/history/names` lists names the standard list doesn't cover, from historical **and** live projects, ranked by how many projects use them (default 3+, adjustable). Each row shows samples and the closest existing scope from `suggestScopes.ts`. Actions: approve the suggestion, pick another, add as a new standard scope, or ignore (a small table keeps ignored names hidden). The admin action is the approval. **No local model**, now or later.
+- **Split-rule mining:** WBS parent→children patterns, matched against the existing `ScopeSplitRule`s first; only novel ones get queued. Details decided before that PR.
+- **Sub identity (Q64):** deferred; nothing in Phases 5–7 uses it.
 
 ## Phase 5 — Benchmarks + surfacing
 

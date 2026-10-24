@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { backfillPlan, nameStem, placeFiles, type ManifestFile } from "@/scripts/manifestRules";
+import { backfillPlan, nameStem, placeFiles, projectDetails, type ManifestFile } from "@/scripts/manifestRules";
 
 function f(file: string, lastSaved: string, over: Partial<ManifestFile> = {}): ManifestFile {
   return { file, title: file, project: null, reviewerSkip: false, sha256: file, creationDate: "2020-05-01T00:49:00", lastSaved, error: null, ...over };
@@ -142,5 +142,22 @@ describe("backfillPlan", () => {
 
   it("ignores rows with no group (failed conversions) and accepts YES in any case", () => {
     expect(backfillPlan([row("x", "", { group: "" }), row("y", "", { keep: "YES" })]).map((p) => p.files.length)).toEqual([1]);
+  });
+});
+
+describe("projectDetails", () => {
+  it("reads sector, building type and size per project, blanks as null", () => {
+    const d = projectDetails([
+      { project: "BSW Plano Cath", sector: "Healthcare", buildingType: "Cath / IR / EP", sizeSqFt: "4,200" },
+      { project: "TCU", sector: "Education", buildingType: "", sizeSqFt: "" },
+    ]);
+    expect(d.get("BSW Plano Cath")).toEqual({ sector: "Healthcare", buildingType: "Cath / IR / EP", sizeSqFt: 4200 });
+    expect(d.get("TCU")).toEqual({ sector: "Education", buildingType: null, sizeSqFt: null });
+  });
+
+  it("refuses values outside the app's lists, naming the row", () => {
+    expect(() => projectDetails([{ project: "X", sector: "Retail", buildingType: "", sizeSqFt: "" }])).toThrow(/X.*Retail/);
+    expect(() => projectDetails([{ project: "X", sector: "", buildingType: "Hospital", sizeSqFt: "" }])).toThrow(/Hospital/);
+    expect(() => projectDetails([{ project: "X", sector: "", buildingType: "", sizeSqFt: "big" }])).toThrow(/big/);
   });
 });

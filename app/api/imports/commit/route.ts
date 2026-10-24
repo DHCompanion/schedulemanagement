@@ -3,6 +3,7 @@ import { readUploadedXml } from "@/lib/http";
 import { prisma } from "@/lib/db";
 import { commitImport } from "@/lib/import/commitImport";
 import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
   }
 
   const scope = await scopeFromRequest(req, Math.floor(Date.now() / 1000));
-  const denied = denyOutOfScope(scope, projectId);
+  const denied = denyOutOfScope(scope, projectId) ?? (await denyIfHistorical(projectId));
   if (denied) return denied;
   const upload = await readUploadedXml(file);
   if ("error" in upload) {

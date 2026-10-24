@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/http";
 import { denyIfOutOfScope, isAdminRequest } from "@/lib/scope";
+import { denyIfHistorical } from "@/lib/historical";
 
 // Wipes a project's schedule data back to "never imported" and re-arms the
 // setup wizard. The project row itself survives, so the binding to the Skiles
@@ -15,7 +16,7 @@ import { denyIfOutOfScope, isAdminRequest } from "@/lib/scope";
 // pages.
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const denied = await denyIfOutOfScope(req, params.id);
+  const denied = (await denyIfOutOfScope(req, params.id)) ?? (await denyIfHistorical(params.id));
   if (denied) return denied;
   if (!(await isAdminRequest(req))) {
     return NextResponse.json({ error: { message: "Admin access required." } }, { status: 403 });

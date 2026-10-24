@@ -4,7 +4,9 @@ import { prisma } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  // Backfilled projects live in their own read-only library (/history).
   const projects = await prisma.project.findMany({
+    where: { status: { not: "historical" } },
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { imports: true } } },
   });
@@ -13,9 +15,14 @@ export default async function Home() {
     <main className="mx-auto max-w-3xl p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Projects</h1>
-        <Link href="/projects/new" className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
-          New Project
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/history" className="text-sm text-slate-600 underline hover:text-slate-900">
+            History
+          </Link>
+          <Link href="/projects/new" className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white">
+            New Project
+          </Link>
+        </div>
       </div>
       {projects.length === 0 ? (
         <p className="text-slate-500">No projects yet. Create one to import a schedule.</p>
