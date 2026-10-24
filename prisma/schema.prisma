@@ -368,6 +368,15 @@ model ScopeNotCoarse {
   createdAt      DateTime @default(now())
 }
 
+// Activity names an admin decided aren't real work ("Notice to Proceed",
+// "Buffer"), so the cross-project name review (/history/names) stops listing
+// them. Global, like the dictionary.
+model ScopeIgnoredName {
+  normalizedName String   @id
+  personId       Int?
+  createdAt      DateTime @default(now())
+}
+
 model CompletenessDismissal {
   id                   String   @id @default(cuid())
   projectId            String
