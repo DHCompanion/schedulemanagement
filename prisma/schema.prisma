@@ -377,6 +377,34 @@ model ScopeIgnoredName {
   createdAt      DateTime @default(now())
 }
 
+// The controlled list of standard names. A mapping can only point at one of
+// these; only an admin adds to it (plan Q72).
+model StandardScope {
+  name      String   @id
+  createdAt DateTime @default(now())
+}
+
+// Names an admin classified instead of mapping: "coarse" bundles several
+// standard names (covers, when known), "procurement" is a material/lead-time
+// line. Both stay out of activity benchmarks; neither is ignored.
+model ScopeNameClass {
+  normalizedName String   @id
+  kind           String
+  covers         String[]
+  createdAt      DateTime @default(now())
+}
+
+// A user's "add this as a new standard name", waiting for an admin on
+// /history/names. Settling the name in any way removes it.
+model StandardScopeRequest {
+  normalizedName String   @id
+  rawName        String
+  projectId      String?
+  personId       Int?
+  requestedBy    String?
+  createdAt      DateTime @default(now())
+}
+
 model CompletenessDismissal {
   id                   String   @id @default(cuid())
   projectId            String

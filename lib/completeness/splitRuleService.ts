@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { normalizeName } from "@/lib/normalize/normalizeName";
+import { addStandardScope } from "@/lib/normalize/normalizationService";
 
 export async function getSplitRules(): Promise<Map<string, string[]>> {
   const rows = await prisma.scopeSplitRule.findMany({ orderBy: [{ coarseScope: "asc" }, { finerScope: "asc" }] });
@@ -13,9 +14,11 @@ export async function getSplitRules(): Promise<Map<string, string[]>> {
 }
 
 export async function addSplitRule(coarseScope: string, finerScope: string, createdBy?: string): Promise<void> {
-  const coarse = coarseScope.trim();
-  const finer = finerScope.trim();
-  if (!coarse || !finer) return;
+  if (!coarseScope.trim() || !finerScope.trim()) return;
+  // Split rules are admin-only, so writing one is the deliberate act that puts
+  // both names on the standard list — and a split mints activities under them.
+  const coarse = await addStandardScope(coarseScope);
+  const finer = await addStandardScope(finerScope);
   await prisma.scopeSplitRule.upsert({
     where: { coarseScope_finerScope: { coarseScope: coarse, finerScope: finer } },
     create: { coarseScope: coarse, finerScope: finer, createdBy },

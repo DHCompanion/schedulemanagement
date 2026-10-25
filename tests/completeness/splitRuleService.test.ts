@@ -12,6 +12,7 @@ describe.runIf(hasDb)("splitRuleService", () => {
 
   afterAll(async () => {
     await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
+    await prisma.standardScope.deleteMany({ where: { name: coarse } });
     await prisma.$disconnect();
   });
 
@@ -21,6 +22,8 @@ describe.runIf(hasDb)("splitRuleService", () => {
 
     const rules = await getSplitRules();
     expect(rules.get(coarse)).toEqual(["Finer A", "Finer B"]);
+    // Both sides of a rule join the standard list.
+    expect(await prisma.standardScope.count({ where: { name: { in: [coarse, "Finer A", "Finer B"] } } })).toBe(3);
 
     await removeSplitRule(coarse, "Finer B");
     const after = await getSplitRules();

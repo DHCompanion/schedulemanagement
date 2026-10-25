@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { applyDictionary, getDictionary } from "@/lib/normalize/normalizationService";
+import { applyDictionary, getDictionary, getNameStatus } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { getCompleteness } from "@/lib/completeness/completenessService";
 import { getTradeDictionary, getDismissedScopes } from "@/lib/trades/tradesService";
@@ -42,6 +42,8 @@ export async function getDataHealthCounts(projectId: string): Promise<DataHealth
   const dismissed = new Set(await getDismissedScopes(projectId));
   const trades = unmappedScopes.filter((s) => !dismissed.has(s)).length;
 
-  const naming = unmappedNames.length;
+  // Same rule as the Task Naming list: ignored and classified names are decided.
+  const { settled } = await getNameStatus();
+  const naming = unmappedNames.filter((n) => !settled.has(normalizeName(n))).length;
   return { naming, granularity, trades, total: naming + granularity + trades };
 }

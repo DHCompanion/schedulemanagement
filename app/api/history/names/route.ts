@@ -1,28 +1,45 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/http";
 import { isAdminRequest } from "@/lib/scope";
-import { confirmMapping } from "@/lib/normalize/normalizationService";
+import { addStandardScope, confirmMapping, settleName } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 
-// The cross-project name review: map a name to a standard scope (an existing one
-// or a new one — typing it is the approval) or ignore it. Both are global.
+// The cross-project name review. Every action is global: map a name to an
+// approved scope, approve a requested name onto the list, classify it as coarse
+// or procurement, ignore it, or add a standard name outright.
 export async function POST(req: Request) {
   if (!(await isAdminRequest(req))) return error("Admin access required.", 403);
   const form = await req.formData();
+  const min = String(form.get("min") ?? "");
+  const back = NextResponse.redirect(appUrl(req, `/history/names${/^\d+$/.test(min) ? `?min=${min}` : ""}`), { status: 303 });
+
+  const newScope = String(form.get("newScope") ?? "");
+  if (newScope.trim()) {
+    await addStandardScope(newScope);
+    return back;
+  }
+
   const name = String(form.get("name") ?? "");
   const normalizedName = normalizeName(name);
   if (!normalizedName) return error("name is required.", 422);
+  const kind = String(form.get("class") ?? "");
 
-  if (form.get("ignore")) {
-    await prisma.scopeIgnoredName.upsert({ where: { normalizedName }, create: { normalizedName }, update: {} });
+  if (form.get("ignore")) await settleName(normalizedName, { ignore: true });
+  else if (kind) {
+    if (kind !== "coarse" && kind !== "procurement") return error("class must be coarse or procurement.", 422);
+    await settleName(normalizedName, { class: kind, covers: [] });
+  } else if (form.get("approve")) {
+    await settleName(normalizedName, { mapTo: await addStandardScope(name) });
   } else {
     const scope = String(form.get("scope") ?? "").trim();
-    if (!scope) return error("Pick or type a standard scope.", 422);
-    await confirmMapping(name, scope);
+    if (!scope) return error("Pick a standard name.", 422);
+    try {
+      await confirmMapping(name, scope);
+    } catch (e) {
+      return error(e instanceof Error ? e.message : "Failed to save.", 422);
+    }
   }
-  const min = String(form.get("min") ?? "");
-  return NextResponse.redirect(appUrl(req, `/history/names${/^\d+$/.test(min) ? `?min=${min}` : ""}`), { status: 303 });
+  return back;
 }
 
 function error(message: string, status: number) {

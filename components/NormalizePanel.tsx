@@ -8,9 +8,13 @@ export interface UnmappedRow {
   rawName: string;
   count: number;
   suggestions: string[];
+  /** Someone already asked for this as a new standard name. */
+  requested?: boolean;
 }
 
-export function NormalizePanel({ rows, knownScopes }: { rows: UnmappedRow[]; knownScopes: string[] }) {
+// Names can only map onto the approved list. A name the list lacks is requested
+// as a new one; an admin decides on /history/names.
+export function NormalizePanel({ projectId, rows, knownScopes }: { projectId: string; rows: UnmappedRow[]; knownScopes: string[] }) {
   const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -20,16 +24,13 @@ export function NormalizePanel({ rows, knownScopes }: { rows: UnmappedRow[]; kno
     setValues((v) => ({ ...v, [rawName]: scope }));
   }
 
-  function useAsIs(rawName: string) {
-    set(rawName, rawName);
-  }
-
-  function acceptAllAsIs() {
-    setValues((v) => {
-      const next = { ...v };
-      for (const r of rows) if (!next[r.rawName]?.trim()) next[r.rawName] = r.rawName;
-      return next;
-    });
+  async function request(rawName: string) {
+    setBusy(true);
+    setError(null);
+    const err = await sendJson("/api/normalize/requests", { projectId, rawName });
+    setBusy(false);
+    if (err) setError(err);
+    else router.refresh();
   }
 
   async function save() {
@@ -50,9 +51,6 @@ export function NormalizePanel({ rows, knownScopes }: { rows: UnmappedRow[]; kno
   return (
     <div>
       {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      <datalist id="known-scopes">
-        {knownScopes.map((s) => <option key={s} value={s} />)}
-      </datalist>
       <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
         {rows.map((r) => (
           <li key={r.rawName} className="px-3 py-3">
@@ -61,25 +59,28 @@ export function NormalizePanel({ rows, knownScopes }: { rows: UnmappedRow[]; kno
               <span className="text-xs text-slate-400">{r.count} activit{r.count === 1 ? "y" : "ies"}</span>
             </div>
             <div className="mt-1 flex flex-wrap gap-1">
-              <button onClick={() => useAsIs(r.rawName)} className="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100">Use as-is</button>
+              {r.requested ? (
+                <span className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">Requested as a new name</span>
+              ) : (
+                <button disabled={busy} onClick={() => request(r.rawName)} className="rounded border border-slate-300 px-2 py-1 text-xs font-medium hover:bg-slate-100">Request as new name</button>
+              )}
               {r.suggestions.map((s) => (
                 <button key={s} onClick={() => set(r.rawName, s)} className="rounded bg-slate-100 px-2 py-1 text-xs hover:bg-slate-200">{s}</button>
               ))}
             </div>
-            <input
-              list="known-scopes"
+            <select
               value={values[r.rawName] ?? ""}
               onChange={(e) => set(r.rawName, e.target.value)}
-              placeholder="Standard scope"
-              className="mt-2 w-full rounded border border-slate-300 px-2 py-1 text-sm"
-            />
+              aria-label={`Standard name for ${r.rawName}`}
+              className="mt-2 w-full rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+            >
+              <option value="">Standard name…</option>
+              {knownScopes.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
           </li>
         ))}
       </ul>
       <div className="mt-4 flex flex-wrap gap-2">
-        <button disabled={busy} onClick={acceptAllAsIs} className="rounded border border-slate-300 px-3 py-2 text-sm font-medium">
-          Accept all shown as-is
-        </button>
         <button disabled={busy} onClick={save} className="rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
           {busy ? "Saving…" : "Save mappings"}
         </button>
