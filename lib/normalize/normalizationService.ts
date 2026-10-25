@@ -55,10 +55,11 @@ export async function getKnownScopes(): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
-/** The listed spelling of an approved name, matched ignoring case; throws for anything off the list. */
+/** The listed spelling of an approved name, matched exactly or else ignoring case; throws for anything off the list. */
 export async function requireStandardScope(scope: string): Promise<string> {
   const name = scope.trim();
-  const found = name && (await prisma.standardScope.findFirst({ where: { name: { equals: name, mode: "insensitive" } } }));
+  const found = name && ((await prisma.standardScope.findUnique({ where: { name } }))
+    ?? (await prisma.standardScope.findFirst({ where: { name: { equals: name, mode: "insensitive" } } })));
   if (!found) throw new Error(`"${name}" is not on the standard name list.`);
   return found.name;
 }
@@ -69,6 +70,11 @@ export async function addStandardScope(scope: string): Promise<string> {
   const existing = await prisma.standardScope.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
   return existing?.name ?? (await prisma.standardScope.create({ data: { name } })).name;
 }
+
+// createdBy on the dictionary entry that maps a renamed name's old spelling to
+// its new name. Split rules match raw activity names, so completeness checks
+// follow these aliases.
+export const RENAME_ALIAS = "rename";
 
 export type NameOutcome =
   | { mapTo: string }
@@ -84,6 +90,10 @@ export async function settleName(normalizedName: string, outcome: NameOutcome, p
     ...("mapTo" in outcome ? [] : [prisma.scopeDictionaryEntry.deleteMany({ where })]),
     ...("ignore" in outcome ? [] : [prisma.scopeIgnoredName.deleteMany({ where })]),
     ...("class" in outcome ? [] : [prisma.scopeNameClass.deleteMany({ where })]),
+    // Mapping a renamed name's old spelling somewhere new ends it being a rename alias.
+    ...("mapTo" in outcome
+      ? [prisma.scopeDictionaryEntry.updateMany({ where: { ...where, createdBy: RENAME_ALIAS, NOT: { canonicalScope: outcome.mapTo } }, data: { createdBy: null } })]
+      : []),
     "mapTo" in outcome
       ? prisma.scopeDictionaryEntry.upsert({
           where,

@@ -44,6 +44,22 @@ export default async function NameReviewPage(props: { searchParams: Promise<{ mi
         </form>
       </div>
 
+      <form action={action} method="post" className="mb-6 flex flex-wrap items-end gap-2 rounded border border-slate-200 bg-white p-3 text-sm">
+        <input type="hidden" name="min" value={min} />
+        <label className="flex min-w-0 flex-1 flex-col text-xs text-slate-600">Standard name
+          <select name="from" required defaultValue="" className={input}>
+            <option value="">Pick a name…</option>
+            {scopes.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+        <label className="flex min-w-0 flex-1 flex-col text-xs text-slate-600">Rename to, or merge into
+          <input name="to" list="standard-names" className={input} />
+        </label>
+        <datalist id="standard-names">{scopes.map((s) => <option key={s} value={s} />)}</datalist>
+        <button name="rename" value="1" className="rounded border border-slate-300 px-3 py-1.5">Rename / merge</button>
+        <button name="deleteScope" value="1" className="rounded border border-red-300 px-3 py-1.5 text-red-700">Delete</button>
+      </form>
+
       {requests.length > 0 && (
         <>
           <h2 className="mb-2 font-medium">Requested new names ({requests.length})</h2>

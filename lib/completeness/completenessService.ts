@@ -3,6 +3,7 @@ import { normalizeName } from "@/lib/normalize/normalizeName";
 import { getSplitRules } from "@/lib/completeness/splitRuleService";
 import { checkCompleteness, summarizeCompleteness, type CompletenessIssue, type CompletenessSummary } from "@/lib/completeness/completenessChecks";
 import { isLeafActive } from "@/lib/msp/types";
+import { getRenameAliases } from "@/lib/normalize/renameStandardScope";
 
 /** A distinct activity name in the schedule, and whether it is already marked coarse. */
 export interface ScheduleName {
@@ -30,8 +31,8 @@ export async function getCompleteness(projectId: string): Promise<ScheduleComple
   }
 
   const leaves = latestImport.activities.filter(isLeafActive);
-  const splitRules = await getSplitRules();
-  const allIssues = checkCompleteness(leaves, splitRules);
+  const [splitRules, aliases] = await Promise.all([getSplitRules(), getRenameAliases()]);
+  const allIssues = checkCompleteness(leaves, splitRules, aliases);
 
   const dismissals = await prisma.completenessDismissal.findMany({ where: { projectId } });
   const dismissedKeys = new Set(dismissals.map((d) => `${d.canonicalActivityKey}::${d.coarseScope}`));
@@ -49,7 +50,7 @@ export async function getCompleteness(projectId: string): Promise<ScheduleComple
     else counts.set(key, { name: a.name.trim(), count: 1 });
   }
   const names: ScheduleName[] = [...counts.entries()]
-    .map(([key, { name, count }]) => ({ name, count, finerScopes: rulesByName.get(key) ?? [] }))
+    .map(([key, { name, count }]) => ({ name, count, finerScopes: rulesByName.get(key) ?? rulesByName.get(normalizeName(aliases.get(key) ?? "")) ?? [] }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
   return { hasImport: true, issues, summary: summarizeCompleteness(issues), names };

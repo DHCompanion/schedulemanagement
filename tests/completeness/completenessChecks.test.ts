@@ -20,6 +20,12 @@ describe("checkCompleteness", () => {
     expect(issues[0].finerScopes).toEqual(["Electrical Rough-In", "Mechanical Rough-In", "Plumbing Rough-In"]);
   });
 
+  it("flags an activity still spelled like a renamed rule's old name, under the current name", () => {
+    const rules = new Map([["MEP Trim Out", ["A", "B"]]]);
+    const issues = checkCompleteness([act({ name: "MEP Trimout" })], rules, new Map([["mep trimout", "MEP Trim Out"]]));
+    expect(issues.map((i) => i.coarseScope)).toEqual(["MEP Trim Out"]);
+  });
+
   it("does not flag a name with no split rule", () => {
     const rules = new Map([["Other Scope", ["A", "B"]]]);
     expect(checkCompleteness([act()], rules)).toEqual([]);
