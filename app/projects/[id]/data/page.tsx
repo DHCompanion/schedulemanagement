@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { appPath } from "@/lib/http";
 import { SCOPE_COOKIE, readScope } from "@/lib/scope";
 import { isAdminSession } from "@/lib/adminSession";
-import { applyDictionary, getKnownScopes, getDictionary } from "@/lib/normalize/normalizationService";
+import { applyDictionary, getKnownScopes, getDictionary, getNameStatus } from "@/lib/normalize/normalizationService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { suggestScopes } from "@/lib/normalize/suggestScopes";
 import { getCompleteness } from "@/lib/completeness/completenessService";
@@ -74,11 +74,16 @@ export default async function DataHealthPage(
     const key = a.name.trim();
     nameCounts.set(key, (nameCounts.get(key) ?? 0) + 1);
   }
-  const namingRows: UnmappedRow[] = unmappedNames.map((name) => ({
-    rawName: name,
-    count: nameCounts.get(name) ?? 1,
-    suggestions: suggestScopes(name, knownScopes),
-  }));
+  // Ignored and classified (coarse/procurement) names are decided; requested ones wait on an admin.
+  const nameStatus = await getNameStatus();
+  const namingRows: UnmappedRow[] = unmappedNames
+    .filter((name) => !nameStatus.settled.has(normalizeName(name)))
+    .map((name) => ({
+      rawName: name,
+      count: nameCounts.get(name) ?? 1,
+      suggestions: suggestScopes(name, knownScopes),
+      requested: nameStatus.requested.has(normalizeName(name)),
+    }));
 
   // --- Task Granularity (moved verbatim from completeness/page.tsx) ---
   const completeness = await getCompleteness(project.id);
@@ -189,7 +194,7 @@ export default async function DataHealthPage(
             {namingRows.length === 0 ? (
               <p className="text-slate-500">All activity names are mapped.</p>
             ) : (
-              <NormalizePanel rows={namingRows} knownScopes={knownScopes} />
+              <NormalizePanel projectId={project.id} rows={namingRows} knownScopes={knownScopes} />
             )}
           </Section>
 

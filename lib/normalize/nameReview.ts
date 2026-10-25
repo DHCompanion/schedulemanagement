@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getDictionary, getKnownScopes } from "@/lib/normalize/normalizationService";
+import { getDictionary, getKnownScopes, getNameStatus } from "@/lib/normalize/normalizationService";
 import { suggestScopes } from "@/lib/normalize/suggestScopes";
 
 export interface NameCount {
@@ -18,9 +18,9 @@ export interface NameReviewRow extends NameCount {
 }
 
 /** Names the standard list doesn't cover yet, most widely used first (plan Q61–Q63). */
-export function buildNameReview(counts: NameCount[], dict: Map<string, string>, ignored: Set<string>, knownScopes: string[]): NameReviewRow[] {
+export function buildNameReview(counts: NameCount[], dict: Map<string, string>, settled: Set<string>, knownScopes: string[]): NameReviewRow[] {
   return counts
-    .filter((c) => !dict.has(c.normalizedName) && !ignored.has(c.normalizedName))
+    .filter((c) => !dict.has(c.normalizedName) && !settled.has(c.normalizedName))
     .map((c) => ({ ...c, suggestion: suggestScopes(c.sampleName, knownScopes, 1)[0] ?? "" }));
 }
 
@@ -45,10 +45,29 @@ export async function getNameReview(minProjects: number): Promise<NameReviewRow[
     GROUP BY key
     HAVING count(DISTINCT project_id) >= ${minProjects}
     ORDER BY projects DESC, key`;
-  const [dict, ignored, known] = await Promise.all([
-    getDictionary(),
-    prisma.scopeIgnoredName.findMany({ select: { normalizedName: true } }),
-    getKnownScopes(),
-  ]);
-  return buildNameReview(counts, dict, new Set(ignored.map((i) => i.normalizedName)), known);
+  const [dict, status, known] = await Promise.all([getDictionary(), getNameStatus(), getKnownScopes()]);
+  // Requested names are listed on their own, above this list.
+  return buildNameReview(counts, dict, new Set([...status.settled, ...status.requested]), known);
+}
+
+export interface NameRequestRow {
+  normalizedName: string;
+  rawName: string;
+  requestedBy: string | null;
+  projectName: string | null;
+  createdAt: Date;
+}
+
+/** Names users asked to add to the standard list, oldest first. */
+export async function getNameRequests(): Promise<NameRequestRow[]> {
+  const requests = await prisma.standardScopeRequest.findMany({ orderBy: { createdAt: "asc" } });
+  const ids = [...new Set(requests.map((r) => r.projectId).filter((id): id is string => !!id))];
+  const projects = new Map((await prisma.project.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map((p) => [p.id, p.name]));
+  return requests.map((r) => ({
+    normalizedName: r.normalizedName,
+    rawName: r.rawName,
+    requestedBy: r.requestedBy,
+    projectName: (r.projectId && projects.get(r.projectId)) || null,
+    createdAt: r.createdAt,
+  }));
 }
