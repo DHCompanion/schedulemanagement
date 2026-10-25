@@ -1,14 +1,10 @@
 import { prisma } from "@/lib/db";
 import { normalizeName } from "@/lib/normalize/normalizeName";
-import { requireStandardScope } from "@/lib/normalize/normalizationService";
+import { RENAME_ALIAS, requireStandardScope } from "@/lib/normalize/normalizationService";
 
 // A standard name is stored as plain text wherever it is used, so renaming one
 // rewrites every place in one transaction. Renaming onto a name already on the
 // list merges the two. Unique keys that would collide keep the target's row.
-
-// createdBy on the dictionary entry that maps an old spelling to its new name.
-// Split rules match raw activity names, so completeness checks follow these.
-export const RENAME_ALIAS = "rename";
 
 export interface RenameResult {
   from: string;

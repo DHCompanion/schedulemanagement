@@ -71,6 +71,11 @@ export async function addStandardScope(scope: string): Promise<string> {
   return existing?.name ?? (await prisma.standardScope.create({ data: { name } })).name;
 }
 
+// createdBy on the dictionary entry that maps a renamed name's old spelling to
+// its new name. Split rules match raw activity names, so completeness checks
+// follow these aliases.
+export const RENAME_ALIAS = "rename";
+
 export type NameOutcome =
   | { mapTo: string }
   | { ignore: true }
@@ -85,6 +90,10 @@ export async function settleName(normalizedName: string, outcome: NameOutcome, p
     ...("mapTo" in outcome ? [] : [prisma.scopeDictionaryEntry.deleteMany({ where })]),
     ...("ignore" in outcome ? [] : [prisma.scopeIgnoredName.deleteMany({ where })]),
     ...("class" in outcome ? [] : [prisma.scopeNameClass.deleteMany({ where })]),
+    // Mapping a renamed name's old spelling somewhere new ends it being a rename alias.
+    ...("mapTo" in outcome
+      ? [prisma.scopeDictionaryEntry.updateMany({ where: { ...where, createdBy: RENAME_ALIAS, NOT: { canonicalScope: outcome.mapTo } }, data: { createdBy: null } })]
+      : []),
     "mapTo" in outcome
       ? prisma.scopeDictionaryEntry.upsert({
           where,

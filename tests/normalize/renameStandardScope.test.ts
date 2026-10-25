@@ -1,6 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
-import { RENAME_ALIAS, deleteStandardScope, getRenameAliases, renameStandardScope } from "@/lib/normalize/renameStandardScope";
+import { deleteStandardScope, getRenameAliases, renameStandardScope } from "@/lib/normalize/renameStandardScope";
+import { RENAME_ALIAS, confirmMapping } from "@/lib/normalize/normalizationService";
 
 describe.runIf(!!process.env.DATABASE_URL)("renameStandardScope (db)", () => {
   const tag = `zr${Date.now()}`;
@@ -42,6 +43,10 @@ describe.runIf(!!process.env.DATABASE_URL)("renameStandardScope (db)", () => {
     expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: t("lv pull").toLowerCase() } })).toMatchObject({ canonicalScope: to });
     expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: from.toLowerCase() } })).toMatchObject({ canonicalScope: to, createdBy: RENAME_ALIAS });
     expect((await getRenameAliases()).get(from.toLowerCase())).toBe(to);
+    // Mapping the old spelling elsewhere later ends the alias.
+    await prisma.standardScope.create({ data: { name: t("Other") } });
+    await confirmMapping(from, t("Other"));
+    expect((await getRenameAliases()).has(from.toLowerCase())).toBe(false);
     expect(await prisma.tradeDictionaryEntry.findUnique({ where: { canonicalScope: to } })).toMatchObject({ osDisciplineId: 7 });
     expect(await prisma.scopeSplitRule.findFirst({ where: { coarseScope: to } })).toMatchObject({ finerScope: t("Trimout LV") });
     expect(await prisma.completenessDismissal.findFirst({ where: { projectId: pid } })).toMatchObject({ coarseScope: to });
