@@ -99,23 +99,31 @@ export function listChanges(current: string[], sheet: string[], referenced: stri
   };
 }
 
+/**
+ * The list change a full-list sheet makes. Names still used after the sheet is
+ * applied — by a dictionary entry the sheet leaves alone, a split rule or a
+ * trade entry — are kept and reported, so nothing points at an unlisted name.
+ */
+export async function planListChange(plan: NamingPlan & { standard: string[] }, current: string[]) {
+  const touched = new Set(plan.ops.map((o) => normalizeName(o.name)));
+  const [entries, rules, trades] = await Promise.all([
+    prisma.scopeDictionaryEntry.findMany(), prisma.scopeSplitRule.findMany(), prisma.tradeDictionaryEntry.findMany(),
+  ]);
+  const referenced = [
+    ...entries.filter((e) => !touched.has(e.normalizedName)).map((e) => e.canonicalScope),
+    ...rules.flatMap((r) => [r.coarseScope, r.finerScope]),
+    ...trades.map((t) => t.canonicalScope),
+  ];
+  return listChanges(current, plan.standard, referenced);
+}
+
 export async function applyNamingPlan(plan: NamingPlan) {
   const counts = { mapped: 0, unmapped: 0, ignored: 0, classified: 0, added: 0, removed: 0, kept: [] as string[] };
   const current = (await prisma.standardScope.findMany({ select: { name: true } })).map((s) => s.name);
-  if (plan.standard) {
-    const [rules, trades] = await Promise.all([prisma.scopeSplitRule.findMany(), prisma.tradeDictionaryEntry.findMany()]);
-    const referenced = [...rules.flatMap((r) => [r.coarseScope, r.finerScope]), ...trades.map((t) => t.canonicalScope)];
-    const change = listChanges(current, plan.standard, referenced);
-    await prisma.standardScope.createMany({ data: change.add.map((name) => ({ name })) });
-    await prisma.standardScope.deleteMany({ where: { name: { in: change.remove } } });
-    counts.added = change.add.length;
-    counts.removed = change.remove.length;
-    counts.kept = change.kept;
-  } else {
-    const fresh = plan.added.filter((s) => !current.includes(s));
-    await prisma.standardScope.createMany({ data: fresh.map((name) => ({ name })) });
-    counts.added = fresh.length;
-  }
+  const change = plan.standard ? await planListChange({ ...plan, standard: plan.standard }, current) : null;
+  const fresh = change ? change.add : plan.added.filter((s) => !current.includes(s));
+  await prisma.standardScope.createMany({ data: fresh.map((name) => ({ name })) });
+  counts.added = fresh.length;
 
   const [entries, ignored, classes] = await Promise.all([
     prisma.scopeDictionaryEntry.findMany(), prisma.scopeIgnoredName.findMany(), prisma.scopeNameClass.findMany(),
@@ -153,5 +161,11 @@ export async function applyNamingPlan(plan: NamingPlan) {
   // A request for a name the sheet already settled the same way is settled too.
   const keys = plan.ops.filter((o) => o.kind !== "unmap").map((o) => normalizeName(o.name));
   await prisma.standardScopeRequest.deleteMany({ where: { normalizedName: { in: keys } } });
+  // Names leave the list last, once nothing the sheet re-pointed still uses them.
+  if (change) {
+    await prisma.standardScope.deleteMany({ where: { name: { in: change.remove } } });
+    counts.removed = change.remove.length;
+    counts.kept = change.kept;
+  }
   return counts;
 }

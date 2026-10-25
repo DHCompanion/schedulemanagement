@@ -14,7 +14,7 @@
 import { readFileSync } from "node:fs";
 import { prisma } from "@/lib/db";
 import { getKnownScopes } from "@/lib/normalize/normalizationService";
-import { applyNamingPlan, listChanges, planNamingSheet } from "@/lib/normalize/namingSheet";
+import { applyNamingPlan, planListChange, planNamingSheet } from "@/lib/normalize/namingSheet";
 import { readCsv } from "./manifestRules";
 
 async function main() {
@@ -31,14 +31,15 @@ async function main() {
     const plan = planNamingSheet(readCsv(readFileSync(file, "utf8").replace(/^\uFEFF/, "")), approved, approveNew);
     const kinds = plan.ops.reduce<Record<string, number>>((n, o) => ({ ...n, [o.kind]: (n[o.kind] ?? 0) + 1 }), {});
     console.log(`\n${file}\n  rows to write: ${JSON.stringify(kinds)}`);
-    if (plan.standard) {
-      const change = listChanges(approved, plan.standard, []);
-      console.log(`  standard list: ${plan.standard.length} names (+${change.add.length} / -${change.remove.length})`);
+    const change = plan.standard ? await planListChange({ ...plan, standard: plan.standard }, approved) : null;
+    if (change) {
+      console.log(`  standard list: ${plan.standard!.length} names (+${change.add.length} / -${change.remove.length})`);
+      if (change.kept.length) console.log(`  kept (still in use): ${change.kept.join(", ")}`);
     }
     if (plan.added.length) console.log(`  new standard names: ${plan.added.join(", ")}`);
     for (const p of plan.problems) console.log(`  SKIPPED ${p}`);
     if (apply) console.log(`  done: ${JSON.stringify(await applyNamingPlan(plan))}`);
-    approved = apply ? await getKnownScopes() : (plan.standard ?? [...approved, ...plan.added]);
+    approved = apply ? await getKnownScopes() : plan.standard ? [...plan.standard, ...change!.kept] : [...approved, ...plan.added];
   }
 }
 

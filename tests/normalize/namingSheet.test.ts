@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
-import { applyNamingPlan, listChanges, planNamingSheet } from "@/lib/normalize/namingSheet";
+import { applyNamingPlan, listChanges, planListChange, planNamingSheet } from "@/lib/normalize/namingSheet";
 
 const review = (name: string, action: string, approved: string) => ({
   "Activity name": name, "Action (keep/merge/retire/map/ignore)": action, "Approved name": approved,
@@ -95,6 +95,14 @@ describe.runIf(!!process.env.DATABASE_URL)("applyNamingPlan (db)", () => {
     expect(await prisma.scopeNameClass.findUnique({ where: { normalizedName: `vavs ${tag}` } })).toMatchObject({ kind: "procurement" });
 
     expect(await applyNamingPlan(plan)).toMatchObject({ mapped: 0, classified: 0, ignored: 0, added: 0 });
+  }, 30000);
+
+  it("keeps a dropped name that an entry the sheet leaves alone still points at", async () => {
+    await prisma.scopeDictionaryEntry.create({ data: { normalizedName: `untouched ${tag}`, canonicalScope: `Kept ${tag}` } });
+    await prisma.scopeDictionaryEntry.create({ data: { normalizedName: `repointed ${tag}`, canonicalScope: `Gone ${tag}` } });
+    const plan = { standard: [`New ${tag}`], added: [], problems: [], ops: [{ kind: "map" as const, name: `Repointed ${tag}`, scope: `New ${tag}` }] };
+    expect(await planListChange(plan, [`Kept ${tag}`, `Gone ${tag}`]))
+      .toEqual({ add: [`New ${tag}`], remove: [`Gone ${tag}`], kept: [`Kept ${tag}`] });
   }, 30000);
 
   it("lets the last row for a name win", async () => {
