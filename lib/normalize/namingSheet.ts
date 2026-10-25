@@ -147,16 +147,8 @@ export async function applyNamingPlan(plan: NamingPlan) {
   await prisma.standardScope.createMany({ data: fresh.map((name) => ({ name })) });
   counts.added = fresh.length;
 
-  const [entries, ignored, classes] = await Promise.all([
-    prisma.scopeDictionaryEntry.findMany(), prisma.scopeIgnoredName.findMany(), prisma.scopeNameClass.findMany(),
-  ]);
-  const entryOf = new Map(entries.map((e) => [e.normalizedName, e.canonicalScope]));
-  const isIgnored = new Set(ignored.map((i) => i.normalizedName));
-  const classOf = new Map(classes.map((c) => [c.normalizedName, `${c.kind}:${c.covers.join("+")}`]));
-  // Several rows can share a key; the last one is the reviewer's final word.
-  const finalOps = new Map(plan.ops.map((op) => [normalizeName(op.name), op]));
-  finalOps.delete("");
-  for (const [key, op] of finalOps) {
+  // Renames and deletes run in row order: each can depend on the one before.
+  for (const op of plan.ops) {
     if (op.kind === "rename") {
       // A row whose From name is already gone was done on an earlier run.
       if (!(await prisma.standardScope.findFirst({ where: { name: { equals: op.name.trim(), mode: "insensitive" } } }))) continue;
@@ -167,7 +159,19 @@ export async function applyNamingPlan(plan: NamingPlan) {
       if (!(await prisma.standardScope.findUnique({ where: { name: op.name.trim() } }))) continue;
       await deleteStandardScope(op.name);
       counts.deleted++;
-    } else if (op.kind === "unmap") {
+    }
+  }
+  const [entries, ignored, classes] = await Promise.all([
+    prisma.scopeDictionaryEntry.findMany(), prisma.scopeIgnoredName.findMany(), prisma.scopeNameClass.findMany(),
+  ]);
+  const entryOf = new Map(entries.map((e) => [e.normalizedName, e.canonicalScope]));
+  const isIgnored = new Set(ignored.map((i) => i.normalizedName));
+  const classOf = new Map(classes.map((c) => [c.normalizedName, `${c.kind}:${c.covers.join("+")}`]));
+  // Several rows can share a key; the last one is the reviewer's final word.
+  const finalOps = new Map(plan.ops.filter((op): op is Exclude<NamingOp, { kind: "rename" | "delete" }> => op.kind !== "rename" && op.kind !== "delete").map((op) => [normalizeName(op.name), op]));
+  finalOps.delete("");
+  for (const [key, op] of finalOps) {
+    if (op.kind === "unmap") {
       if (entryOf.delete(key)) {
         await prisma.scopeDictionaryEntry.delete({ where: { normalizedName: key } });
         counts.unmapped++;

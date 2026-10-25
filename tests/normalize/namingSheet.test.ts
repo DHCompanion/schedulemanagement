@@ -148,6 +148,15 @@ describe.runIf(!!process.env.DATABASE_URL)("applyNamingPlan (db)", () => {
     expect(await applyNamingPlan(plan)).toMatchObject({ renamed: 0, deleted: 0 });
   }, 30000);
 
+  it("runs merge rows for the same name in different case one after another", async () => {
+    await prisma.standardScope.createMany({ data: [{ name: `floor ${tag}` }, { name: `Floor ${tag}` }] });
+    await applyNamingPlan({
+      standard: null, added: [], problems: [],
+      ops: [{ kind: "rename", name: `floor ${tag}`, to: `Floor ${tag}` }, { kind: "rename", name: `Floor ${tag}`, to: `Finish Floor ${tag}` }],
+    });
+    expect((await prisma.standardScope.findMany({ where: { name: { contains: `loor ${tag}` } } })).map((s) => s.name)).toEqual([`Finish Floor ${tag}`]);
+  }, 30000);
+
   it("lets the last row for a name win", async () => {
     const name = `Twice ${tag}`;
     await applyNamingPlan({

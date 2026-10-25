@@ -6,6 +6,10 @@ import { requireStandardScope } from "@/lib/normalize/normalizationService";
 // rewrites every place in one transaction. Renaming onto a name already on the
 // list merges the two. Unique keys that would collide keep the target's row.
 
+// createdBy on the dictionary entry that maps an old spelling to its new name.
+// Split rules match raw activity names, so completeness checks follow these.
+export const RENAME_ALIAS = "rename";
+
 export interface RenameResult {
   from: string;
   to: string;
@@ -33,6 +37,7 @@ export async function renameStandardScope(fromName: string, toName: string): Pro
     const settled = (await tx.scopeIgnoredName.count({ where: { normalizedName: self } })) + (await tx.scopeNameClass.count({ where: { normalizedName: self } }));
     if (!settled && self !== normalizeName(to)) {
       await tx.scopeDictionaryEntry.createMany({ data: [{ normalizedName: self, canonicalScope: to }], skipDuplicates: true });
+      await tx.scopeDictionaryEntry.updateMany({ where: { normalizedName: self, canonicalScope: to }, data: { createdBy: RENAME_ALIAS } });
     }
 
     const [fromTrade, toTrade] = await Promise.all([
@@ -96,4 +101,10 @@ export async function deleteStandardScope(scope: string): Promise<void> {
     prisma.tradeScopeDismissal.deleteMany({ where: { canonicalScope: name } }),
     prisma.standardScope.delete({ where: { name } }),
   ]);
+}
+
+/** Old spelling (normalized) → the name it was renamed to. */
+export async function getRenameAliases(): Promise<Map<string, string>> {
+  const rows = await prisma.scopeDictionaryEntry.findMany({ where: { createdBy: RENAME_ALIAS } });
+  return new Map(rows.map((r) => [r.normalizedName, r.canonicalScope]));
 }

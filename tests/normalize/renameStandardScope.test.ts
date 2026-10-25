@@ -1,6 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
-import { deleteStandardScope, renameStandardScope } from "@/lib/normalize/renameStandardScope";
+import { RENAME_ALIAS, deleteStandardScope, getRenameAliases, renameStandardScope } from "@/lib/normalize/renameStandardScope";
 
 describe.runIf(!!process.env.DATABASE_URL)("renameStandardScope (db)", () => {
   const tag = `zr${Date.now()}`;
@@ -40,7 +40,8 @@ describe.runIf(!!process.env.DATABASE_URL)("renameStandardScope (db)", () => {
     expect(await prisma.standardScope.findUnique({ where: { name: from } })).toBeNull();
     expect(await prisma.standardScope.findUnique({ where: { name: to } })).not.toBeNull();
     expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: t("lv pull").toLowerCase() } })).toMatchObject({ canonicalScope: to });
-    expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: from.toLowerCase() } })).toMatchObject({ canonicalScope: to });
+    expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: from.toLowerCase() } })).toMatchObject({ canonicalScope: to, createdBy: RENAME_ALIAS });
+    expect((await getRenameAliases()).get(from.toLowerCase())).toBe(to);
     expect(await prisma.tradeDictionaryEntry.findUnique({ where: { canonicalScope: to } })).toMatchObject({ osDisciplineId: 7 });
     expect(await prisma.scopeSplitRule.findFirst({ where: { coarseScope: to } })).toMatchObject({ finerScope: t("Trimout LV") });
     expect(await prisma.completenessDismissal.findFirst({ where: { projectId: pid } })).toMatchObject({ coarseScope: to });
