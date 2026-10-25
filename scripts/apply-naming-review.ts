@@ -8,6 +8,8 @@
 // A review batch (Current name / Standard name) maps each name to an approved
 // name, or to a keyword: ignore, procurement, coarse, coarse: A + B. A name not
 // on the list is reported; --approve-new adds it instead. Blank rows are skipped.
+// A merge sheet (From name / To name) renames each From name to its To name, or
+// merges it when To is already listed, in row order; To "delete" drops it.
 //
 // Writes to whatever DATABASE_URL points at.
 

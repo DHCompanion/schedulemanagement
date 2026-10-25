@@ -99,6 +99,20 @@ describe.runIf(!!process.env.DATABASE_URL)("name review with a database", () => 
     expect((await getNameRequests()).some((r) => r.rawName === `Hydro Test ${tag}`)).toBe(false);
   });
 
+  it("renames, merges and deletes standard names, for admins only", async () => {
+    await prisma.standardScope.createMany({ data: [{ name: `Pull Cable ${tag}` }, { name: `Install Cable ${tag}` }, { name: `ZZ ${tag}` }] });
+    await prisma.scopeDictionaryEntry.create({ data: { normalizedName: `cable pull ${tag}`, canonicalScope: `Pull Cable ${tag}` } });
+    expect((await post({ from: `Pull Cable ${tag}`, to: `Install Cable ${tag}`, rename: "1" }, false)).status).toBe(403);
+    expect((await post({ from: `Pull Cable ${tag}`, to: `Install Cable ${tag}`, rename: "1" })).status).toBe(303);
+    expect(await prisma.standardScope.findUnique({ where: { name: `Pull Cable ${tag}` } })).toBeNull();
+    expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: `cable pull ${tag}` } })).toMatchObject({ canonicalScope: `Install Cable ${tag}` });
+
+    expect((await post({ from: `Install Cable ${tag}`, deleteScope: "1" })).status).toBe(422);
+    expect((await post({ from: `ZZ ${tag}`, deleteScope: "1" })).status).toBe(303);
+    expect(await prisma.standardScope.findUnique({ where: { name: `ZZ ${tag}` } })).toBeNull();
+    expect((await post({ from: `Gone ${tag}`, to: "x", rename: "1" })).status).toBe(422);
+  });
+
   it("adds a standard name without mapping anything", async () => {
     expect((await post({ newScope: `  Site  Fencing ${tag} ` })).status).toBe(303);
     expect(await prisma.standardScope.findUnique({ where: { name: `Site Fencing ${tag}` } })).not.toBeNull();

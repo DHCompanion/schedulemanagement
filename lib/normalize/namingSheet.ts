@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { settleName } from "@/lib/normalize/normalizationService";
+import { deleteStandardScope, renameStandardScope } from "@/lib/normalize/renameStandardScope";
 
 // Reviewed naming spreadsheets -> dictionary writes (scripts/apply-naming-review.ts).
 // Two layouts: the reviewed dictionary sheet (Activity name / Action / Approved
@@ -11,7 +12,9 @@ export type NamingOp =
   | { kind: "map"; name: string; scope: string }
   | { kind: "unmap"; name: string }
   | { kind: "ignore"; name: string }
-  | { kind: "class"; name: string; class: "coarse" | "procurement"; covers: string[] };
+  | { kind: "class"; name: string; class: "coarse" | "procurement"; covers: string[] }
+  | { kind: "rename"; name: string; to: string }
+  | { kind: "delete"; name: string };
 
 export interface NamingPlan {
   ops: NamingOp[];
@@ -28,7 +31,19 @@ export function planNamingSheet(rows: Record<string, string>[], approved: string
   const head = rows[0] ?? {};
   if ("Approved name" in head && ACTION in head) return planReview(rows);
   if ("Current name" in head && "Standard name" in head) return planBatch(rows, approved, approveNew);
+  if ("From name" in head && "To name" in head) return planMerges(rows);
   throw new Error(`Unrecognised columns: ${Object.keys(head).join(", ")}`);
+}
+
+// A merge sheet (From name / To name) renames or merges standard names, in row order; "delete" drops one.
+function planMerges(rows: Record<string, string>[]): NamingPlan {
+  const ops: NamingOp[] = [];
+  for (const r of rows) {
+    const [name, to] = [r["From name"].trim(), r["To name"].trim()];
+    if (!name || !to) continue;
+    ops.push(to.toLowerCase() === "delete" ? { kind: "delete", name } : { kind: "rename", name, to });
+  }
+  return { ops, standard: null, added: [], problems: [] };
 }
 
 function planReview(rows: Record<string, string>[]): NamingPlan {
@@ -61,6 +76,11 @@ function planBatch(rows: Record<string, string>[], approved: string[], approveNe
       problems.push(`row ${row}: "${value}" is not a standard name`);
       return null;
     }
+    // Standard names are title case; one lowercase word is a keyword typo like "corase".
+    if (/^[a-z]+$/.test(value)) {
+      problems.push(`row ${row}: "${value}" looks like a misspelled keyword`);
+      return null;
+    }
     byKey.set(normalizeName(value), value);
     added.push(value);
     return value;
@@ -72,9 +92,11 @@ function planBatch(rows: Record<string, string>[], approved: string[], approveNe
     if (!value || !name.trim()) return;
     if (keyword === "ignore") ops.push({ kind: "ignore", name });
     else if (keyword === "procurement") ops.push({ kind: "class", name, class: "procurement", covers: [] });
-    else if (keyword === "coarse" || keyword.startsWith("coarse:")) {
-      const covers = value.slice("coarse".length).replace(/^:/, "").split("+").map((s) => s.trim()).filter(Boolean)
-        .map((s) => resolve(s, i + 2));
+    else if (/^coarse\s*(:|$)/.test(keyword)) {
+      const list = value.replace(/^coarse\s*:?/i, "").trim();
+      // "+" separates covers; commas do too, unless the text is one name that has commas ("Tape, Bed, and Paint").
+      const parts = list.includes("+") || byKey.has(normalizeName(list)) ? list.split("+") : list.split(",");
+      const covers = parts.map((s) => s.trim()).filter(Boolean).map((s) => resolve(s, i + 2));
       if (covers.every((c) => c !== null)) ops.push({ kind: "class", name, class: "coarse", covers: covers as string[] });
     } else {
       const scope = resolve(value, i + 2);
@@ -118,7 +140,7 @@ export async function planListChange(plan: NamingPlan & { standard: string[] }, 
 }
 
 export async function applyNamingPlan(plan: NamingPlan) {
-  const counts = { mapped: 0, unmapped: 0, ignored: 0, classified: 0, added: 0, removed: 0, kept: [] as string[] };
+  const counts = { mapped: 0, unmapped: 0, ignored: 0, classified: 0, renamed: 0, deleted: 0, added: 0, removed: 0, kept: [] as string[], conflicts: [] as string[] };
   const current = (await prisma.standardScope.findMany({ select: { name: true } })).map((s) => s.name);
   const change = plan.standard ? await planListChange({ ...plan, standard: plan.standard }, current) : null;
   const fresh = change ? change.add : plan.added.filter((s) => !current.includes(s));
@@ -135,7 +157,17 @@ export async function applyNamingPlan(plan: NamingPlan) {
   const finalOps = new Map(plan.ops.map((op) => [normalizeName(op.name), op]));
   finalOps.delete("");
   for (const [key, op] of finalOps) {
-    if (op.kind === "unmap") {
+    if (op.kind === "rename") {
+      // A row whose From name is already gone was done on an earlier run.
+      if (!(await prisma.standardScope.findFirst({ where: { name: { equals: op.name.trim(), mode: "insensitive" } } }))) continue;
+      const r = await renameStandardScope(op.name, op.to);
+      if (r.from !== r.to) counts.renamed++;
+      counts.conflicts.push(...r.conflicts);
+    } else if (op.kind === "delete") {
+      if (!(await prisma.standardScope.findUnique({ where: { name: op.name.trim() } }))) continue;
+      await deleteStandardScope(op.name);
+      counts.deleted++;
+    } else if (op.kind === "unmap") {
       if (entryOf.delete(key)) {
         await prisma.scopeDictionaryEntry.delete({ where: { normalizedName: key } });
         counts.unmapped++;
@@ -159,7 +191,7 @@ export async function applyNamingPlan(plan: NamingPlan) {
     }
   }
   // A request for a name the sheet already settled the same way is settled too.
-  const keys = plan.ops.filter((o) => o.kind !== "unmap").map((o) => normalizeName(o.name));
+  const keys = plan.ops.filter((o) => o.kind === "map" || o.kind === "ignore" || o.kind === "class").map((o) => normalizeName(o.name));
   await prisma.standardScopeRequest.deleteMany({ where: { normalizedName: { in: keys } } });
   // Names leave the list last, once nothing the sheet re-pointed still uses them.
   if (change) {

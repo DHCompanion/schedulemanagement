@@ -6,6 +6,7 @@ const review = (name: string, action: string, approved: string) => ({
   "Activity name": name, "Action (keep/merge/retire/map/ignore)": action, "Approved name": approved,
 });
 const batch = (current: string, standard: string) => ({ "Current name": current, "Standard name": standard });
+const merge = (from: string, to: string) => ({ "From name": from, "To name": to });
 
 describe("planNamingSheet", () => {
   it("reads the reviewed dictionary sheet as the whole standard list", () => {
@@ -48,6 +49,32 @@ describe("planNamingSheet", () => {
     expect(plan.added).toEqual(["Hydrostatic Test"]);
     expect(plan.ops.map((o) => o.kind === "map" && o.scope)).toEqual(["Hydrostatic Test", "Hydrostatic Test"]);
     expect(plan.problems).toEqual([]);
+  });
+
+  it("splits coarse covers on commas only when the text isn't itself a standard name, and allows 'coarse :'", () => {
+    const plan = planNamingSheet(
+      [batch("Form and Pour", "coarse : Form Foundations, Pour Foundations"), batch("TBP walls", "coarse: Tape, Bed, and Paint")],
+      ["Form Foundations", "Pour Foundations", "Tape, Bed, and Paint"], false,
+    );
+    expect(plan.ops).toEqual([
+      { kind: "class", name: "Form and Pour", class: "coarse", covers: ["Form Foundations", "Pour Foundations"] },
+      { kind: "class", name: "TBP walls", class: "coarse", covers: ["Tape, Bed, and Paint"] },
+    ]);
+  });
+
+  it("won't add a one-word lowercase value as a new name: it is a misspelled keyword", () => {
+    const plan = planNamingSheet([batch("Foundation", "corase"), batch("Grading", "Grading")], [], true);
+    expect(plan.added).toEqual(["Grading"]);
+    expect(plan.problems).toEqual(['row 2: "corase" looks like a misspelled keyword']);
+  });
+
+  it("reads a merge sheet: rename or merge each From name into its To name, or delete it", () => {
+    const plan = planNamingSheet([merge("Demo", "Demolition"), merge("ZZ Cross", "Delete"), merge("", "x"), merge("Roofing", " ")], [], false);
+    expect(plan.ops).toEqual([
+      { kind: "rename", name: "Demo", to: "Demolition" },
+      { kind: "delete", name: "ZZ Cross" },
+    ]);
+    expect(plan.standard).toBeNull();
   });
 
   it("rejects a sheet with neither layout", () => {
@@ -103,6 +130,22 @@ describe.runIf(!!process.env.DATABASE_URL)("applyNamingPlan (db)", () => {
     const plan = { standard: [`New ${tag}`], added: [], problems: [], ops: [{ kind: "map" as const, name: `Repointed ${tag}`, scope: `New ${tag}` }] };
     expect(await planListChange(plan, [`Kept ${tag}`, `Gone ${tag}`]))
       .toEqual({ add: [`New ${tag}`], remove: [`Gone ${tag}`], kept: [`Kept ${tag}`] });
+  }, 30000);
+
+  it("runs a merge sheet in order, and skips rows already done on a second run", async () => {
+    await prisma.standardScope.createMany({ data: [{ name: `Pull ${tag}` }, { name: `Old ${tag}` }] });
+    const plan = {
+      standard: null, added: [], problems: [],
+      ops: [
+        { kind: "rename" as const, name: `Pull ${tag}`, to: `Install ${tag}` },
+        { kind: "rename" as const, name: `Install ${tag}`, to: `Install Cabling ${tag}` },
+        { kind: "delete" as const, name: `Old ${tag}` },
+      ],
+    };
+    expect(await applyNamingPlan(plan)).toMatchObject({ renamed: 2, deleted: 1 });
+    expect((await prisma.standardScope.findMany({ where: { name: { contains: tag } } })).map((s) => s.name)).toContain(`Install Cabling ${tag}`);
+    expect(await prisma.standardScope.count({ where: { name: { in: [`Pull ${tag}`, `Install ${tag}`, `Old ${tag}`] } } })).toBe(0);
+    expect(await applyNamingPlan(plan)).toMatchObject({ renamed: 0, deleted: 0 });
   }, 30000);
 
   it("lets the last row for a name win", async () => {

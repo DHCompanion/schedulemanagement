@@ -55,10 +55,11 @@ export async function getKnownScopes(): Promise<string[]> {
   return rows.map((r) => r.name);
 }
 
-/** The listed spelling of an approved name, matched ignoring case; throws for anything off the list. */
+/** The listed spelling of an approved name, matched exactly or else ignoring case; throws for anything off the list. */
 export async function requireStandardScope(scope: string): Promise<string> {
   const name = scope.trim();
-  const found = name && (await prisma.standardScope.findFirst({ where: { name: { equals: name, mode: "insensitive" } } }));
+  const found = name && ((await prisma.standardScope.findUnique({ where: { name } }))
+    ?? (await prisma.standardScope.findFirst({ where: { name: { equals: name, mode: "insensitive" } } })));
   if (!found) throw new Error(`"${name}" is not on the standard name list.`);
   return found.name;
 }
