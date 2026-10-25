@@ -25,6 +25,9 @@ describe("buildDictionary (pure)", () => {
   it("maps an approved name with no entries to itself", () => {
     expect(buildDictionary([], ["Install Wall Protection"]).get("install wall protection")).toBe("Install Wall Protection");
   });
+  it("leaves a settled name unmapped even when it spells a standard name", () => {
+    expect(buildDictionary([], ["Paint"], new Set(["paint"])).has("paint")).toBe(false);
+  });
   it("lets an explicit entry win over the implied one", () => {
     const dict = buildDictionary([
       { normalizedName: "demo", canonicalScope: "Selective Demolition" },

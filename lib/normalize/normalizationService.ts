@@ -30,18 +30,20 @@ export function applyDictionaryWith<A extends ActivityName>(activities: A[], dic
 export function buildDictionary(
   rows: { normalizedName: string; canonicalScope: string }[],
   standard: string[] = [],
+  settled: Set<string> = new Set(),
 ): Map<string, string> {
   const dict = new Map(rows.map((r) => [r.normalizedName, r.canonicalScope]));
   for (const scope of [...rows.map((r) => r.canonicalScope), ...standard]) {
     const self = normalizeName(scope);
-    if (!dict.has(self)) dict.set(self, scope);
+    // An ignored or classified name stays unmapped even if it spells a standard name.
+    if (!dict.has(self) && !settled.has(self)) dict.set(self, scope);
   }
   return dict;
 }
 
 export async function getDictionary(): Promise<Map<string, string>> {
-  const [rows, standard] = await Promise.all([prisma.scopeDictionaryEntry.findMany(), getKnownScopes()]);
-  return buildDictionary(rows, standard);
+  const [rows, standard, status] = await Promise.all([prisma.scopeDictionaryEntry.findMany(), getKnownScopes(), getNameStatus()]);
+  return buildDictionary(rows, standard, status.settled);
 }
 
 export async function applyDictionary<A extends ActivityName>(activities: A[]): Promise<ApplyResult<A>> {

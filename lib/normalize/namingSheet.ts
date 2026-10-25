@@ -123,9 +123,10 @@ export async function applyNamingPlan(plan: NamingPlan) {
   const entryOf = new Map(entries.map((e) => [e.normalizedName, e.canonicalScope]));
   const isIgnored = new Set(ignored.map((i) => i.normalizedName));
   const classOf = new Map(classes.map((c) => [c.normalizedName, `${c.kind}:${c.covers.join("+")}`]));
-  for (const op of plan.ops) {
-    const key = normalizeName(op.name);
-    if (!key) continue;
+  // Several rows can share a key; the last one is the reviewer's final word.
+  const finalOps = new Map(plan.ops.map((op) => [normalizeName(op.name), op]));
+  finalOps.delete("");
+  for (const [key, op] of finalOps) {
     if (op.kind === "unmap") {
       if (entryOf.delete(key)) {
         await prisma.scopeDictionaryEntry.delete({ where: { normalizedName: key } });

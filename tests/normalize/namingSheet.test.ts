@@ -96,4 +96,14 @@ describe.runIf(!!process.env.DATABASE_URL)("applyNamingPlan (db)", () => {
 
     expect(await applyNamingPlan(plan)).toMatchObject({ mapped: 0, classified: 0, ignored: 0, added: 0 });
   }, 30000);
+
+  it("lets the last row for a name win", async () => {
+    const name = `Twice ${tag}`;
+    await applyNamingPlan({
+      standard: null, added: [`Walls ${tag}`], problems: [],
+      ops: [{ kind: "map", name, scope: `Walls ${tag}` }, { kind: "ignore", name }, { kind: "map", name: ` ${name.toUpperCase()}`, scope: `Walls ${tag}` }],
+    });
+    expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: `twice ${tag}` } })).toMatchObject({ canonicalScope: `Walls ${tag}` });
+    expect(await prisma.scopeIgnoredName.findUnique({ where: { normalizedName: `twice ${tag}` } })).toBeNull();
+  }, 30000);
 });
