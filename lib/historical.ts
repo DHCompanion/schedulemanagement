@@ -52,15 +52,19 @@ export function parseProjectNumber(raw: string): string | null {
   return n;
 }
 
-/** Project numbers to write from the review sheet (Project / FY / Project number). Blank rows and numbers already set are skipped. */
+/** Project numbers to write from the review sheet (Project / FY / Project number), and the projects marked "delete". Blank rows and numbers already set are skipped. */
 export function planProjectNumbers(rows: Record<string, string>[], projects: { id: string; name: string; fy: number | null; projectNumber: string | null }[]) {
   const updates: { id: string; projectNumber: string }[] = [];
+  const deletes: { id: string; label: string }[] = [];
   const problems: string[] = [];
   for (const r of rows) {
     if (!r["Project number"]?.trim()) continue;
     const label = `${r.Project} (FY${r.FY})`;
     const match = projects.filter((p) => p.name === r.Project && String(p.fy ?? "") === r.FY);
+    const del = r["Project number"].trim().toLowerCase() === "delete";
+    if (del && !match.length) continue; // deleted on an earlier run
     if (match.length !== 1) { problems.push(`${label}: ${match.length} projects match`); continue; }
+    if (del) { deletes.push({ id: match[0].id, label }); continue; }
     try {
       const projectNumber = parseProjectNumber(r["Project number"])!;
       if (match[0].projectNumber !== projectNumber) updates.push({ id: match[0].id, projectNumber });
@@ -68,7 +72,7 @@ export function planProjectNumbers(rows: Record<string, string>[], projects: { i
       problems.push(`${label}: ${(e as Error).message}`);
     }
   }
-  return { updates, problems };
+  return { updates, deletes, problems };
 }
 
 // As-built and baseline have to come from the data; review can only demote.

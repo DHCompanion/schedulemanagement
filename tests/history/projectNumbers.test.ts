@@ -16,6 +16,14 @@ describe("planProjectNumbers", () => {
       projects,
     );
     expect(plan.updates).toEqual([{ id: "a", projectNumber: "2024020" }, { id: "b", projectNumber: "2022010" }]);
+    expect(plan.deletes).toEqual([]);
+    expect(plan.problems).toEqual([]);
+  });
+
+  it("marks rows saying delete for deletion, in any case; one already gone is skipped", () => {
+    const plan = planProjectNumbers([row("Untouched", "2023", " Delete "), row("Nowhere", "2024", "delete")], projects);
+    expect(plan.deletes).toEqual([{ id: "d", label: "Untouched (FY2023)" }]);
+    expect(plan.updates).toEqual([]);
     expect(plan.problems).toEqual([]);
   });
 

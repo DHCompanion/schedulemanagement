@@ -4,7 +4,8 @@
 //   npx tsx scripts/load-project-numbers.ts [--apply] <project-numbers.csv>
 //
 // Rows match on Project + FY; only the Project number column is read, and a
-// blank one is left alone. Writes to whatever DATABASE_URL points at.
+// blank one is left alone. "delete" removes the historical project and, by
+// cascade, its schedules — rerun Recompute after. Writes to whatever DATABASE_URL points at.
 
 import { readFileSync } from "node:fs";
 import { prisma } from "@/lib/db";
@@ -22,9 +23,14 @@ async function main() {
     .map((p) => ({ ...p, fy: fiscalYear(p.externalProjectKey) }));
   const plan = planProjectNumbers(readCsv(readFileSync(file, "utf8").replace(/^﻿/, "")), projects);
   console.log(`numbers to write: ${plan.updates.length}`);
+  console.log(`projects to delete: ${plan.deletes.length}`);
+  for (const d of plan.deletes) console.log(`  DELETE ${d.label}`);
   for (const p of plan.problems) console.log(`  SKIPPED ${p}`);
   if (!apply) return;
-  await prisma.$transaction(plan.updates.map((u) => prisma.project.update({ where: { id: u.id }, data: { projectNumber: u.projectNumber } })));
+  await prisma.$transaction([
+    ...plan.updates.map((u) => prisma.project.update({ where: { id: u.id }, data: { projectNumber: u.projectNumber } })),
+    prisma.project.deleteMany({ where: { id: { in: plan.deletes.map((d) => d.id) }, status: "historical" } }),
+  ]);
   console.log("done");
 }
 
