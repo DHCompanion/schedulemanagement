@@ -20,12 +20,13 @@ afterEach(() => cleanup());
 describe("ActivityDetail", () => {
   it("shows the historical span ranges for the activity's standard name, and flags an outlier", () => {
     const range = { p25: 12.4, median: 15, p75: 20.6, n: 9, typeN: 3, typeShare: 0.375 };
-    render(<ActivityDetail row={row({ benchmark: { actual: range, planned: null, projectDays: 60, outside: true } })} />);
+    render(<ActivityDetail row={row({ benchmark: { actual: range, planned: null, projectDays: 60, outside: true, critical: { share: 0.8, n: 40, typeN: 3 } } })} />);
     expect(screen.getByText("History · Overhead MEP Rough-In")).toBeTruthy();
     expect(screen.getByText(/Actual: 12–21 working days, median 15/)).toBeTruthy();
     expect(screen.getByText(/9 projects, 3 of this type/)).toBeTruthy();
     expect(screen.queryByText(/Planned: \d/)).toBeNull();
     expect(screen.getByText("This project: 60 working days (outside the usual range)")).toBeTruthy();
+    expect(screen.getByText("Usually critical: on the critical path in 80% of past projects")).toBeTruthy();
     cleanup();
     render(<ActivityDetail row={row()} />);
     expect(screen.queryByText(/History/)).toBeNull();
