@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { appPath } from "@/lib/http";
 import { isAdminSession } from "@/lib/adminSession";
-import { PROJECT_TYPES, SECTORS } from "@/lib/historical";
+import { PROJECT_TYPES, SECTORS, SUBTYPES } from "@/lib/historical";
 import { getKnownScopes } from "@/lib/normalize/normalizationService";
 import { buildDraft, getChecklist, getDraftGroup, readDraftQuery } from "@/lib/baseline/draftInputs";
 import { fmtShortDate } from "@/lib/schedule/weekBuckets";
@@ -19,15 +19,15 @@ const nextMonday = () => {
 };
 
 // Draft baseline generator (roadmap Phase 7, decided 2026-10-26): pick a
-// project type and start date, tick standard names, preview, download MS
+// project type (and subtype, where it has them) and start date, tick standard names, preview, download MS
 // Project XML. Built from the stored benchmarks; admin only in v1.
 export default async function DraftBaselinePage(props: { searchParams: Promise<Record<string, string | string[]>> }) {
   if (!(await isAdminSession())) notFound();
   const raw = await props.searchParams;
   const q = new URLSearchParams(Object.entries(raw).flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).map((x) => [k, x])));
-  const { type, start, scopes } = readDraftQuery(q);
+  const { type, subType, start, scopes } = readDraftQuery(q);
   const startText = q.get("start") || nextMonday();
-  const group = type ? await getDraftGroup(type) : null;
+  const group = type ? await getDraftGroup(type, subType) : null;
   const ready = group && !("error" in group) ? group : null;
   const [checklist, known] = ready ? await Promise.all([getChecklist(ready), getKnownScopes()]) : [[], []];
   const previewing = q.get("preview") === "1";
@@ -36,7 +36,8 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
   const draft = ready && previewing && start && chosen.length ? await buildDraft(ready, chosen, start) : null;
   const nameOf = new Map(draft?.activities.map((a) => [a.uid, a.name]));
   const input = "rounded border border-slate-300 bg-white px-2 py-1.5 text-sm";
-  const download = new URLSearchParams([["type", type], ["start", startText], ...chosen.map((s) => ["scope", s])]);
+  const download = new URLSearchParams([["type", type], ...(subType ? [["sub", subType]] : []), ["start", startText], ...chosen.map((s) => ["scope", s])]);
+  const subTypes = SUBTYPES[type];
 
   return (
     <main className="mx-auto max-w-4xl p-4 sm:p-6">
@@ -56,6 +57,13 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
             </optgroup>
           ))}
         </select>
+        {/* Shows once a type with subtypes is chosen; changing the type clears it on the server. */}
+        {subTypes && (
+          <select name="sub" defaultValue={subType} aria-label="Subtype" className={input}>
+            <option value="">Any subtype</option>
+            {subTypes.map((t) => <option key={t}>{t}</option>)}
+          </select>
+        )}
         <input type="date" name="start" defaultValue={startText} aria-label="Start date" className={input} required />
         <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Choose names</button>
       </form>
@@ -65,10 +73,11 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
       {ready && (
         <form className="mb-6 rounded border border-slate-200 bg-white p-4">
           <input type="hidden" name="type" value={type} />
+          {ready.subType && <input type="hidden" name="sub" value={ready.subType} />}
           <input type="hidden" name="start" value={startText} />
           <input type="hidden" name="preview" value="1" />
           <p className="mb-2 text-sm text-slate-600">
-            {ready.sectorProjects} {ready.sector} projects, {ready.typeProjects} of them {type}. Ticked: names in at least a quarter of them.
+            {ready.sectorProjects} {ready.sector} projects, {ready.typeProjects} of them {type}{ready.subType && `, ${ready.subTypeProjects} ${ready.subType}`}. Ticked: names in at least a quarter of them.
           </p>
           <div className="mb-3 grid max-h-96 grid-cols-1 gap-x-4 overflow-y-auto sm:grid-cols-2">
             {checklist.map((c) => (

@@ -61,6 +61,15 @@ describe("aggregateFacts", () => {
     const lone = aggregateFacts([fact("Clinic", ["Frame Walls", "Install Sheetrock"], [], true)]).sequences;
     expect(lone).toEqual([]);
   });
+
+  it("counts subtype groups the way it counts building types", () => {
+    const ir = (linked: boolean): ProjectFacts => ({ ...fact("Special Procedure (EP, Cath, IR)", ["Frame Walls", "Install Sheetrock"], ["Frame Walls"], linked), subType: "IR" });
+    const { criticality, sequences, groups } = aggregateFacts([ir(true), ir(false), fact("Clinic", ["Frame Walls", "Install Sheetrock"], [], true)]);
+    const groupValue = "Special Procedure (EP, Cath, IR) / IR";
+    expect(groups).toContainEqual({ groupKind: "subType", groupValue, projects: 2 });
+    expect(criticality).toContainEqual({ canonicalScope: "Frame Walls", groupKind: "subType", groupValue, n: 2, critical: 2 });
+    expect(sequences).toContainEqual({ fromScope: "Frame Walls", toScope: "Install Sheetrock", groupKind: "subType", groupValue, projects: 1, base: 2, type: "FS", lagDays: 2 });
+  });
 });
 
 describe("blendShare", () => {
@@ -70,5 +79,7 @@ describe("blendShare", () => {
     expect(b).toMatchObject({ n: 20, typeN: 5 });
     expect(blendShare({ n: 20, share: 0.4 }, undefined)).toEqual({ share: 0.4, n: 20, typeN: 0 });
     expect(blendShare({ n: 4, share: 1 }, undefined)).toBeNull();
+    // Then the subtype by n / (n + 2): 2 projects at 1.0 against 0.6 → 0.8.
+    expect(blendShare({ n: 20, share: 0.4 }, { n: 5, share: 0.8 }, { n: 2, share: 1 })?.share).toBeCloseTo(0.8);
   });
 });

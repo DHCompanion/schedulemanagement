@@ -16,8 +16,8 @@ describe.runIf(!!process.env.DATABASE_URL)("benchmarkService (db)", () => {
   });
 
   // One Paint activity per import: Mon 3 Mar 2025 plus `days` working days, actually finished.
-  async function project(name: string, imports: { days: number; tierOverride?: string; isSynthetic?: boolean }[], sector: string | null = "Healthcare", buildingType: string | null = "Clinic") {
-    const p = await prisma.project.create({ data: { name: `${name} ${tag}`, sector, buildingType, status: "historical" } });
+  async function project(name: string, imports: { days: number; tierOverride?: string; isSynthetic?: boolean }[], sector: string | null = "Healthcare", buildingType: string | null = "Clinic", subType: string | null = null) {
+    const p = await prisma.project.create({ data: { name: `${name} ${tag}`, sector, buildingType, subType, status: "historical" } });
     for (const [i, imp] of imports.entries()) {
       const finish = new Date(Date.UTC(2025, 2, 3 + imp.days - 1 + 2 * Math.floor((imp.days - 1) / 5)));
       await prisma.scheduleImport.create({
@@ -38,7 +38,7 @@ describe.runIf(!!process.env.DATABASE_URL)("benchmarkService (db)", () => {
     await prisma.scopeDictionaryEntry.create({ data: { normalizedName: `paint ${tag}`, canonicalScope: scope } });
     // Planned comes from the earliest eligible import, actual from the latest; rough and synthetic ones are skipped.
     const first = await project("A", [{ days: 50, tierOverride: "rough" }, { days: 2 }, { days: 4 }, { days: 90, isSynthetic: true }]);
-    for (const [i, days] of [4, 6, 8, 10].entries()) await project(`B${i}`, [{ days }], "Healthcare", i < 2 ? "Clinic" : "OR Suite");
+    for (const [i, days] of [4, 6, 8, 10].entries()) await project(`B${i}`, [{ days }], "Healthcare", i < 2 ? "Clinic" : "OR Suite", i === 3 ? "Multiple" : null);
     await project("NoSector", [{ days: 99 }], null, null);
     const off = await project("Off", [{ days: 99 }]);
     await prisma.project.update({ where: { id: off }, data: { useInBenchmarks: false } });
@@ -51,18 +51,24 @@ describe.runIf(!!process.env.DATABASE_URL)("benchmarkService (db)", () => {
       ["actual", "buildingType", "Clinic", 3, 4],
       ["actual", "buildingType", "OR Suite", 2, 9],
       ["actual", "sector", "Healthcare", 5, 6],
+      ["actual", "subType", "OR Suite / Multiple", 1, 10],
       ["planned", "buildingType", "Clinic", 3, 4],
       ["planned", "buildingType", "OR Suite", 2, 9],
       ["planned", "sector", "Healthcare", 5, 6],
+      ["planned", "subType", "OR Suite / Multiple", 1, 10],
       // One continuous activity per project: days worked equal the planned span.
       ["worked", "buildingType", "Clinic", 3, 4],
       ["worked", "buildingType", "OR Suite", 2, 9],
       ["worked", "sector", "Healthcare", 5, 6],
+      ["worked", "subType", "OR Suite / Multiple", 1, 10],
     ]);
 
     // Clinic's 3 projects weigh 3/8 against the sector's median of 6.
     const ranges = await getBenchmarkRanges("Healthcare", "Clinic");
     expect(ranges.get(scope)?.actual).toMatchObject({ n: 5, typeN: 3, median: (3 * 4 + 5 * 6) / 8 });
+    // OR Suite blends to (2·9 + 5·6)/7; its one Multiple project at 10 then weighs 1/3.
+    const orBlend = (2 * 9 + 5 * 6) / 7;
+    expect((await getBenchmarkRanges("Healthcare", "OR Suite", "Multiple")).get(scope)?.actual?.median).toBeCloseTo((10 + 2 * orBlend) / 3);
 
     // Project A's latest schedule is the synthetic 90-day one: far beyond the fences.
     expect((await getProjectBenchmarks(first)).get(scope)).toMatchObject({ projectDays: 90, outside: true, critical: { share: 0, n: 5 } });
