@@ -40,6 +40,8 @@ describe.runIf(!!process.env.DATABASE_URL)("benchmarkService (db)", () => {
     const first = await project("A", [{ days: 50, tierOverride: "rough" }, { days: 2 }, { days: 4 }, { days: 90, isSynthetic: true }]);
     for (const [i, days] of [4, 6, 8, 10].entries()) await project(`B${i}`, [{ days }], "Healthcare", i < 2 ? "Clinic" : "OR Suite");
     await project("NoSector", [{ days: 99 }], null, null);
+    const off = await project("Off", [{ days: 99 }]);
+    await prisma.project.update({ where: { id: off }, data: { useInBenchmarks: false } });
 
     expect((await recomputeBenchmarks()).rows).toBeGreaterThan(0);
     expect((await getBenchmarkStatus()).computedAt).not.toBeNull();

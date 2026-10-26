@@ -1,89 +1,153 @@
 import Link from "next/link";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { PROJECT_TYPES, SECTORS, fiscalYear } from "@/lib/historical";
 import { appPath } from "@/lib/http";
 import { isAdminSession } from "@/lib/adminSession";
 import { getBenchmarkStatus } from "@/lib/benchmarks/benchmarkService";
+import { getImportQuality } from "@/lib/health/healthService";
+import { workingDaysBetween } from "@/lib/forecast/workingDays";
+import { HistoryTable, type HistoryGroup, type HistoryImport, type HistoryRow } from "@/components/HistoryTable";
 
 export const dynamic = "force-dynamic";
 
-// The historical library (plan Q51): backfilled projects, read-only, kept out of
-// the live project list. Middleware lets in standalone sessions and OS tool admins.
-export default async function HistoryPage(props: { searchParams: Promise<{ fy?: string; sector?: string; buildingType?: string }> }) {
-  const { fy, sector, buildingType } = await props.searchParams;
-  const where: Prisma.ProjectWhereInput = { status: "historical" };
-  if (fy) where.externalProjectKey = { startsWith: `backfill:FY${fy}:` };
-  if (sector) where.sector = sector;
-  if (buildingType) where.buildingType = buildingType;
-  const [admin, benchmarks] = await Promise.all([isAdminSession(), getBenchmarkStatus()]);
-  const [projects, keys] = await Promise.all([
-    prisma.project.findMany({ where, orderBy: { name: "asc" }, include: { _count: { select: { imports: true } } } }),
-    prisma.project.findMany({ where: { status: "historical" }, select: { externalProjectKey: true } }),
+type Query = { q?: string; fy?: string; type?: string; bench?: string; group?: string; sort?: string; dir?: string; open?: string };
+
+const date = (d: Date | null) => d?.toISOString().slice(0, 10) ?? null;
+const SORTS: Record<string, (r: HistoryRow) => string | number> = {
+  name: (r) => r.name.toLowerCase(),
+  fy: (r) => r.fy ?? 0,
+  type: (r) => r.buildingType ?? "",
+  schedules: (r) => r.schedules,
+  start: (r) => r.start ?? "",
+  days: (r) => r.workDays ?? -1,
+  activities: (r) => r.activities,
+};
+
+// The historical library (plan Q51): backfilled projects, read-only apart from
+// admin true-up edits, kept out of the live project list. Middleware lets in
+// standalone sessions and OS tool admins.
+export default async function HistoryPage(props: { searchParams: Promise<Query> }) {
+  const query = await props.searchParams;
+  const [admin, benchmarks, projects] = await Promise.all([
+    isAdminSession(),
+    getBenchmarkStatus(),
+    prisma.project.findMany({
+      where: { status: "historical" },
+      select: {
+        id: true, name: true, externalProjectKey: true, sector: true, buildingType: true, sizeSqFt: true, useInBenchmarks: true, updatedAt: true,
+        imports: { orderBy: { importedAt: "asc" }, select: { fileName: true, projectStart: true, projectFinish: true, activityCount: true } },
+      },
+    }),
   ]);
-  const years = [...new Set(keys.map((k) => fiscalYear(k.externalProjectKey)).filter((y) => y !== null))].sort();
-  const byYear = new Map<number | null, typeof projects>();
-  for (const p of projects) {
-    const y = fiscalYear(p.externalProjectKey);
-    byYear.set(y, [...(byYear.get(y) ?? []), p]);
+
+  const all: HistoryRow[] = projects.map((p) => {
+    const latest = p.imports.at(-1);
+    return {
+      id: p.id, name: p.name, fy: fiscalYear(p.externalProjectKey), buildingType: p.buildingType, sizeSqFt: p.sizeSqFt,
+      useInBenchmarks: p.useInBenchmarks, schedules: p.imports.length,
+      start: date(latest?.projectStart ?? null), finish: date(latest?.projectFinish ?? null),
+      workDays: latest?.projectStart && latest.projectFinish ? workingDaysBetween(latest.projectStart, latest.projectFinish) : null,
+      activities: latest?.activityCount ?? 0,
+    };
+  });
+  const edited = benchmarks.computedAt ? projects.filter((p) => p.updatedAt > benchmarks.computedAt!).length : 0;
+  const years = [...new Set(all.map((r) => r.fy).filter((y) => y !== null))].sort();
+
+  const q = query.q?.trim().toLowerCase();
+  const files = new Map(projects.map((p) => [p.id, p.imports.map((i) => i.fileName.toLowerCase())]));
+  const rows = all.filter((r) =>
+    (!q || r.name.toLowerCase().includes(q) || files.get(r.id)!.some((f) => f.includes(q))) &&
+    (!query.fy || String(r.fy) === query.fy) &&
+    (!query.type || (query.type === "none" ? !r.buildingType : r.buildingType === query.type)) &&
+    (!query.bench || r.useInBenchmarks === (query.bench === "in")),
+  );
+  const sort = SORTS[query.sort ?? ""] ? query.sort! : "name";
+  const dir = query.dir === "desc" ? -1 : 1;
+  rows.sort((a, b) => {
+    const x = SORTS[sort](a), y = SORTS[sort](b);
+    return (x < y ? -1 : x > y ? 1 : 0) * dir || a.name.localeCompare(b.name);
+  });
+  const group = query.group === "type" || query.group === "none" ? query.group : "fy";
+  const groups = new Map<string, HistoryRow[]>();
+  for (const r of rows) {
+    const label = group === "none" ? "" : group === "type" ? (r.buildingType ?? "No project type") : r.fy ? `FY${r.fy}` : "No fiscal year";
+    groups.set(label, [...(groups.get(label) ?? []), r]);
   }
-  const select = "rounded border border-slate-300 bg-white px-2 py-1.5 text-sm";
+  const grouped: HistoryGroup[] = [...groups].map(([label, rows]) => ({ label, rows }));
+  if (group !== "none") grouped.sort((a, b) => (group === "fy" ? b.label.localeCompare(a.label) : a.label.localeCompare(b.label)));
+
+  // Tiers need every activity, so only the open project's are worked out.
+  const openId = rows.some((r) => r.id === query.open) ? query.open! : null;
+  const openImports: HistoryImport[] = openId
+    ? await Promise.all(
+        (await prisma.scheduleImport.findMany({ where: { projectId: openId }, orderBy: { importedAt: "asc" } })).map(async (i) => {
+          const quality = await getImportQuality(i.id);
+          return {
+            id: i.id, fileName: i.fileName, isBaseline: i.isBaseline, statusDate: date(i.statusDate), start: date(i.projectStart), finish: date(i.projectFinish),
+            activities: i.activityCount, tierOverride: i.tierOverride, tier: quality.tier, reasons: quality.reasons,
+            logic: `${quality.logic.passed} of ${quality.logic.total}`,
+          };
+        }),
+      )
+    : [];
+
+  const select = "h-9 rounded border border-slate-300 bg-white px-2 text-sm";
+  const types = SECTORS.map((s) => ({ sector: s, types: [...PROJECT_TYPES[s]] }));
 
   return (
-    <main className="mx-auto max-w-3xl p-4 sm:p-6">
+    <main className="mx-auto max-w-[1680px] p-4 sm:px-8 sm:py-5">
       <Link href="/" className="text-sm text-slate-500">← Projects</Link>
-      <div className="mb-4 mt-1 flex items-baseline justify-between">
+      <div className="mb-3 mt-1 flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="text-xl font-semibold">Historical schedules</h1>
-        <div className="flex gap-4">
-          {admin && <Link href="/history/draft-baseline" className="text-sm text-slate-600 underline hover:text-slate-900">Draft baseline</Link>}
-          <Link href="/history/names" className="text-sm text-slate-600 underline hover:text-slate-900">Name review</Link>
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          {admin && (
+            <form action={appPath("/api/history/benchmarks")} method="post" className="flex flex-wrap items-center gap-3">
+              <span className="text-slate-600">
+                Benchmarks: {benchmarks.computedAt ? `${benchmarks.rows.toLocaleString()} ranges, computed ${benchmarks.computedAt.toLocaleString("en-US", { timeZone: "America/Chicago" })}` : "never computed"}
+                {edited > 0 && <b className="ml-2 font-medium text-amber-700">· {edited} project{edited === 1 ? "" : "s"} edited since</b>}
+              </span>
+              <button className="h-9 rounded border border-slate-300 bg-white px-3 font-medium hover:bg-slate-50">Recompute</button>
+            </form>
+          )}
+          {admin && <Link href="/history/draft-baseline" className="text-slate-600 underline hover:text-slate-900">Draft baseline</Link>}
+          <Link href="/history/names" className="text-slate-600 underline hover:text-slate-900">Name review</Link>
         </div>
       </div>
-      {admin && (
-        <form action={appPath("/api/history/benchmarks")} method="post" className="mb-4 flex flex-wrap items-center gap-3 rounded border border-slate-200 bg-white px-3 py-2 text-sm">
-          <span className="text-slate-600">
-            Duration benchmarks: {benchmarks.computedAt ? `${benchmarks.rows} ranges, last computed ${benchmarks.computedAt.toLocaleString("en-US", { timeZone: "America/Chicago" })}` : "never computed"}
-          </span>
-          <button className="rounded border border-slate-300 px-3 py-1 font-medium hover:bg-slate-50">Recompute benchmarks</button>
-        </form>
-      )}
-      <form className="mb-4 flex flex-wrap items-end gap-2">
-        <select name="fy" defaultValue={fy ?? ""} aria-label="Fiscal year" className={select}>
+
+      <form className="mb-3 flex flex-wrap items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2">
+        <input type="search" name="q" defaultValue={query.q ?? ""} placeholder="Search project or file name" aria-label="Search" className={`${select} w-full sm:w-72`} />
+        <select name="fy" defaultValue={query.fy ?? ""} aria-label="Fiscal year" className={select}>
           <option value="">All years</option>
           {years.map((y) => <option key={y} value={y}>FY{y}</option>)}
         </select>
-        <select name="sector" defaultValue={sector ?? ""} aria-label="Sector" className={select}>
-          <option value="">All sectors</option>
-          {SECTORS.map((s) => <option key={s}>{s}</option>)}
-        </select>
-        <select name="buildingType" defaultValue={buildingType ?? ""} aria-label="Project type" className={select}>
+        <select name="type" defaultValue={query.type ?? ""} aria-label="Project type" className={select}>
           <option value="">All project types</option>
-          {SECTORS.map((s) => (
-            <optgroup key={s} label={s}>
-              {PROJECT_TYPES[s].map((t) => <option key={t}>{t}</option>)}
-            </optgroup>
+          <option value="none">No project type</option>
+          {types.map(({ sector, types }) => (
+            <optgroup key={sector} label={sector}>{types.map((t) => <option key={t}>{t}</option>)}</optgroup>
           ))}
         </select>
-        <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Filter</button>
+        <select name="bench" defaultValue={query.bench ?? ""} aria-label="Benchmarks" className={select}>
+          <option value="">In or out of benchmarks</option>
+          <option value="in">In benchmarks</option>
+          <option value="out">Left out</option>
+        </select>
+        <select name="group" defaultValue={group} aria-label="Group by" className={select}>
+          <option value="fy">Group: fiscal year</option>
+          <option value="type">Group: project type</option>
+          <option value="none">No grouping</option>
+        </select>
+        {query.sort && <input type="hidden" name="sort" value={query.sort} />}
+        {query.dir && <input type="hidden" name="dir" value={query.dir} />}
+        <button className="h-9 rounded bg-slate-900 px-3 text-sm font-medium text-white">Filter</button>
+        <span className="ml-auto text-sm text-slate-500">{rows.length} of {all.length} projects · {all.filter((r) => r.useInBenchmarks).length} in benchmarks</span>
       </form>
-      {projects.length === 0 && <p className="text-slate-500">No historical projects match.</p>}
-      {[...byYear].sort(([a], [b]) => (b ?? 0) - (a ?? 0)).map(([year, list]) => (
-        <section key={year ?? "none"} className="mb-6">
-          <h2 className="mb-2 text-sm font-semibold text-slate-600">{year ? `FY${year}` : "No fiscal year"} · {list.length}</h2>
-          <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
-            {list.map((p) => (
-              <li key={p.id}>
-                <Link href={`/history/${p.id}`} className="flex flex-wrap items-center justify-between gap-x-4 px-4 py-3 hover:bg-slate-50">
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-sm text-slate-500">
-                    {[p.buildingType, `${p._count.imports} schedule(s)`].filter(Boolean).join(" · ")}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
+
+      {rows.length === 0 ? (
+        <p className="text-slate-500">No historical projects match.</p>
+      ) : (
+        <HistoryTable groups={grouped} admin={admin} types={types} query={query} sort={sort} dir={dir === 1 ? "asc" : "desc"} openId={openId} openImports={openImports} />
+      )}
     </main>
   );
 }

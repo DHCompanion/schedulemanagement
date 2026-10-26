@@ -22,6 +22,8 @@ model Project {
   region              String?
   deliveryMethod      String?
   status              String   @default("active")
+  // Off leaves the project out of benchmarks and drafts (historical true-up, 2026-10-26).
+  useInBenchmarks     Boolean  @default(true)
   // The Skiles Connect project this record is bound to. Set when the project is
   // created through the OS launch handoff; null for projects created directly in
   // standalone mode. Unique: one local project per OS project.

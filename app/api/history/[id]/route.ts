@@ -4,8 +4,8 @@ import { appUrl } from "@/lib/http";
 import { isAdminRequest } from "@/lib/scope";
 import { TIER_OVERRIDES, parseDetails } from "@/lib/historical";
 
-// Admin edits on a historical project: its details (project type, which sets the sector; size)
-// or one import's tier override. The only writes the library allows. Cross-project
+// Admin edits on a historical project: its details (project type, which sets the sector; size;
+// whether it feeds benchmarks) or one import's tier override. The only writes the library allows. Cross-project
 // on purpose, so there is no scope check — an OS-launched tool admin may edit any.
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
@@ -22,11 +22,22 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     const tier = field("tierOverride");
     if (tier && !(TIER_OVERRIDES as readonly string[]).includes(tier)) return error("Tier override must be rough or junk.", 422);
     const { count } = await prisma.scheduleImport.updateMany({ where: { id: importId, projectId: id }, data: { tierOverride: tier || null } });
-    return count ? back : error("Import not found.", 404);
+    if (!count) return error("Import not found.", 404);
+    // Counts toward "edited since last compute" on /history.
+    await prisma.project.update({ where: { id }, data: { updatedAt: new Date() } });
+    return back;
   }
 
+  // Only the fields sent change: the list edits one at a time.
+  const use = form.get("useInBenchmarks");
+  if (use !== null && use !== "true" && use !== "false") return error("useInBenchmarks must be true or false.", 422);
   try {
-    const data = parseDetails({ sector: field("sector"), buildingType: field("buildingType"), sizeSqFt: field("sizeSqFt") });
+    const d = parseDetails({ sector: field("sector"), buildingType: field("buildingType"), sizeSqFt: field("sizeSqFt") });
+    const data = {
+      ...((form.has("buildingType") || form.has("sector")) && { sector: d.sector, buildingType: d.buildingType }),
+      ...(form.has("sizeSqFt") && { sizeSqFt: d.sizeSqFt }),
+      ...(use !== null && { useInBenchmarks: use === "true" }),
+    };
     await prisma.project.update({ where: { id }, data });
   } catch (e) {
     return error(e instanceof Error ? e.message : "Invalid details.", 422);
