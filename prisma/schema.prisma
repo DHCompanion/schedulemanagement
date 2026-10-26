@@ -20,6 +20,8 @@ model Project {
   // One of SUBTYPES[buildingType] (lib/historical.ts), when the type has a list.
   subType             String?
   sizeSqFt            Int?
+  // Skiles project number (historical true-up, 2026-10-26); the future link to OS projects.
+  projectNumber       String?
   contractValue       Decimal? @db.Decimal(14, 2)
   region              String?
   deliveryMethod      String?

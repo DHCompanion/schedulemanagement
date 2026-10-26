@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/http";
 import { isAdminRequest } from "@/lib/scope";
-import { SUBTYPES, TIER_OVERRIDES, parseDetails, parseSubType } from "@/lib/historical";
+import { SUBTYPES, TIER_OVERRIDES, parseDetails, parseProjectNumber, parseSubType } from "@/lib/historical";
 
-// Admin edits on a historical project: its details (project type, which sets the sector; subtype; size;
+// Admin edits on a historical project: its details (project type, which sets the sector; subtype; project number; size;
 // whether it feeds benchmarks) or one import's tier override. The only writes the library allows. Cross-project
 // on purpose, so there is no scope check — an OS-launched tool admin may edit any.
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
@@ -41,6 +41,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       ...(typeSent && { sector: d.sector, buildingType: d.buildingType }),
       ...((typeSent || form.has("subType")) && { subType }),
       ...(form.has("sizeSqFt") && { sizeSqFt: d.sizeSqFt }),
+      ...(form.has("projectNumber") && { projectNumber: parseProjectNumber(field("projectNumber")) }),
       ...(use !== null && { useInBenchmarks: use === "true" }),
     };
     await prisma.project.update({ where: { id }, data });

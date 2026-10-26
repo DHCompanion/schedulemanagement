@@ -52,7 +52,7 @@ export default async function HistoricalProjectPage(props: { params: Promise<{ i
         </form>
       ) : (
         <p className="mb-6 text-sm text-slate-700">
-          {[project.sector, project.buildingType, project.subType, project.sizeSqFt && `${project.sizeSqFt.toLocaleString()} sf`].filter(Boolean).join(" · ") || "No details yet."}
+          {[project.projectNumber && `#${project.projectNumber}`, project.sector, project.buildingType, project.subType, project.sizeSqFt && `${project.sizeSqFt.toLocaleString()} sf`].filter(Boolean).join(" · ") || "No details yet."}
         </p>
       )}
 
