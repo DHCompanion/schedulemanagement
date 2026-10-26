@@ -25,6 +25,7 @@ import { TradesPanel, type DisciplineRow, type AssignmentRow } from "@/component
 import { ProjectTabs } from "@/components/ProjectTabs";
 import { TierBadge } from "@/components/TierBadge";
 import { getImportQuality } from "@/lib/health/healthService";
+import { getProjectBenchmarks } from "@/lib/benchmarks/benchmarkService";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,9 @@ export default async function DataHealthPage(
   // The toolLevel Connect handed down, shown verbatim, so a launched session
   // can confirm what the OS resolved without guessing at the footer below.
   const scope = await readScope(jar.get(SCOPE_COOKIE)?.value, nowSeconds);
+
+  // Not in the tab badge: an outlier is worth a look, but there is nothing to resolve.
+  const outliers = [...(await getProjectBenchmarks(project.id))].filter(([, b]) => b.outside).sort(([a], [b]) => a.localeCompare(b));
 
   // --- Task Naming (moved verbatim from normalize/page.tsx) ---
   const { mapped, unmappedNames } = await applyDictionary(leaves);
@@ -211,6 +215,35 @@ export default async function DataHealthPage(
               dismissedScopes={dismissedScopes}
               driftRows={driftRows}
             />
+          </Section>
+          <Section title="Durations vs history" count={outliers.length}>
+            <p className="mb-3 text-sm text-slate-500">
+              Standard names whose span in this schedule (first start to last finish) is far outside past projects of the same sector and type.
+            </p>
+            {outliers.length === 0 ? (
+              <p className="text-slate-500">Every benchmarked name is within the usual range.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-xs text-slate-500">
+                    <tr><th className="py-1 pr-3">Standard name</th><th className="py-1 pr-3">This schedule</th><th className="py-1 pr-3">Usual (P25–P75)</th><th className="py-1">Projects</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {outliers.map(([scope, b]) => {
+                      const r = (b.actual ?? b.planned)!;
+                      return (
+                        <tr key={scope}>
+                          <td className="py-1 pr-3">{scope}</td>
+                          <td className="py-1 pr-3 font-medium text-amber-800">{b.projectDays} days</td>
+                          <td className="py-1 pr-3">{Math.round(r.p25)}–{Math.round(r.p75)} days {b.actual ? "actual" : "planned"}</td>
+                          <td className="py-1">{r.n}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Section>
         </>
       )}

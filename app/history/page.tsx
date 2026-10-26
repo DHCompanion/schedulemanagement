@@ -2,6 +2,9 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { PROJECT_TYPES, SECTORS, fiscalYear } from "@/lib/historical";
+import { appPath } from "@/lib/http";
+import { isAdminSession } from "@/lib/adminSession";
+import { getBenchmarkStatus } from "@/lib/benchmarks/benchmarkService";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +16,7 @@ export default async function HistoryPage(props: { searchParams: Promise<{ fy?: 
   if (fy) where.externalProjectKey = { startsWith: `backfill:FY${fy}:` };
   if (sector) where.sector = sector;
   if (buildingType) where.buildingType = buildingType;
+  const [admin, benchmarks] = await Promise.all([isAdminSession(), getBenchmarkStatus()]);
   const [projects, keys] = await Promise.all([
     prisma.project.findMany({ where, orderBy: { name: "asc" }, include: { _count: { select: { imports: true } } } }),
     prisma.project.findMany({ where: { status: "historical" }, select: { externalProjectKey: true } }),
@@ -32,6 +36,14 @@ export default async function HistoryPage(props: { searchParams: Promise<{ fy?: 
         <h1 className="text-xl font-semibold">Historical schedules</h1>
         <Link href="/history/names" className="text-sm text-slate-600 underline hover:text-slate-900">Name review</Link>
       </div>
+      {admin && (
+        <form action={appPath("/api/history/benchmarks")} method="post" className="mb-4 flex flex-wrap items-center gap-3 rounded border border-slate-200 bg-white px-3 py-2 text-sm">
+          <span className="text-slate-600">
+            Duration benchmarks: {benchmarks.computedAt ? `${benchmarks.rows} ranges, last computed ${benchmarks.computedAt.toLocaleString("en-US", { timeZone: "America/Chicago" })}` : "never computed"}
+          </span>
+          <button className="rounded border border-slate-300 px-3 py-1 font-medium hover:bg-slate-50">Recompute benchmarks</button>
+        </form>
+      )}
       <form className="mb-4 flex flex-wrap items-end gap-2">
         <select name="fy" defaultValue={fy ?? ""} aria-label="Fiscal year" className={select}>
           <option value="">All years</option>

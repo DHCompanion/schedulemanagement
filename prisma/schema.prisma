@@ -475,3 +475,21 @@ model TradeDriftDismissal {
   @@unique([projectId, osDisciplineId, fileValue])
   @@index([projectId])
 }
+
+// Duration benchmarks (roadmap Phase 5): quartiles of each standard name's
+// first-start-to-last-finish span, one contribution per project, per sector
+// and per building type. Rebuilt whole by "Recompute benchmarks"; blended
+// toward the sector at read time (lib/benchmarks/benchmarks.ts).
+model ScopeBenchmark {
+  canonicalScope String
+  measure        String   // planned | actual
+  groupKind      String   // sector | buildingType
+  groupValue     String
+  n              Int
+  p25            Float
+  median         Float
+  p75            Float
+  computedAt     DateTime @default(now())
+
+  @@id([canonicalScope, measure, groupKind, groupValue])
+}
