@@ -66,6 +66,8 @@ export function HistoryTable({ groups, admin, types, query, sort, dir, openId, o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rows = groups.flatMap((g) => g.rows);
+  // Only rows still shown count: a filter change keeps the selection state.
+  const picked = rows.filter((r) => selected.has(r.id)).map((r) => r.id);
 
   const href = (change: Record<string, string | null>) => {
     const p = new URLSearchParams(Object.entries(query).filter((e): e is [string, string] => !!e[1]));
@@ -91,16 +93,16 @@ export function HistoryTable({ groups, admin, types, query, sort, dir, openId, o
   return (
     <div>
       {error && <p className="mb-2 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      {admin && selected.size > 0 && (
+      {admin && picked.length > 0 && (
         <div className="mb-2 flex flex-wrap items-center gap-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm">
-          <b className="text-blue-900">{selected.size} selected</b>
+          <b className="text-blue-900">{picked.length} selected</b>
           <select value={bulkType} onChange={(e) => setBulkType(e.target.value)} aria-label="Project type for selected" className="h-8 rounded border border-blue-300 bg-white px-2">
             <option value="">Set project type…</option>
             {typeOptions}
           </select>
-          <button disabled={busy || !bulkType} onClick={() => run([...selected].map((id) => [id, { buildingType: bulkType }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Apply</button>
-          <button disabled={busy} onClick={() => run([...selected].map((id) => [id, { useInBenchmarks: "false" }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Leave out of benchmarks</button>
-          <button disabled={busy} onClick={() => run([...selected].map((id) => [id, { useInBenchmarks: "true" }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Use in benchmarks</button>
+          <button disabled={busy || !bulkType} onClick={() => run(picked.map((id) => [id, { buildingType: bulkType }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Apply</button>
+          <button disabled={busy} onClick={() => run(picked.map((id) => [id, { useInBenchmarks: "false" }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Leave out of benchmarks</button>
+          <button disabled={busy} onClick={() => run(picked.map((id) => [id, { useInBenchmarks: "true" }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Use in benchmarks</button>
           <button onClick={() => setSelected(new Set())} className="h-8 px-2 text-blue-700">Clear</button>
           {busy && <span className="text-blue-900">Saving…</span>}
         </div>
@@ -110,7 +112,7 @@ export function HistoryTable({ groups, admin, types, query, sort, dir, openId, o
           <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
               <th className="w-8 px-3 py-2">
-                {admin && <input type="checkbox" aria-label="Select all" checked={selected.size === rows.length} onChange={(e) => setSelected(new Set(e.target.checked ? rows.map((r) => r.id) : []))} />}
+                {admin && <input type="checkbox" aria-label="Select all" checked={picked.length === rows.length} onChange={(e) => setSelected(new Set(e.target.checked ? rows.map((r) => r.id) : []))} />}
               </th>
               {COLUMNS.map((c) => (
                 <th key={c.key} className={`${cell} font-semibold ${c.right ? "text-right" : ""}`} aria-sort={sort === c.key ? (dir === "asc" ? "ascending" : "descending") : undefined}>
