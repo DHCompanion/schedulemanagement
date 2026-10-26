@@ -114,6 +114,21 @@ export function scopeWorkedDays(activities: SpanActivity[], dictionary: Map<stri
   return new Map([...days].filter(([, s]) => s.size > 0).map(([scope, s]) => [scope, s.size]));
 }
 
+// Procurement belongs to the procurement tool, not the schedule (decided 2026-10-26).
+// "Doors" under Long Lead Items is a delivery, not the install it maps to.
+const PROCUREMENT_SUMMARY = /procure|long lead|submittal|material/i;
+const PRECONSTRUCTION = new Set(["Procurement", "Submittals", "Project Buyout", "Permitting", "Bidding", "CD Pricing", "Task Order"]);
+
+/** Blanks the name of a line whose nearest summary is procurement, unless it maps to a preconstruction step. */
+export function withoutProcurement<T extends { externalUid: number; parentExternalUid: number | null; name: string }>(activities: T[], dictionary: Map<string, string>): T[] {
+  const nameOf = new Map(activities.map((a) => [a.externalUid, a.name]));
+  return activities.map((a) => {
+    const parent = a.parentExternalUid === null ? undefined : nameOf.get(a.parentExternalUid);
+    if (!parent || !PROCUREMENT_SUMMARY.test(parent) || PRECONSTRUCTION.has(dictionary.get(normalizeName(a.name)) ?? "")) return a;
+    return { ...a, name: "" };
+  });
+}
+
 /** Linear-interpolated quartiles (the spreadsheet PERCENTILE method). */
 export function quartiles(values: number[]): Quartiles {
   const s = [...values].sort((a, b) => a - b);
