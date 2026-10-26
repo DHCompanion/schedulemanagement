@@ -11,6 +11,7 @@ describe.runIf(!!process.env.DATABASE_URL)("benchmarkService (db)", () => {
     await prisma.project.deleteMany({ where: { name: { contains: tag } } });
     await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: { contains: tag } } });
     await prisma.scopeBenchmark.deleteMany({ where: { canonicalScope: scope } });
+    await prisma.scopeCriticality.deleteMany({ where: { canonicalScope: scope } });
     await prisma.$disconnect();
   });
 
@@ -58,7 +59,9 @@ describe.runIf(!!process.env.DATABASE_URL)("benchmarkService (db)", () => {
     expect(ranges.get(scope)?.actual).toMatchObject({ n: 5, typeN: 3, median: (3 * 4 + 5 * 6) / 8 });
 
     // Project A's latest schedule is the synthetic 90-day one: far beyond the fences.
-    expect((await getProjectBenchmarks(first)).get(scope)).toMatchObject({ projectDays: 90, outside: true });
+    expect((await getProjectBenchmarks(first)).get(scope)).toMatchObject({ projectDays: 90, outside: true, critical: { share: 0, n: 5 } });
+    expect(await prisma.scopeCriticality.findUnique({ where: { canonicalScope_groupKind_groupValue: { canonicalScope: scope, groupKind: "sector", groupValue: "Healthcare" } } }))
+      .toMatchObject({ n: 5, critical: 0 });
   }, 60000);
 
   it("route recomputes for an admin and refuses everyone else", async () => {

@@ -493,3 +493,32 @@ model ScopeBenchmark {
 
   @@id([canonicalScope, measure, groupKind, groupValue])
 }
+
+// Benchmarks PR B (roadmap Q69): per standard name, how many projects had it
+// on the file's critical path; rebuilt with ScopeBenchmark.
+model ScopeCriticality {
+  canonicalScope String
+  groupKind      String   // sector | buildingType
+  groupValue     String
+  n              Int
+  critical       Int
+  computedAt     DateTime @default(now())
+
+  @@id([canonicalScope, groupKind, groupValue])
+}
+
+// Direct links between two standard names, for the Phase 7 baseline generator:
+// how many projects link them, out of those that have both.
+model ScopeSequence {
+  fromScope  String
+  toScope    String
+  groupKind  String   // sector | buildingType
+  groupValue String
+  projects   Int
+  base       Int
+  type       String   // commonest link type: FS | SS | FF | SF
+  lagDays    Float    // median lag, working days
+  computedAt DateTime @default(now())
+
+  @@id([fromScope, toScope, groupKind, groupValue])
+}

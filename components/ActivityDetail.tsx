@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import type { ScheduleRow } from "@/lib/schedule/types";
 import { describeProcurement, describeAtRiskCause } from "@/lib/procurement/display";
 import { fmtShortDate } from "@/lib/schedule/weekBuckets";
+import { USUALLY_CRITICAL } from "@/lib/benchmarks/benchmarks";
 
 function range(startIso: string | null, endIso: string | null): string {
   const s = startIso ? fmtShortDate(startIso) : "—";
@@ -75,6 +76,11 @@ export function ActivityDetail({ row, sectionName }: { row: ScheduleRow; section
                 </div>
               );
             })}
+            {row.benchmark.critical && (
+              <div className={row.benchmark.critical.share >= USUALLY_CRITICAL ? "font-medium" : "text-slate-500"}>
+                {row.benchmark.critical.share >= USUALLY_CRITICAL ? "Usually critical: " : ""}on the critical path in {Math.round(row.benchmark.critical.share * 100)}% of past projects
+              </div>
+            )}
             <div className={row.benchmark.outside ? "font-medium text-amber-800" : "text-slate-500"}>
               This project: {row.benchmark.projectDays} working days{row.benchmark.outside && " (outside the usual range)"}
             </div>
