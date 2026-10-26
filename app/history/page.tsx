@@ -15,6 +15,7 @@ type Query = { q?: string; fy?: string; type?: string; sub?: string; bench?: str
 const date = (d: Date | null) => d?.toISOString().slice(0, 10) ?? null;
 const SORTS: Record<string, (r: HistoryRow) => string | number> = {
   name: (r) => r.name.toLowerCase(),
+  num: (r) => r.projectNumber ?? "",
   fy: (r) => r.fy ?? 0,
   type: (r) => r.buildingType ?? "",
   sub: (r) => r.subType ?? "",
@@ -35,7 +36,7 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
     prisma.project.findMany({
       where: { status: "historical" },
       select: {
-        id: true, name: true, externalProjectKey: true, sector: true, buildingType: true, subType: true, sizeSqFt: true, useInBenchmarks: true, updatedAt: true,
+        id: true, name: true, externalProjectKey: true, sector: true, buildingType: true, subType: true, projectNumber: true, sizeSqFt: true, useInBenchmarks: true, updatedAt: true,
         imports: { orderBy: { importedAt: "asc" }, select: { fileName: true, projectStart: true, projectFinish: true, activityCount: true } },
       },
     }),
@@ -44,7 +45,7 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
   const all: HistoryRow[] = projects.map((p) => {
     const latest = p.imports.at(-1);
     return {
-      id: p.id, name: p.name, fy: fiscalYear(p.externalProjectKey), buildingType: p.buildingType, subType: p.subType, sizeSqFt: p.sizeSqFt,
+      id: p.id, name: p.name, fy: fiscalYear(p.externalProjectKey), buildingType: p.buildingType, subType: p.subType, projectNumber: p.projectNumber, sizeSqFt: p.sizeSqFt,
       useInBenchmarks: p.useInBenchmarks, schedules: p.imports.length,
       start: date(latest?.projectStart ?? null), finish: date(latest?.projectFinish ?? null),
       workDays: latest?.projectStart && latest.projectFinish ? workingDaysBetween(latest.projectStart, latest.projectFinish) : null,
@@ -57,7 +58,7 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
   const q = query.q?.trim().toLowerCase();
   const files = new Map(projects.map((p) => [p.id, p.imports.map((i) => i.fileName.toLowerCase())]));
   const rows = all.filter((r) =>
-    (!q || r.name.toLowerCase().includes(q) || files.get(r.id)!.some((f) => f.includes(q))) &&
+    (!q || r.name.toLowerCase().includes(q) || r.projectNumber?.toLowerCase().includes(q) || files.get(r.id)!.some((f) => f.includes(q))) &&
     (!query.fy || String(r.fy) === query.fy) &&
     (!query.type || (query.type === "none" ? !r.buildingType : r.buildingType === query.type)) &&
     (!query.sub || (query.sub === "none" ? !r.subType : r.subType === query.sub)) &&
@@ -117,7 +118,7 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
       </div>
 
       <form className="mb-3 flex flex-wrap items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2">
-        <input type="search" name="q" defaultValue={query.q ?? ""} placeholder="Search project or file name" aria-label="Search" className={`${select} w-full sm:w-72`} />
+        <input type="search" name="q" defaultValue={query.q ?? ""} placeholder="Search project, number or file" aria-label="Search" className={`${select} w-full sm:w-72`} />
         <select name="fy" defaultValue={query.fy ?? ""} aria-label="Fiscal year" className={select}>
           <option value="">All years</option>
           {years.map((y) => <option key={y} value={y}>FY{y}</option>)}

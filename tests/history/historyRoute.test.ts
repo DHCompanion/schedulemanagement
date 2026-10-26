@@ -110,6 +110,15 @@ describe.runIf(!!process.env.DATABASE_URL)("POST /api/history/[id]", () => {
     expect((await post(id, { buildingType: "Sterile Processing", subType: "" }, await admin())).status).toBe(303);
   });
 
+  it("sets or clears the project number", async () => {
+    const { id } = await historical();
+    expect((await post(id, { projectNumber: " 2024020 " }, await admin())).status).toBe(303);
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ projectNumber: "2024020" });
+    expect((await post(id, { projectNumber: "20 24" }, await admin())).status).toBe(422);
+    expect((await post(id, { projectNumber: "" }, await admin())).status).toBe(303);
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ projectNumber: null });
+  });
+
   it("only edits historical projects, and only their own imports", async () => {
     const live = await historical("active");
     expect((await post(live.id, { sector: "Healthcare" }, await admin())).status).toBe(404);

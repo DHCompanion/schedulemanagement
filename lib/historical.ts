@@ -45,6 +45,32 @@ export function parseSubType(buildingType: string | null, raw: string): string |
   return subType;
 }
 
+/** A Skiles project number (5 or 7 digits so far), or null for blank. Throws a user-facing message. */
+export function parseProjectNumber(raw: string): string | null {
+  const n = raw.trim() || null;
+  if (n && !/^[A-Za-z0-9-]{1,20}$/.test(n)) throw new Error(`"${n}" isn't a project number: letters, digits and dashes only.`);
+  return n;
+}
+
+/** Project numbers to write from the review sheet (Project / FY / Project number). Blank rows and numbers already set are skipped. */
+export function planProjectNumbers(rows: Record<string, string>[], projects: { id: string; name: string; fy: number | null; projectNumber: string | null }[]) {
+  const updates: { id: string; projectNumber: string }[] = [];
+  const problems: string[] = [];
+  for (const r of rows) {
+    if (!r["Project number"]?.trim()) continue;
+    const label = `${r.Project} (FY${r.FY})`;
+    const match = projects.filter((p) => p.name === r.Project && String(p.fy ?? "") === r.FY);
+    if (match.length !== 1) { problems.push(`${label}: ${match.length} projects match`); continue; }
+    try {
+      const projectNumber = parseProjectNumber(r["Project number"])!;
+      if (match[0].projectNumber !== projectNumber) updates.push({ id: match[0].id, projectNumber });
+    } catch (e) {
+      problems.push(`${label}: ${(e as Error).message}`);
+    }
+  }
+  return { updates, problems };
+}
+
 // As-built and baseline have to come from the data; review can only demote.
 export const TIER_OVERRIDES = ["rough", "junk"] as const;
 

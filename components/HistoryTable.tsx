@@ -13,6 +13,7 @@ export interface HistoryRow {
   fy: number | null;
   buildingType: string | null;
   subType: string | null;
+  projectNumber: string | null;
   sizeSqFt: number | null;
   useInBenchmarks: boolean;
   schedules: number;
@@ -47,7 +48,7 @@ async function save(projectId: string, fields: Record<string, string>): Promise<
 }
 
 const COLUMNS: { key: string; label: string; right?: boolean }[] = [
-  { key: "name", label: "Project" }, { key: "fy", label: "FY" }, { key: "type", label: "Project type" }, { key: "sub", label: "Subtype" },
+  { key: "name", label: "Project" }, { key: "num", label: "Project #" }, { key: "fy", label: "FY" }, { key: "type", label: "Project type" }, { key: "sub", label: "Subtype" },
   { key: "schedules", label: "Schedules", right: true }, { key: "start", label: "Start → finish" },
   { key: "days", label: "Work days", right: true }, { key: "activities", label: "Activities", right: true },
 ];
@@ -119,7 +120,7 @@ export function HistoryTable({ groups, admin, types, subTypes, query, sort, dir,
         </div>
       )}
       <div className="overflow-x-auto rounded border border-slate-200 bg-white">
-        <table className="w-full min-w-[1000px] border-collapse text-sm">
+        <table className="w-full min-w-[1100px] border-collapse text-sm">
           <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
               <th className="w-8 px-3 py-2">
@@ -140,7 +141,7 @@ export function HistoryTable({ groups, admin, types, subTypes, query, sort, dir,
               <Fragment key={g.label}>
                 {g.label && (
                   <tr className="border-t border-slate-200 bg-slate-50">
-                    <td colSpan={10} className="px-3 py-1.5 text-xs font-semibold text-slate-600">{g.label} · {g.rows.length}</td>
+                    <td colSpan={11} className="px-3 py-1.5 text-xs font-semibold text-slate-600">{g.label} · {g.rows.length}</td>
                   </tr>
                 )}
                 {g.rows.map((r) => {
@@ -155,6 +156,15 @@ export function HistoryTable({ groups, admin, types, subTypes, query, sort, dir,
                           <Link href={href({ open: open ? null : r.id })} scroll={false} aria-expanded={open} className="inline-flex items-start gap-2 hover:text-blue-700">
                             <span aria-hidden className="w-3 text-slate-400">{open ? "▾" : "▸"}</span>{r.name}
                           </Link>
+                        </td>
+                        <td className="px-2 py-1">
+                          {admin ? (
+                            // Saves on blur or Enter; keyed so a refresh resets it to the saved value.
+                            <input key={r.projectNumber ?? ""} defaultValue={r.projectNumber ?? ""} disabled={busy} aria-label={`Project number for ${r.name}`}
+                              onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+                              onBlur={(e) => { if (e.target.value.trim() !== (r.projectNumber ?? "")) run([[r.id, { projectNumber: e.target.value }]]); }}
+                              className="h-8 w-24 rounded border border-slate-200 bg-white px-1 tabular-nums" />
+                          ) : (r.projectNumber ?? <span className="text-slate-400">—</span>)}
                         </td>
                         <td className={`${cell} text-slate-600`}>{r.fy ? `FY${r.fy}` : "—"}</td>
                         <td className="px-2 py-1">
@@ -207,7 +217,7 @@ function OpenRow({ row, imports, admin, busy, run }: {
   return (
     <tr className="bg-slate-50">
       <td />
-      <td colSpan={9} className="px-2 pb-4 pt-1">
+      <td colSpan={10} className="px-2 pb-4 pt-1">
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex flex-[0_1_260px] flex-col gap-2 rounded border border-slate-200 bg-white p-3 text-sm">
             {admin ? (
