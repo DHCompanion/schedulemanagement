@@ -25,7 +25,10 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
   if (!(await isAdminSession())) notFound();
   const raw = await props.searchParams;
   const q = new URLSearchParams(Object.entries(raw).flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).map((x) => [k, x])));
-  const { type, subType, start, scopes } = readDraftQuery(q);
+  const { type, subType: picked, start, scopes } = readDraftQuery(q);
+  // The form keeps the old subtype when the type changes; drop it here (the download route still rejects one).
+  const subTypes = SUBTYPES[type];
+  const subType = subTypes?.includes(picked) ? picked : "";
   const startText = q.get("start") || nextMonday();
   const group = type ? await getDraftGroup(type, subType) : null;
   const ready = group && !("error" in group) ? group : null;
@@ -37,7 +40,6 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
   const nameOf = new Map(draft?.activities.map((a) => [a.uid, a.name]));
   const input = "rounded border border-slate-300 bg-white px-2 py-1.5 text-sm";
   const download = new URLSearchParams([["type", type], ...(subType ? [["sub", subType]] : []), ["start", startText], ...chosen.map((s) => ["scope", s])]);
-  const subTypes = SUBTYPES[type];
 
   return (
     <main className="mx-auto max-w-4xl p-4 sm:p-6">
@@ -57,7 +59,7 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
             </optgroup>
           ))}
         </select>
-        {/* Shows once a type with subtypes is chosen; changing the type clears it on the server. */}
+        {/* Shows once a type with subtypes is chosen. */}
         {subTypes && (
           <select name="sub" defaultValue={subType} aria-label="Subtype" className={input}>
             <option value="">Any subtype</option>
