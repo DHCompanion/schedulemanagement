@@ -2,7 +2,7 @@
 // standard name, the span from first start to last finish of its mapped
 // activities, then P25/median/P75 across projects by sector and building type.
 
-import { workingDaysBetween } from "@/lib/forecast/workingDays";
+import { isWeekend, workingDaysBetween } from "@/lib/forecast/workingDays";
 import { isLeafActive } from "@/lib/msp/types";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 
@@ -81,7 +81,10 @@ export function scopeSpans(activities: SpanActivity[], dictionary: Map<string, s
   }
   const spans = new Map<string, number>();
   for (const [scope, b] of bounds) {
-    if (b && b.finish >= b.start) spans.set(scope, workingDaysBetween(new Date(b.start), new Date(b.finish)) + 1);
+    if (!b || b.finish < b.start) continue;
+    // Inclusive: the first day counts too, when it is a working day.
+    const start = new Date(b.start);
+    spans.set(scope, workingDaysBetween(start, new Date(b.finish)) + (isWeekend(start) ? 0 : 1));
   }
   return spans;
 }

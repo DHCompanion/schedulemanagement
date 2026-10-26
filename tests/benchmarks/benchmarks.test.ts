@@ -16,6 +16,12 @@ describe("scopeSpans", () => {
     expect(Object.fromEntries(spans)).toEqual({ "Frame Walls": 8 });
   });
 
+  it("counts the first day only when it is a working day", () => {
+    // Sat 1 Mar → Mon 3 Mar is 1 working day; Sat → Sun is none.
+    expect(Object.fromEntries(scopeSpans([act("Paint", "2025-03-01", "2025-03-03")], dict, "planned"))).toEqual({ Paint: 1 });
+    expect(Object.fromEntries(scopeSpans([act("Paint", "2025-03-01", "2025-03-02")], dict, "planned"))).toEqual({ Paint: 0 });
+  });
+
   it("counts actuals only for a finished scope, and skips milestones and summaries", () => {
     const acts = [
       act("Frame Walls L1", "2025-03-03", "2025-03-07", ["2025-03-03", "2025-03-10"]),
