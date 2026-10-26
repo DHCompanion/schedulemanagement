@@ -12,16 +12,17 @@ export async function denyIfHistorical(projectId: string): Promise<NextResponse 
 }
 
 // Skiles' standard market sectors and project types, from Fibery (Database
-// Standards/Project Type), plus "Special Procedure (EP, Cath, IR)", added here.
+// Standards/Project Type), plus "Special Procedure (EP, Cath, IR)", "GI/Endoscopy" and
+// "Sterile Processing", added here.
 // Each type belongs to one sector, so a project's sector
 // follows from its type. Stored in Project.sector / Project.buildingType.
 export const PROJECT_TYPES = {
   Healthcare: [
     "ASC (Ambulatory Surgery Center)", "Behavioral", "Cancer Center", "Clinic", "Emergency Department",
-    "FSED (Freestanding Emergency Department)", "Healthcare - Misc.", "Hospital - New Build", "ICU/NICU",
+    "FSED (Freestanding Emergency Department)", "GI/Endoscopy", "Healthcare - Misc.", "Hospital - New Build", "ICU/NICU",
     "Imaging & Radiology", "Lab/Pharmacy", "Med/Surgery", "MEP Upgrade", "MOB (Medical Office Building)",
     "Obstetrics", "OR Suite", "Outpatient Surgery Center", "Patient Care", "POB",
-    "Rehab/LTAC (Long Term Acute Care)", "Special Procedure (EP, Cath, IR)", "Vertical Expansion",
+    "Rehab/LTAC (Long Term Acute Care)", "Special Procedure (EP, Cath, IR)", "Sterile Processing", "Vertical Expansion",
   ],
   Institutional: ["Athletic Facilities", "Schools", "Student Housing"],
   Hospitality: ["Hoteling"],
@@ -31,6 +32,19 @@ export const PROJECT_TYPES = {
 } as const;
 export const SECTORS = Object.keys(PROJECT_TYPES) as (keyof typeof PROJECT_TYPES)[];
 export const SECTOR_OF = new Map<string, string>(SECTORS.flatMap((s) => PROJECT_TYPES[s].map((t) => [t, s] as const)));
+// Subtypes where a type mixes very different builds (decided 2026-10-26).
+export const SUBTYPES: Record<string, readonly string[]> = {
+  "Imaging & Radiology": ["MRI", "CT", "X-Ray", "Ultrasound", "Nuclear Medicine", "Mammography", "Fluoroscopy", "Multiple"],
+  "Special Procedure (EP, Cath, IR)": ["EP", "Cath", "IR", "Multiple"],
+};
+
+/** A subtype for this project type, or null for blank. Throws a user-facing message. */
+export function parseSubType(buildingType: string | null, raw: string): string | null {
+  const subType = raw.trim() || null;
+  if (subType && !SUBTYPES[buildingType ?? ""]?.includes(subType)) throw new Error(`"${subType}" isn't a subtype of ${buildingType ?? "a project with no type"}.`);
+  return subType;
+}
+
 // As-built and baseline have to come from the data; review can only demote.
 export const TIER_OVERRIDES = ["rough", "junk"] as const;
 
