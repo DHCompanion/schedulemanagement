@@ -45,6 +45,18 @@ describe("assembleDraft", () => {
     expect(day(a.get("B")!.finish)).toBe(day(a.get("A")!.finish));
   });
 
+  it("finishes an SF successor by the predecessor's start", () => {
+    // B (3 days) SS+2 after A puts it Wed–Fri; C (2 days) SF from B must finish by Wed's start: Mon–Tue.
+    const a = byName(assembleDraft([scope("A", 5), scope("B", 3), scope("C", 2)], [link("A", "B", 0.9, "SS", 2), link("B", "C", 0.9, "SF")], start));
+    expect([day(a.get("C")!.start), day(a.get("C")!.finish)]).toEqual(["2025-03-03", "2025-03-04"]);
+  });
+
+  it("ties to Finish any activity that outlasts its successors", () => {
+    // FS −9 starts B on A's second day, so B ends 8 days before A: A must still hold up Finish.
+    const draft = assembleDraft([scope("A", 10), scope("B", 1)], [link("A", "B", 0.9, "FS", -9)], start);
+    expect(draft.activities.at(-1)!.preds.map((p) => p.uid).sort()).toEqual([2, 3]);
+  });
+
   it("breaks a loop by dropping its weakest link, and says so", () => {
     const draft = assembleDraft([scope("A", 1), scope("B", 1), scope("C", 1)], [link("A", "B", 0.9), link("B", "C", 0.8), link("C", "A", 0.6)], start);
     expect(draft.warnings).toContain("Dropped C → A to break a loop.");

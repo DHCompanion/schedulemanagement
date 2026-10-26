@@ -127,7 +127,8 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
       const pes = es.get(l.from)!;
       const pef = pes + nodes.get(l.from)!.days - 1;
       const lag = Math.round(l.lagDays);
-      const need = { FS: pef + 1 + lag, SS: pes + lag, FF: pef + lag - d + 1, SF: pes + lag - d + 1 }[l.type];
+      // A day's 17:00 finish meets the next working day's 08:00 start, so SF ends the day before.
+      const need = { FS: pef + 1 + lag, SS: pes + lag, FF: pef + lag - d + 1, SF: pes + lag - d }[l.type];
       at = Math.max(at, need);
     }
     es.set(n, at);
@@ -143,8 +144,10 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
     return d;
   };
   const uid = new Map(order.map((n, i) => [n, i + 2]));
-  // Only an FS or FF successor waits on an activity's finish; anything else is an open end.
-  const hasSuccessor = new Set(usable.filter((l) => l.type === "FS" || l.type === "FF").map((l) => l.from));
+  // An activity is an open end unless some successor finishes no earlier than it
+  // does (MS Project would otherwise pull Finish in ahead of it).
+  const ef = (n: string) => es.get(n)! + nodes.get(n)!.days - 1;
+  const hasSuccessor = new Set(usable.filter((l) => ef(l.to) >= ef(l.from)).map((l) => l.from));
   const lastDay = Math.max(0, ...order.map((n) => es.get(n)! + nodes.get(n)!.days - 1));
 
   const activities: DraftActivity[] = [
