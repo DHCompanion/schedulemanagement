@@ -39,7 +39,7 @@ interface QualitySource {
   relationships: LogicRelationship[];
 }
 
-function importQuality(imp: QualitySource): ImportQuality {
+export function importQuality(imp: QualitySource): ImportQuality {
   const logic = scoreLogic(imp.activities, imp.relationships, imp.minutesPerDay ?? DEFAULT_MINUTES_PER_DAY);
   const leaves = imp.activities.filter(isLeafActive);
   const leafUids = new Set(leaves.map((a) => a.externalUid));

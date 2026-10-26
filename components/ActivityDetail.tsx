@@ -64,6 +64,22 @@ export function ActivityDetail({ row, sectionName }: { row: ScheduleRow; section
             {row.partnerName && <div className="text-slate-500">{row.partnerName}</div>}
           </Group>
         )}
+        {row.benchmark && row.canonicalScope && (
+          <Group title={`History · ${row.canonicalScope}`}>
+            {(["actual", "planned"] as const).map((m) => {
+              const r = row.benchmark![m];
+              return r && (
+                <div key={m} className={m === "planned" ? "text-slate-500" : undefined}>
+                  {m === "actual" ? "Actual" : "Planned"}: {Math.round(r.p25)}–{Math.round(r.p75)} working days, median {Math.round(r.median)}
+                  <span className="text-slate-400"> · {r.n} projects{r.typeN > 0 && `, ${r.typeN} of this type`}</span>
+                </div>
+              );
+            })}
+            <div className={row.benchmark.outside ? "font-medium text-amber-800" : "text-slate-500"}>
+              This project: {row.benchmark.projectDays} working days{row.benchmark.outside && " (outside the usual range)"}
+            </div>
+          </Group>
+        )}
         {procurement && (
           <Group title="This trade's procurement">
             <div className={procurementBehind ? "font-medium text-amber-800" : undefined}>{procurement.headline}</div>

@@ -5,7 +5,7 @@ import { ScheduleBody } from "@/components/ScheduleBody";
 import type { ScheduleRow } from "@/lib/schedule/types";
 
 const mk = (over: Partial<ScheduleRow>): ScheduleRow => ({
-  id: "x", externalId: 1, wbsCode: "1", name: "n", canonicalScope: null,
+  id: "x", externalId: 1, wbsCode: "1", name: "n", canonicalScope: null, benchmark: null,
   disciplineName: null, partnerName: null, atRisk: false, atRiskItem: null, procurement: null,
   type: "task", isCritical: false, outlineLevel: 1,
   plannedStart: "2026-08-03T08:00:00.000Z", plannedFinish: "2026-08-07T17:00:00.000Z",

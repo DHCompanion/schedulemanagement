@@ -1,4 +1,5 @@
 import type { ActivityProcurement, AtRiskItem } from "@/lib/procurement/display";
+import type { ScopeBenchmarkView } from "@/lib/benchmarks/benchmarks";
 
 export type RowStatus = "not_started" | "in_progress" | "complete";
 
@@ -10,6 +11,8 @@ export interface ScheduleRow {
   wbsCode: string | null;
   name: string;
   canonicalScope: string | null;
+  /** Historical span ranges for canonicalScope, when the project's sector has them. */
+  benchmark: ScopeBenchmarkView | null;
   disciplineName: string | null;
   partnerName: string | null;
   atRisk: boolean;

@@ -5,7 +5,7 @@ import { ActivityDetail } from "@/components/ActivityDetail";
 import type { ScheduleRow } from "@/lib/schedule/types";
 
 const row = (over: Partial<ScheduleRow> = {}): ScheduleRow => ({
-  id: "a1", externalId: 101, wbsCode: "1.2", name: "MEP R/I L2", canonicalScope: "Overhead MEP Rough-In",
+  id: "a1", externalId: 101, wbsCode: "1.2", name: "MEP R/I L2", canonicalScope: "Overhead MEP Rough-In", benchmark: null,
   disciplineName: "Mechanical", partnerName: "TDIndustries", atRisk: false, atRiskItem: null, procurement: null,
   type: "task", isCritical: false, outlineLevel: 2,
   plannedStart: "2026-08-03T08:00:00.000Z", plannedFinish: "2026-08-07T17:00:00.000Z",
@@ -18,6 +18,18 @@ const row = (over: Partial<ScheduleRow> = {}): ScheduleRow => ({
 afterEach(() => cleanup());
 
 describe("ActivityDetail", () => {
+  it("shows the historical span ranges for the activity's standard name, and flags an outlier", () => {
+    const range = { p25: 12.4, median: 15, p75: 20.6, n: 9, typeN: 3, typeShare: 0.375 };
+    render(<ActivityDetail row={row({ benchmark: { actual: range, planned: null, projectDays: 60, outside: true } })} />);
+    expect(screen.getByText("History · Overhead MEP Rough-In")).toBeTruthy();
+    expect(screen.getByText(/Actual: 12–21 working days, median 15/)).toBeTruthy();
+    expect(screen.getByText(/9 projects, 3 of this type/)).toBeTruthy();
+    expect(screen.queryByText(/Planned: \d/)).toBeNull();
+    expect(screen.getByText("This project: 60 working days (outside the usual range)")).toBeTruthy();
+    cleanup();
+    render(<ActivityDetail row={row()} />);
+    expect(screen.queryByText(/History/)).toBeNull();
+  });
   it("shows planned vs expected dates with the drift delta", () => {
     render(<ActivityDetail row={row()} />);
     expect(screen.getByText(/Planned: Aug 3 → Aug 7/)).toBeTruthy();

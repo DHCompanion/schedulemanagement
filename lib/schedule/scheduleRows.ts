@@ -5,6 +5,7 @@ import { baselineProgress } from "@/lib/lookahead/computeLookahead";
 import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries } from "@/lib/updates/updateService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
+import { getProjectBenchmarks } from "@/lib/benchmarks/benchmarkService";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 import { stableActivityKey } from "@/lib/msp/stableKey";
 import { countPushesByDriver } from "./pushLinks";
@@ -55,7 +56,7 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
   });
   const drift = projectDrift(latest.activities, forecasts, progressByKey);
 
-  const scopeDict = await getDictionary();
+  const [scopeDict, benchmarks] = await Promise.all([getDictionary(), getProjectBenchmarks(projectId)]);
   const trades = await resolveActivityTrades(
     projectId,
     latest.activities.map((a) => ({ id: a.id, name: a.name })),
@@ -127,6 +128,7 @@ export async function getScheduleData(projectId: string): Promise<ScheduleData |
       wbsCode: a.wbsCode,
       name: a.name,
       canonicalScope: scopeDict.get(normalizeName(a.name)) ?? null,
+      benchmark: benchmarks.get(scopeDict.get(normalizeName(a.name)) ?? "") ?? null,
       disciplineName: trades.get(a.id)?.disciplineName ?? null,
       partnerName: trades.get(a.id)?.partnerName ?? null,
       atRisk,
