@@ -39,7 +39,8 @@ export interface HistoryImport {
 async function save(projectId: string, fields: Record<string, string>): Promise<string | null> {
   const body = new FormData();
   for (const [k, v] of Object.entries(fields)) body.set(k, v);
-  const res = await fetch(appPath(`/api/history/${projectId}`), { method: "POST", body, redirect: "manual" });
+  const res = await fetch(appPath(`/api/history/${projectId}`), { method: "POST", body, redirect: "manual" }).catch(() => null);
+  if (!res) return "Save failed: no connection.";
   if (res.ok || res.type === "opaqueredirect") return null;
   return (await res.json().catch(() => null))?.error?.message ?? "Save failed.";
 }
