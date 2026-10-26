@@ -29,12 +29,12 @@ export interface CompletenessSummary {
   byCoarseScope: { coarseScope: string; count: number }[];
 }
 
-// aliases: a renamed rule's old spelling (normalized) → its current name, so
-// activities still spelled the old way stay flagged.
+// dictionary: raw name (normalized) → its standard name, so an activity mapped
+// to a coarse name (an old spelling, a variant) is flagged under that name.
 export function checkCompleteness(
   activities: CompletenessActivity[],
   splitRules: Map<string, string[]>,
-  aliases: Map<string, string> = new Map(),
+  dictionary: Map<string, string> = new Map(),
 ): CompletenessIssue[] {
   // Match case- and whitespace-insensitively, but report the rule's own spelling
   // — that string is the key everything downstream (dismissals, accepted splits)
@@ -47,7 +47,7 @@ export function checkCompleteness(
   const issues: CompletenessIssue[] = [];
   for (const a of activities) {
     const key = normalizeName(a.name);
-    const rule = byName.get(key) ?? byName.get(normalizeName(aliases.get(key) ?? ""));
+    const rule = byName.get(key) ?? byName.get(normalizeName(dictionary.get(key) ?? ""));
     if (!rule) continue;
     issues.push({
       canonicalActivityKey: a.canonicalActivityKey,

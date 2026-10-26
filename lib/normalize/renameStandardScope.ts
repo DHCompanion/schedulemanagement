@@ -98,9 +98,3 @@ export async function deleteStandardScope(scope: string): Promise<void> {
     prisma.standardScope.delete({ where: { name } }),
   ]);
 }
-
-/** Old spelling (normalized) → the name it was renamed to. */
-export async function getRenameAliases(): Promise<Map<string, string>> {
-  const rows = await prisma.scopeDictionaryEntry.findMany({ where: { createdBy: RENAME_ALIAS } });
-  return new Map(rows.map((r) => [r.normalizedName, r.canonicalScope]));
-}

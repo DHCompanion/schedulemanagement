@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { normalizeName } from "@/lib/normalize/normalizeName";
-import { settleName } from "@/lib/normalize/normalizationService";
+import { settleNames, type NameOutcome } from "@/lib/normalize/normalizationService";
 import { deleteStandardScope, renameStandardScope } from "@/lib/normalize/renameStandardScope";
 
 // Reviewed naming spreadsheets -> dictionary writes (scripts/apply-naming-review.ts).
@@ -170,29 +170,26 @@ export async function applyNamingPlan(plan: NamingPlan) {
   // Several rows can share a key; the last one is the reviewer's final word.
   const finalOps = new Map(plan.ops.filter((op): op is Exclude<NamingOp, { kind: "rename" | "delete" }> => op.kind !== "rename" && op.kind !== "delete").map((op) => [normalizeName(op.name), op]));
   finalOps.delete("");
+  const unmap: string[] = [];
+  const settle: { normalizedName: string; outcome: NameOutcome }[] = [];
   for (const [key, op] of finalOps) {
     if (op.kind === "unmap") {
-      if (entryOf.delete(key)) {
-        await prisma.scopeDictionaryEntry.delete({ where: { normalizedName: key } });
-        counts.unmapped++;
-      }
+      if (entryOf.has(key)) unmap.push(key);
     } else if (op.kind === "map") {
-      if (entryOf.get(key) === op.scope) continue;
-      await settleName(key, { mapTo: op.scope });
-      entryOf.set(key, op.scope);
-      counts.mapped++;
+      if (entryOf.get(key) !== op.scope) settle.push({ normalizedName: key, outcome: { mapTo: op.scope } });
     } else if (op.kind === "ignore") {
-      if (isIgnored.has(key)) continue;
-      await settleName(key, { ignore: true });
-      isIgnored.add(key);
-      counts.ignored++;
-    } else {
-      const sig = `${op.class}:${op.covers.join("+")}`;
-      if (classOf.get(key) === sig) continue;
-      await settleName(key, { class: op.class, covers: op.covers });
-      classOf.set(key, sig);
-      counts.classified++;
+      if (!isIgnored.has(key)) settle.push({ normalizedName: key, outcome: { ignore: true } });
+    } else if (classOf.get(key) !== `${op.class}:${op.covers.join("+")}`) {
+      settle.push({ normalizedName: key, outcome: { class: op.class, covers: op.covers } });
     }
+  }
+  await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: { in: unmap } } });
+  await settleNames(settle);
+  counts.unmapped = unmap.length;
+  for (const { outcome } of settle) {
+    if ("mapTo" in outcome) counts.mapped++;
+    else if ("ignore" in outcome) counts.ignored++;
+    else counts.classified++;
   }
   // A request for a name the sheet already settled the same way is settled too.
   const keys = plan.ops.filter((o) => o.kind === "map" || o.kind === "ignore" || o.kind === "class").map((o) => normalizeName(o.name));

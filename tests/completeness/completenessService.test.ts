@@ -1,6 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { prisma } from "@/lib/db";
 import { getCompleteness, dismissIssue } from "@/lib/completeness/completenessService";
+import { acceptSplit } from "@/lib/completeness/acceptSplit";
 
 const hasDb = !!process.env.DATABASE_URL;
 
@@ -8,9 +9,13 @@ describe.runIf(hasDb)("completenessService", () => {
   let projectId = "";
   let projectId2 = "";
   const coarse = `ZZ Coarse ${Date.now()}`;
+  const tag = `zc${Date.now()}`;
 
   afterAll(async () => {
     await prisma.scopeSplitRule.deleteMany({ where: { coarseScope: coarse } });
+    await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: { contains: tag } } });
+    await prisma.scopeNameClass.deleteMany({ where: { normalizedName: { contains: tag } } });
+    await prisma.project.deleteMany({ where: { name: { contains: tag } } });
     if (projectId) await prisma.project.delete({ where: { id: projectId } });
     if (projectId2) await prisma.project.delete({ where: { id: projectId2 } });
     await prisma.$disconnect();
@@ -55,6 +60,28 @@ describe.runIf(hasDb)("completenessService", () => {
     expect(after.issues).toHaveLength(0);
 
     await prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: coarse.toLowerCase() } });
+  }, 30000);
+
+  it("flags an activity whose name is mapped to a split rule's coarse name", async () => {
+    await prisma.scopeSplitRule.upsert({
+      where: { coarseScope_finerScope: { coarseScope: coarse, finerScope: "Finer A" } },
+      create: { coarseScope: coarse, finerScope: "Finer A" }, update: {},
+    });
+    await prisma.scopeDictionaryEntry.create({ data: { normalizedName: `mep rough ${tag}`, canonicalScope: coarse } });
+    const pid = await makeProjectWithActivity(`Mapped ${tag}`, `MEP Rough ${tag}`);
+    const { issues, names } = await getCompleteness(pid);
+    expect(issues.map((i) => [i.name, i.coarseScope])).toEqual([[`MEP Rough ${tag}`, coarse]]);
+    expect(names[0].finerScopes).toEqual(["Finer A"]);
+  }, 30000);
+
+  it("flags a name classified coarse with the names it covers, and splits it", async () => {
+    await prisma.scopeNameClass.create({ data: { normalizedName: `mob + icra ${tag}`, kind: "coarse", covers: ["Mobilization", "ICRA Setup"] } });
+    await prisma.scopeNameClass.create({ data: { normalizedName: `patch ${tag}`, kind: "coarse", covers: [] } });
+    const pid = await makeProjectWithActivity(`Class ${tag}`, `Mob + ICRA ${tag}`);
+    const { issues } = await getCompleteness(pid);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ coarseScope: `mob + icra ${tag}`, finerScopes: ["Mobilization", "ICRA Setup"] });
+    expect(await acceptSplit(pid, issues[0].coarseScope)).toMatchObject({ splitCount: 1 });
   }, 30000);
 
   it("scopes dismissal per project", async () => {

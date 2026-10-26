@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import { applyNamingPlan, listChanges, planListChange, planNamingSheet } from "@/lib/normalize/namingSheet";
 
@@ -156,6 +156,26 @@ describe.runIf(!!process.env.DATABASE_URL)("applyNamingPlan (db)", () => {
     });
     expect((await prisma.standardScope.findMany({ where: { name: { contains: `loor ${tag}` } } })).map((s) => s.name)).toEqual([`Finish Floor ${tag}`]);
   }, 30000);
+
+  it("writes a large batch in a few set-based statements, not one transaction per row", async () => {
+    await prisma.standardScope.create({ data: { name: `Bulk ${tag}` } });
+    await prisma.scopeIgnoredName.create({ data: { normalizedName: `bulk 0 ${tag}` } });
+    await prisma.scopeDictionaryEntry.create({ data: { normalizedName: `bulk 2 ${tag}`, canonicalScope: `Old ${tag}` } });
+    const ops = Array.from({ length: 1500 }, (_, i) =>
+      i % 3 === 0 ? { kind: "map" as const, name: `Bulk ${i} ${tag}`, scope: `Bulk ${tag}` }
+        : i % 3 === 1 ? { kind: "ignore" as const, name: `Bulk ${i} ${tag}` }
+          : { kind: "class" as const, name: `Bulk ${i} ${tag}`, class: "coarse" as const, covers: [`Bulk ${tag}`] });
+    // Each transaction is a round trip to Neon; one per row made a 6,000-row sheet take over 10 minutes.
+    const tx = vi.spyOn(prisma, "$transaction");
+    expect(await applyNamingPlan({ standard: null, added: [], problems: [], ops })).toMatchObject({ mapped: 500, ignored: 500, classified: 500 });
+    expect(tx.mock.calls.length).toBeLessThan(10);
+    tx.mockRestore();
+    expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: `bulk 0 ${tag}` } })).toMatchObject({ canonicalScope: `Bulk ${tag}` });
+    expect(await prisma.scopeIgnoredName.findUnique({ where: { normalizedName: `bulk 0 ${tag}` } })).toBeNull();
+    expect(await prisma.scopeDictionaryEntry.findUnique({ where: { normalizedName: `bulk 2 ${tag}` } })).toBeNull();
+    expect(await prisma.scopeNameClass.findUnique({ where: { normalizedName: `bulk 2 ${tag}` } })).toMatchObject({ kind: "coarse", covers: [`Bulk ${tag}`] });
+    expect(await prisma.scopeIgnoredName.count({ where: { normalizedName: { startsWith: "bulk ", endsWith: tag } } })).toBe(500);
+  }, 60000);
 
   it("lets the last row for a name win", async () => {
     const name = `Twice ${tag}`;
