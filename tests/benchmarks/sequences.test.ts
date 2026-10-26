@@ -55,8 +55,11 @@ describe("aggregateFacts", () => {
     expect(sequences).toContainEqual({ fromScope: "Frame Walls", toScope: "Install Sheetrock", groupKind: "sector", groupValue: "Healthcare", projects: 2, base: 3, type: "FS", lagDays: 2 });
     expect(groups).toContainEqual({ groupKind: "sector", groupValue: "Healthcare", projects: 4 });
     expect(groups).toContainEqual({ groupKind: "buildingType", groupValue: "Clinic", projects: 2 });
-    // A link seen in only one project of a group isn't kept.
-    expect(sequences.filter((s) => s.groupValue === "OR Suite")).toEqual([]);
+    // OR Suite has both names but never links them: its row records 0 of 1, pulling the blended share down.
+    expect(sequences).toContainEqual({ fromScope: "Frame Walls", toScope: "Install Sheetrock", groupKind: "buildingType", groupValue: "OR Suite", projects: 0, base: 1, type: "FS", lagDays: 0 });
+    // A link seen in only one project of a sector isn't kept at all.
+    const lone = aggregateFacts([fact("Clinic", ["Frame Walls", "Install Sheetrock"], [], true)]).sequences;
+    expect(lone).toEqual([]);
   });
 });
 

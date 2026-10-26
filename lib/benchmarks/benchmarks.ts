@@ -269,7 +269,12 @@ export function scheduleFacts(
   return { scopes: new Set(scopeOf.values()), critical, pairs };
 }
 
-/** Criticality per name and links between names, per sector and building type. Links seen in fewer than minPairProjects projects of a group are dropped. */
+/**
+ * Criticality per name and links between names, per sector and building type.
+ * A sector keeps links seen in at least minPairProjects of its projects; each
+ * building type keeps every link its sector keeps that it has both names for,
+ * even at 0 or 1 links, so a type that rarely links a pair pulls its share down.
+ */
 export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): {
   criticality: CriticalityStat[];
   sequences: SequenceStat[];
@@ -287,6 +292,8 @@ export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): {
   }
   const criticality: CriticalityStat[] = [];
   const sequences: SequenceStat[] = [];
+  type Links = Map<string, { types: string[]; lags: number[] }>;
+  const linked: { groupKind: GroupKind; groupValue: string; fs: ProjectFacts[]; links: Links }[] = [];
   for (const { groupKind, groupValue, facts: fs } of groups.values()) {
     const crit = new Map<string, { n: number; critical: number }>();
     const links = new Map<string, { types: string[]; lags: number[] }>();
@@ -305,12 +312,25 @@ export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): {
       }
     }
     for (const [canonicalScope, c] of crit) criticality.push({ canonicalScope, groupKind, groupValue, ...c });
-    for (const [key, l] of links) {
-      if (l.types.length < minPairProjects) continue;
-      const [fromScope, toScope] = JSON.parse(key) as [string, string];
-      const base = fs.filter((f) => f.scopes.has(fromScope) && f.scopes.has(toScope)).length;
-      sequences.push({ fromScope, toScope, groupKind, groupValue, projects: l.types.length, base, type: mode(l.types), lagDays: quartiles(l.lags).median });
-    }
+    linked.push({ groupKind, groupValue, fs, links });
+  }
+  const push = (g: (typeof linked)[number], key: string) => {
+    const l = g.links.get(key) ?? { types: [], lags: [] };
+    const [fromScope, toScope] = JSON.parse(key) as [string, string];
+    const base = g.fs.filter((f) => f.scopes.has(fromScope) && f.scopes.has(toScope)).length;
+    if (base === 0) return;
+    // A building-type row with no links of its own only carries its count; type and lag come from the sector.
+    const [type, lagDays] = l.types.length ? [mode(l.types), quartiles(l.lags).median] : ["FS", 0];
+    sequences.push({ fromScope, toScope, groupKind: g.groupKind, groupValue: g.groupValue, projects: l.types.length, base, type, lagDays });
+  };
+  const sectorPairs = new Map<string, string[]>();
+  for (const g of linked.filter((g) => g.groupKind === "sector")) {
+    const keys = [...g.links].filter(([, l]) => l.types.length >= minPairProjects).map(([key]) => key);
+    sectorPairs.set(g.groupValue, keys);
+    for (const key of keys) push(g, key);
+  }
+  for (const g of linked.filter((g) => g.groupKind === "buildingType")) {
+    for (const key of sectorPairs.get(g.fs[0].sector) ?? []) push(g, key);
   }
   const sizes = [...groups.values()].map(({ groupKind, groupValue, facts: fs }) => ({ groupKind, groupValue, projects: fs.length }));
   return { criticality, sequences, groups: sizes };
