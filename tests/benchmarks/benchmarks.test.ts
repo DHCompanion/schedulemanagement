@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aggregate, blend, outsideRange, quartiles, scopeSpans, scopeWorkedDays } from "@/lib/benchmarks/benchmarks";
+import { aggregate, blend, outsideRange, quartiles, scopeSpans, scopeWorkedDays, withoutProcurement } from "@/lib/benchmarks/benchmarks";
 
 const d = (s: string) => new Date(`${s}T08:00:00Z`);
 const act = (name: string, start: string, finish: string, actual?: [string | null, string | null]) => ({
@@ -75,5 +75,19 @@ describe("outsideRange", () => {
   it("flags beyond the Tukey fences P25 − 1.5·IQR and P75 + 1.5·IQR", () => {
     const r = { p25: 10, median: 15, p75: 20 };
     expect([-6, -5, 35, 36].map((x) => outsideRange(x, r))).toEqual([true, false, false, true]);
+  });
+});
+
+describe("withoutProcurement", () => {
+  it("unnames lines under a procurement summary, except preconstruction steps", () => {
+    const line = (externalUid: number, name: string, parentExternalUid: number | null) => ({ externalUid, name, parentExternalUid });
+    const acts = [
+      line(1, "Long Lead Items", null), line(2, "Doors", 1),
+      line(3, "Interior Finishout", null), line(4, "Doors", 3),
+      line(5, "Submittal Review", null), line(6, "Submittals", 5),
+      line(7, "Equipment Install", null), line(8, "Doors", 7),
+    ];
+    const names = withoutProcurement(acts, new Map([["doors", "Install Doors & Hardware"], ["submittals", "Submittals"]])).map((a) => a.name);
+    expect(names).toEqual(["Long Lead Items", "", "Interior Finishout", "Doors", "Submittal Review", "Submittals", "Equipment Install", "Doors"]);
   });
 });

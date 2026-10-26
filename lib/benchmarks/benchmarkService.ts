@@ -1,15 +1,15 @@
 import { prisma } from "@/lib/db";
 import { importQuality } from "@/lib/health/healthService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
-import { aggregate, aggregateFacts, blend, blendShare, outsideRange, scheduleFacts, scopeSpans, scopeWorkedDays, type Contribution, type ProjectFacts, type StoredMeasure, type Quartiles, type ScopeBenchmarkView, type ScopeRanges } from "@/lib/benchmarks/benchmarks";
+import { aggregate, aggregateFacts, blend, blendShare, outsideRange, scheduleFacts, scopeSpans, scopeWorkedDays, type Contribution, type ProjectFacts, type StoredMeasure, type Quartiles, type ScopeBenchmarkView, type ScopeRanges, withoutProcurement } from "@/lib/benchmarks/benchmarks";
 
 // Rough and junk files feed no benchmarks (Q70).
 const ELIGIBLE = new Set(["as_built", "baseline"]);
 
-async function firstEligible(importIds: string[]) {
+async function firstEligible(importIds: string[], dictionary: Map<string, string>) {
   for (const id of importIds) {
     const imp = await prisma.scheduleImport.findUniqueOrThrow({ where: { id }, include: { activities: true, relationships: true } });
-    if (ELIGIBLE.has(importQuality(imp).tier)) return imp;
+    if (ELIGIBLE.has(importQuality(imp).tier)) return { ...imp, activities: withoutProcurement(imp.activities, dictionary) };
   }
   return null;
 }
@@ -33,9 +33,9 @@ export async function recomputeBenchmarks(): Promise<{ projects: number; rows: n
   let contributing = 0;
   for (const p of projects) {
     const ids = p.imports.map((i) => i.id);
-    const earliest = await firstEligible(ids);
+    const earliest = await firstEligible(ids, dictionary);
     if (!earliest) continue;
-    const latest = (await firstEligible(ids.reverse())) ?? earliest;
+    const latest = (await firstEligible(ids.reverse(), dictionary)) ?? earliest;
     contributing++;
     facts.push({ sector: p.sector!, buildingType: p.buildingType, ...scheduleFacts(earliest.activities, earliest.relationships, dictionary, earliest.minutesPerDay ?? 480) });
     for (const [measure, imp] of [["planned", earliest], ["actual", latest]] as const) {
@@ -107,7 +107,8 @@ export async function getProjectBenchmarks(projectId: string): Promise<Map<strin
   ]);
   if (ranges.size === 0) return new Map();
   const latest = await prisma.scheduleImport.findFirst({ where: { projectId }, orderBy: { importedAt: "desc" }, include: { activities: true } });
-  const spans = latest ? scopeSpans(latest.activities, await getDictionary(), "planned") : new Map<string, number>();
+  const dictionary = await getDictionary();
+  const spans = latest ? scopeSpans(withoutProcurement(latest.activities, dictionary), dictionary, "planned") : new Map<string, number>();
   const views = new Map<string, ScopeBenchmarkView>();
   for (const [scope, days] of spans) {
     const r = ranges.get(scope);
