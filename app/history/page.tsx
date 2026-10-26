@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { PROJECT_TYPES, SECTORS, fiscalYear } from "@/lib/historical";
+import { PROJECT_TYPES, SECTORS, SUBTYPES, fiscalYear } from "@/lib/historical";
 import { appPath } from "@/lib/http";
 import { isAdminSession } from "@/lib/adminSession";
 import { getBenchmarkStatus } from "@/lib/benchmarks/benchmarkService";
@@ -10,13 +10,14 @@ import { HistoryTable, type HistoryGroup, type HistoryImport, type HistoryRow } 
 
 export const dynamic = "force-dynamic";
 
-type Query = { q?: string; fy?: string; type?: string; bench?: string; group?: string; sort?: string; dir?: string; open?: string };
+type Query = { q?: string; fy?: string; type?: string; sub?: string; bench?: string; group?: string; sort?: string; dir?: string; open?: string };
 
 const date = (d: Date | null) => d?.toISOString().slice(0, 10) ?? null;
 const SORTS: Record<string, (r: HistoryRow) => string | number> = {
   name: (r) => r.name.toLowerCase(),
   fy: (r) => r.fy ?? 0,
   type: (r) => r.buildingType ?? "",
+  sub: (r) => r.subType ?? "",
   schedules: (r) => r.schedules,
   start: (r) => r.start ?? "",
   days: (r) => r.workDays ?? -1,
@@ -34,7 +35,7 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
     prisma.project.findMany({
       where: { status: "historical" },
       select: {
-        id: true, name: true, externalProjectKey: true, sector: true, buildingType: true, sizeSqFt: true, useInBenchmarks: true, updatedAt: true,
+        id: true, name: true, externalProjectKey: true, sector: true, buildingType: true, subType: true, sizeSqFt: true, useInBenchmarks: true, updatedAt: true,
         imports: { orderBy: { importedAt: "asc" }, select: { fileName: true, projectStart: true, projectFinish: true, activityCount: true } },
       },
     }),
@@ -43,7 +44,7 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
   const all: HistoryRow[] = projects.map((p) => {
     const latest = p.imports.at(-1);
     return {
-      id: p.id, name: p.name, fy: fiscalYear(p.externalProjectKey), buildingType: p.buildingType, sizeSqFt: p.sizeSqFt,
+      id: p.id, name: p.name, fy: fiscalYear(p.externalProjectKey), buildingType: p.buildingType, subType: p.subType, sizeSqFt: p.sizeSqFt,
       useInBenchmarks: p.useInBenchmarks, schedules: p.imports.length,
       start: date(latest?.projectStart ?? null), finish: date(latest?.projectFinish ?? null),
       workDays: latest?.projectStart && latest.projectFinish ? workingDaysBetween(latest.projectStart, latest.projectFinish) : null,
@@ -59,6 +60,7 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
     (!q || r.name.toLowerCase().includes(q) || files.get(r.id)!.some((f) => f.includes(q))) &&
     (!query.fy || String(r.fy) === query.fy) &&
     (!query.type || (query.type === "none" ? !r.buildingType : r.buildingType === query.type)) &&
+    (!query.sub || (query.sub === "none" ? !r.subType : r.subType === query.sub)) &&
     (!query.bench || r.useInBenchmarks === (query.bench === "in")),
   );
   const sort = SORTS[query.sort ?? ""] ? query.sort! : "name";
@@ -127,6 +129,11 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
             <optgroup key={sector} label={sector}>{types.map((t) => <option key={t}>{t}</option>)}</optgroup>
           ))}
         </select>
+        <select name="sub" defaultValue={query.sub ?? ""} aria-label="Subtype" className={select}>
+          <option value="">All subtypes</option>
+          <option value="none">No subtype</option>
+          {[...new Set(Object.values(SUBTYPES).flat())].map((t) => <option key={t}>{t}</option>)}
+        </select>
         <select name="bench" defaultValue={query.bench ?? ""} aria-label="Benchmarks" className={select}>
           <option value="">In or out of benchmarks</option>
           <option value="in">In benchmarks</option>
@@ -146,7 +153,7 @@ export default async function HistoryPage(props: { searchParams: Promise<Query> 
       {rows.length === 0 ? (
         <p className="text-slate-500">No historical projects match.</p>
       ) : (
-        <HistoryTable groups={grouped} admin={admin} types={types} query={query} sort={sort} dir={dir === 1 ? "asc" : "desc"} openId={openId} openImports={openImports} />
+        <HistoryTable groups={grouped} admin={admin} types={types} subTypes={SUBTYPES} query={query} sort={sort} dir={dir === 1 ? "asc" : "desc"} openId={openId} openImports={openImports} />
       )}
     </main>
   );

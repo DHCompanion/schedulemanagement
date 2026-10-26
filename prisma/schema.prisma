@@ -17,6 +17,8 @@ model Project {
   client              String?
   sector              String?
   buildingType        String?
+  // One of SUBTYPES[buildingType] (lib/historical.ts), when the type has a list.
+  subType             String?
   sizeSqFt            Int?
   contractValue       Decimal? @db.Decimal(14, 2)
   region              String?

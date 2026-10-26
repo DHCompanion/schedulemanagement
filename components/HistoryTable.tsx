@@ -12,6 +12,7 @@ export interface HistoryRow {
   name: string;
   fy: number | null;
   buildingType: string | null;
+  subType: string | null;
   sizeSqFt: number | null;
   useInBenchmarks: boolean;
   schedules: number;
@@ -46,15 +47,16 @@ async function save(projectId: string, fields: Record<string, string>): Promise<
 }
 
 const COLUMNS: { key: string; label: string; right?: boolean }[] = [
-  { key: "name", label: "Project" }, { key: "fy", label: "FY" }, { key: "type", label: "Project type" },
+  { key: "name", label: "Project" }, { key: "fy", label: "FY" }, { key: "type", label: "Project type" }, { key: "sub", label: "Subtype" },
   { key: "schedules", label: "Schedules", right: true }, { key: "start", label: "Start → finish" },
   { key: "days", label: "Work days", right: true }, { key: "activities", label: "Activities", right: true },
 ];
 
-export function HistoryTable({ groups, admin, types, query, sort, dir, openId, openImports }: {
+export function HistoryTable({ groups, admin, types, subTypes, query, sort, dir, openId, openImports }: {
   groups: HistoryGroup[];
   admin: boolean;
   types: { sector: string; types: string[] }[];
+  subTypes: Record<string, readonly string[]>;
   query: Record<string, string | undefined>;
   sort: string;
   dir: "asc" | "desc";
@@ -64,6 +66,7 @@ export function HistoryTable({ groups, admin, types, query, sort, dir, openId, o
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkType, setBulkType] = useState("");
+  const [bulkSub, setBulkSub] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rows = groups.flatMap((g) => g.rows);
@@ -102,6 +105,13 @@ export function HistoryTable({ groups, admin, types, query, sort, dir, openId, o
             {typeOptions}
           </select>
           <button disabled={busy || !bulkType} onClick={() => run(picked.map((id) => [id, { buildingType: bulkType }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Apply</button>
+          <select value={bulkSub} onChange={(e) => setBulkSub(e.target.value)} aria-label="Subtype for selected" className="h-8 rounded border border-blue-300 bg-white px-2">
+            <option value="">Set subtype…</option>
+            {Object.entries(subTypes).map(([type, subs]) => (
+              <optgroup key={type} label={type}>{subs.map((t) => <option key={t}>{t}</option>)}</optgroup>
+            ))}
+          </select>
+          <button disabled={busy || !bulkSub} onClick={() => run(picked.map((id) => [id, { subType: bulkSub }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Apply</button>
           <button disabled={busy} onClick={() => run(picked.map((id) => [id, { useInBenchmarks: "false" }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Leave out of benchmarks</button>
           <button disabled={busy} onClick={() => run(picked.map((id) => [id, { useInBenchmarks: "true" }]))} className="h-8 rounded border border-blue-300 bg-white px-3 disabled:opacity-50">Use in benchmarks</button>
           <button onClick={() => setSelected(new Set())} className="h-8 px-2 text-blue-700">Clear</button>
@@ -130,7 +140,7 @@ export function HistoryTable({ groups, admin, types, query, sort, dir, openId, o
               <Fragment key={g.label}>
                 {g.label && (
                   <tr className="border-t border-slate-200 bg-slate-50">
-                    <td colSpan={9} className="px-3 py-1.5 text-xs font-semibold text-slate-600">{g.label} · {g.rows.length}</td>
+                    <td colSpan={10} className="px-3 py-1.5 text-xs font-semibold text-slate-600">{g.label} · {g.rows.length}</td>
                   </tr>
                 )}
                 {g.rows.map((r) => {
@@ -154,6 +164,14 @@ export function HistoryTable({ groups, admin, types, query, sort, dir, openId, o
                               {typeOptions}
                             </select>
                           ) : (r.buildingType ?? <span className="text-amber-700">No project type</span>)}
+                        </td>
+                        <td className="px-2 py-1">
+                          {admin && subTypes[r.buildingType ?? ""] ? (
+                            <select value={r.subType ?? ""} disabled={busy} onChange={(e) => run([[r.id, { subType: e.target.value }]])} aria-label={`Subtype for ${r.name}`} className="h-8 rounded border border-slate-200 bg-white px-1">
+                              <option value="">—</option>
+                              {subTypes[r.buildingType!].map((t) => <option key={t}>{t}</option>)}
+                            </select>
+                          ) : (r.subType ?? <span className="text-slate-400">—</span>)}
                         </td>
                         <td className={`${cell} text-right`}>{r.schedules}</td>
                         <td className={`${cell} whitespace-nowrap text-slate-700`}>{r.start ?? "—"} → {r.finish ?? "—"}</td>
@@ -189,7 +207,7 @@ function OpenRow({ row, imports, admin, busy, run }: {
   return (
     <tr className="bg-slate-50">
       <td />
-      <td colSpan={8} className="px-2 pb-4 pt-1">
+      <td colSpan={9} className="px-2 pb-4 pt-1">
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex flex-[0_1_260px] flex-col gap-2 rounded border border-slate-200 bg-white p-3 text-sm">
             {admin ? (

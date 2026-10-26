@@ -2,15 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { appUrl } from "@/lib/http";
 import { isAdminRequest } from "@/lib/scope";
-import { TIER_OVERRIDES, parseDetails } from "@/lib/historical";
+import { SUBTYPES, TIER_OVERRIDES, parseDetails, parseSubType } from "@/lib/historical";
 
-// Admin edits on a historical project: its details (project type, which sets the sector; size;
+// Admin edits on a historical project: its details (project type, which sets the sector; subtype; size;
 // whether it feeds benchmarks) or one import's tier override. The only writes the library allows. Cross-project
 // on purpose, so there is no scope check — an OS-launched tool admin may edit any.
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   if (!(await isAdminRequest(req))) return error("Admin access required.", 403);
-  const project = await prisma.project.findUnique({ where: { id }, select: { status: true } });
+  const project = await prisma.project.findUnique({ where: { id }, select: { status: true, buildingType: true, subType: true } });
   if (project?.status !== "historical") return error("Historical project not found.", 404);
 
   const form = await req.formData();
@@ -33,8 +33,13 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   if (use !== null && use !== "true" && use !== "false") return error("useInBenchmarks must be true or false.", 422);
   try {
     const d = parseDetails({ sector: field("sector"), buildingType: field("buildingType"), sizeSqFt: field("sizeSqFt") });
+    const typeSent = form.has("buildingType") || form.has("sector");
+    const type = typeSent ? d.buildingType : project.buildingType;
+    // A type change keeps the subtype only if the new type has it too.
+    const subType = form.has("subType") ? parseSubType(type, field("subType")) : SUBTYPES[type ?? ""]?.includes(project.subType ?? "") ? project.subType : null;
     const data = {
-      ...((form.has("buildingType") || form.has("sector")) && { sector: d.sector, buildingType: d.buildingType }),
+      ...(typeSent && { sector: d.sector, buildingType: d.buildingType }),
+      ...((typeSent || form.has("subType")) && { subType }),
       ...(form.has("sizeSqFt") && { sizeSqFt: d.sizeSqFt }),
       ...(use !== null && { useInBenchmarks: use === "true" }),
     };

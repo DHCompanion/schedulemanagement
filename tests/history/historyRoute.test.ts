@@ -93,6 +93,23 @@ describe.runIf(!!process.env.DATABASE_URL)("POST /api/history/[id]", () => {
     expect((await prisma.project.findUniqueOrThrow({ where: { id } })).updatedAt.getTime()).toBeGreaterThan(before.getTime());
   });
 
+  it("sets a subtype from its type's list, keeping it only while the type allows it", async () => {
+    const { id } = await historical();
+    await post(id, { buildingType: "Special Procedure (EP, Cath, IR)" }, await admin());
+    expect((await post(id, { subType: "IR" }, await admin())).status).toBe(303);
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ subType: "IR" });
+    expect((await post(id, { subType: "MRI" }, await admin())).status).toBe(422);
+
+    // Multiple is in both lists, so it survives the move; IR would not.
+    await post(id, { subType: "Multiple" }, await admin());
+    await post(id, { buildingType: "Imaging & Radiology" }, await admin());
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ subType: "Multiple" });
+    await post(id, { buildingType: "GI/Endoscopy" }, await admin());
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ buildingType: "GI/Endoscopy", sector: "Healthcare", subType: null });
+    expect((await post(id, { subType: "IR" }, await admin())).status).toBe(422);
+    expect((await post(id, { buildingType: "Sterile Processing", subType: "" }, await admin())).status).toBe(303);
+  });
+
   it("only edits historical projects, and only their own imports", async () => {
     const live = await historical("active");
     expect((await post(live.id, { sector: "Healthcare" }, await admin())).status).toBe(404);
