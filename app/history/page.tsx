@@ -34,7 +34,10 @@ export default async function HistoryPage(props: { searchParams: Promise<{ fy?: 
       <Link href="/" className="text-sm text-slate-500">← Projects</Link>
       <div className="mb-4 mt-1 flex items-baseline justify-between">
         <h1 className="text-xl font-semibold">Historical schedules</h1>
-        <Link href="/history/names" className="text-sm text-slate-600 underline hover:text-slate-900">Name review</Link>
+        <div className="flex gap-4">
+          {admin && <Link href="/history/draft-baseline" className="text-sm text-slate-600 underline hover:text-slate-900">Draft baseline</Link>}
+          <Link href="/history/names" className="text-sm text-slate-600 underline hover:text-slate-900">Name review</Link>
+        </div>
       </div>
       {admin && (
         <form action={appPath("/api/history/benchmarks")} method="post" className="mb-4 flex flex-wrap items-center gap-3 rounded border border-slate-200 bg-white px-3 py-2 text-sm">

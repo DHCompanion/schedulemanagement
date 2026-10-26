@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aggregate, blend, outsideRange, quartiles, scopeSpans } from "@/lib/benchmarks/benchmarks";
+import { aggregate, blend, outsideRange, quartiles, scopeSpans, scopeWorkedDays } from "@/lib/benchmarks/benchmarks";
 
 const d = (s: string) => new Date(`${s}T08:00:00Z`);
 const act = (name: string, start: string, finish: string, actual?: [string | null, string | null]) => ({
@@ -31,6 +31,15 @@ describe("scopeSpans", () => {
       { ...act("Paint", "2025-01-01", "2025-06-01", ["2025-01-01", "2025-06-01"]), type: "summary" },
     ];
     expect(Object.fromEntries(scopeSpans(acts, dict, "actual"))).toEqual({ Paint: 1 });
+  });
+});
+
+describe("scopeWorkedDays", () => {
+  it("counts working days with any of the name's activities in progress, not the gaps between them", () => {
+    // L1 Mon 3 – Wed 5 Mar, L2 Mon 17 – Tue 18 Mar (two idle weeks between): 5 days worked, though the span is 12.
+    const acts = [act("Frame Walls L1", "2025-03-03", "2025-03-05"), act("Frame Walls L2", "2025-03-17", "2025-03-18"), act("Frame Walls L1", "2025-03-04", "2025-03-05")];
+    expect(Object.fromEntries(scopeWorkedDays(acts, dict))).toEqual({ "Frame Walls": 5 });
+    expect(Object.fromEntries(scopeSpans(acts, dict, "planned"))).toEqual({ "Frame Walls": 12 });
   });
 });
 

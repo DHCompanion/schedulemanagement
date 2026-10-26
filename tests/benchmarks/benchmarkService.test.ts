@@ -52,6 +52,10 @@ describe.runIf(!!process.env.DATABASE_URL)("benchmarkService (db)", () => {
       ["planned", "buildingType", "Clinic", 3, 4],
       ["planned", "buildingType", "OR Suite", 2, 9],
       ["planned", "sector", "Healthcare", 5, 6],
+      // One continuous activity per project: days worked equal the planned span.
+      ["worked", "buildingType", "Clinic", 3, 4],
+      ["worked", "buildingType", "OR Suite", 2, 9],
+      ["worked", "sector", "Healthcare", 5, 6],
     ]);
 
     // Clinic's 3 projects weigh 3/8 against the sector's median of 6.

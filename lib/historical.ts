@@ -30,7 +30,7 @@ export const PROJECT_TYPES = {
   "Higher Education": ["Higher Education - Misc.", "Middle School"],
 } as const;
 export const SECTORS = Object.keys(PROJECT_TYPES) as (keyof typeof PROJECT_TYPES)[];
-const SECTOR_OF = new Map<string, string>(SECTORS.flatMap((s) => PROJECT_TYPES[s].map((t) => [t, s] as const)));
+export const SECTOR_OF = new Map<string, string>(SECTORS.flatMap((s) => PROJECT_TYPES[s].map((t) => [t, s] as const)));
 // As-built and baseline have to come from the data; review can only demote.
 export const TIER_OVERRIDES = ["rough", "junk"] as const;
 

@@ -522,3 +522,14 @@ model ScopeSequence {
 
   @@id([fromScope, toScope, groupKind, groupValue])
 }
+
+// How many projects fed the benchmarks per sector and building type: the
+// denominator for "how often a name appears" in the draft baseline checklist.
+model BenchmarkGroup {
+  groupKind  String   // sector | buildingType
+  groupValue String
+  projects   Int
+  computedAt DateTime @default(now())
+
+  @@id([groupKind, groupValue])
+}

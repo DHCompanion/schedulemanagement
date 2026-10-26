@@ -218,3 +218,14 @@ Decisions, 2026-10-23 (Q65–Q71):
 - Assembly from statistics: links that appear in ≥ 50% of the projects containing both scopes; cycle break; open-end tie-off; P75 durations.
 - Hard error when there are fewer than 5 qualifying projects; warnings on thin scopes and links; confidence summary.
 - Output: a synthetic import with lineage, exported through the existing `lib/export`.
+
+Decisions, 2026-10-26:
+
+- **Output:** a preview page plus an MS Project XML download (`lib/baseline/draftMspdi.ts`), not a new project. `lib/export` only edits a project's original file, so drafts get their own small writer. The PM refines the draft in MS Project and imports it into the real project.
+- **Where:** `/history/draft-baseline`, admin only for v1.
+- **Minimum:** the hard stop is fewer than 5 **sector** projects. Building-type thinness is a warning, because blending leans on the sector.
+- **Durations:** P75 of **days worked** (`worked` measure: planned working days with any of the name's activities in progress), not the first-to-last span. Spans count idle months between phases (Doors & Hardware: 91 days as a span). Activity Detail and the Data Health check keep using spans (Q66).
+- **Checklist:** every name seen in the sector, pre-ticked at ≥ 25% of past projects. At 50%, an Imaging draft had 8 names.
+- **Links:** keep a link when ≥ 50% of the projects with both names use it. An activity left with no predecessor or successor gets its commonest one as a weaker link. Links are counted through milestones and unnamed activities.
+- **Out of v1:** size (Q67), split-rule children, phase grouping. Calendar: Mon–Fri, 8 hours, no holidays.
+- **Next:** a duration review. Some long names (Doors & Hardware, Light Fixtures) likely carry procurement or delivery lines mapped as work.

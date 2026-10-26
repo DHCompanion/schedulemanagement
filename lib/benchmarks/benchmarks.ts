@@ -7,6 +7,8 @@ import { isLeafActive } from "@/lib/msp/types";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 
 export type Measure = "planned" | "actual";
+/** "worked": planned working days on which any of the name's activities is in progress (drafts, 2026-10-26). */
+export type StoredMeasure = Measure | "worked";
 export type GroupKind = "sector" | "buildingType";
 
 export interface SpanActivity {
@@ -28,7 +30,7 @@ export interface Quartiles {
 
 export interface BenchmarkStat extends Quartiles {
   canonicalScope: string;
-  measure: Measure;
+  measure: StoredMeasure;
   groupKind: GroupKind;
   groupValue: string;
   n: number;
@@ -36,7 +38,7 @@ export interface BenchmarkStat extends Quartiles {
 
 export interface Contribution {
   scope: string;
-  measure: Measure;
+  measure: StoredMeasure;
   sector: string;
   buildingType: string | null;
   days: number;
@@ -50,7 +52,7 @@ export interface BenchmarkRange extends Quartiles {
   typeShare: number;
 }
 
-export type ScopeRanges = Record<Measure, BenchmarkRange | null>;
+export type ScopeRanges = Record<StoredMeasure, BenchmarkRange | null>;
 
 export interface ScopeBenchmarkView extends ScopeRanges {
   /** This project's own planned span for the name, from its latest import. */
@@ -89,6 +91,27 @@ export function scopeSpans(activities: SpanActivity[], dictionary: Map<string, s
     spans.set(scope, workingDaysBetween(start, new Date(b.finish)) + (isWeekend(start) ? 0 : 1));
   }
   return spans;
+}
+
+/**
+ * Planned working days on which at least one of a name's activities is in
+ * progress. Unlike the span, idle time between phases doesn't count: doors
+ * hung in phase 1 and phase 3 months apart are a few weeks of work, not months.
+ */
+export function scopeWorkedDays(activities: SpanActivity[], dictionary: Map<string, string>): Map<string, number> {
+  const days = new Map<string, Set<number>>();
+  for (const a of activities) {
+    if (!isLeafActive(a) || a.isMilestone || !a.plannedStart || !a.plannedFinish) continue;
+    const scope = dictionary.get(normalizeName(a.name));
+    if (!scope) continue;
+    const set = days.get(scope) ?? new Set<number>();
+    const day = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    for (let t = day(a.plannedStart); t <= day(a.plannedFinish); t += 86_400_000) {
+      if (!isWeekend(new Date(t))) set.add(t);
+    }
+    days.set(scope, set);
+  }
+  return new Map([...days].filter(([, s]) => s.size > 0).map(([scope, s]) => [scope, s.size]));
 }
 
 /** Linear-interpolated quartiles (the spreadsheet PERCENTILE method). */
@@ -194,9 +217,10 @@ const mode = (xs: string[]) => {
 };
 
 /**
- * One schedule's names, critical names and direct links between different
- * names. ponytail: direct links only; a link routed through an unmapped
- * activity is lost. Walk through unmapped activities if Phase 7 finds gaps.
+ * One schedule's names, critical names and links between different names.
+ * A link may run through activities with no standard name (milestones,
+ * unmapped tasks): Frame Walls → Inspection → Install Sheetrock counts as
+ * Frame Walls → Install Sheetrock, typed FS with no lag.
  */
 export function scheduleFacts(
   activities: FactActivity[],
@@ -213,22 +237,44 @@ export function scheduleFacts(
     scopeOf.set(a.externalUid, scope);
     if (a.isCritical) critical.add(scope);
   }
-  const seen = new Map<string, { types: string[]; lags: number[] }>();
+  const next = new Map<number, FactLink[]>();
   for (const l of links) {
-    const [from, to] = [scopeOf.get(l.predecessorExternalUid), scopeOf.get(l.successorExternalUid)];
-    if (l.crossProject || !from || !to || from === to) continue;
+    if (!l.crossProject) next.set(l.predecessorExternalUid, [...(next.get(l.predecessorExternalUid) ?? []), l]);
+  }
+  const seen = new Map<string, { types: string[]; lags: number[] }>();
+  const record = (from: string, to: string, type: string, lagDays: number) => {
+    if (from === to) return;
     const key = JSON.stringify([from, to]);
     const s = seen.get(key) ?? { types: [], lags: [] };
-    s.types.push(l.type);
-    s.lags.push((l.lagMinutes ?? 0) / minutesPerDay);
+    s.types.push(type);
+    s.lags.push(lagDays);
     seen.set(key, s);
+  };
+  for (const [uid, from] of scopeOf) {
+    // Walk forward until each path reaches an activity with a standard name.
+    const visited = new Set([uid]);
+    const stack = (next.get(uid) ?? []).map((l) => ({ l, direct: true }));
+    while (stack.length) {
+      const { l, direct } = stack.pop()!;
+      const to = l.successorExternalUid;
+      const scope = scopeOf.get(to);
+      if (scope) record(from, scope, direct ? l.type : "FS", direct ? (l.lagMinutes ?? 0) / minutesPerDay : 0);
+      else if (!visited.has(to)) {
+        visited.add(to);
+        for (const n of next.get(to) ?? []) stack.push({ l: n, direct: false });
+      }
+    }
   }
   const pairs = new Map([...seen].map(([k, s]) => [k, { type: mode(s.types), lagDays: quartiles(s.lags).median }]));
   return { scopes: new Set(scopeOf.values()), critical, pairs };
 }
 
 /** Criticality per name and links between names, per sector and building type. Links seen in fewer than minPairProjects projects of a group are dropped. */
-export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): { criticality: CriticalityStat[]; sequences: SequenceStat[] } {
+export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): {
+  criticality: CriticalityStat[];
+  sequences: SequenceStat[];
+  groups: { groupKind: GroupKind; groupValue: string; projects: number }[];
+} {
   const groups = new Map<string, { groupKind: GroupKind; groupValue: string; facts: ProjectFacts[] }>();
   for (const f of facts) {
     for (const [groupKind, groupValue] of [["sector", f.sector], ["buildingType", f.buildingType]] as const) {
@@ -266,7 +312,8 @@ export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): { cr
       sequences.push({ fromScope, toScope, groupKind, groupValue, projects: l.types.length, base, type: mode(l.types), lagDays: quartiles(l.lags).median });
     }
   }
-  return { criticality, sequences };
+  const sizes = [...groups.values()].map(({ groupKind, groupValue, facts: fs }) => ({ groupKind, groupValue, projects: fs.length }));
+  return { criticality, sequences, groups: sizes };
 }
 
 /** A share blended like blend(): (n·type + k·sector) / (n + k), nothing under MIN_SECTOR_PROJECTS. */
