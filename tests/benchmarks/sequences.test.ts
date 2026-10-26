@@ -9,6 +9,18 @@ const link = (p: number, s: number, type = "FS", lagMinutes: number | null = nul
 const dict = new Map([["frame l1", "Frame Walls"], ["frame l2", "Frame Walls"], ["hang", "Install Sheetrock"], ["tape", "Tape and Bed"]]);
 
 describe("scheduleFacts", () => {
+  it("follows links through activities with no standard name", () => {
+    const facts = scheduleFacts(
+      [a(1, "Frame L1"), a(2, "Inspection", false, { isMilestone: true }), a(3, "Unmapped"), a(4, "Hang"), a(5, "Tape")],
+      [link(1, 2, "SS", 480), link(2, 3), link(3, 4), link(4, 5), link(3, 1)],
+      dict, 480,
+    );
+    expect(Object.fromEntries(facts.pairs)).toEqual({
+      [JSON.stringify(["Frame Walls", "Install Sheetrock"])]: { type: "FS", lagDays: 0 },
+      [JSON.stringify(["Install Sheetrock", "Tape and Bed"])]: { type: "FS", lagDays: 0 },
+    });
+  });
+
   it("collects names, critical names and direct links between different names", () => {
     const facts = scheduleFacts(
       [a(1, "Frame L1", true), a(2, "Frame L2"), a(3, "Hang"), a(4, "Tape"), a(5, "Unmapped"), a(6, "Hang", true, { type: "summary" })],
@@ -32,7 +44,7 @@ describe("aggregateFacts", () => {
     pairs: new Map(linked ? [[key, { type: "FS", lagDays: 2 }]] : []),
   });
   it("counts criticality and links per sector and building type, against projects that have both names", () => {
-    const { criticality, sequences } = aggregateFacts([
+    const { criticality, sequences, groups } = aggregateFacts([
       fact("Clinic", ["Frame Walls", "Install Sheetrock"], ["Frame Walls"], true),
       fact("Clinic", ["Frame Walls", "Install Sheetrock"], [], true),
       fact("OR Suite", ["Frame Walls", "Install Sheetrock"], ["Frame Walls"], false),
@@ -41,8 +53,13 @@ describe("aggregateFacts", () => {
     expect(criticality).toContainEqual({ canonicalScope: "Frame Walls", groupKind: "sector", groupValue: "Healthcare", n: 4, critical: 3 });
     expect(criticality).toContainEqual({ canonicalScope: "Frame Walls", groupKind: "buildingType", groupValue: "Clinic", n: 2, critical: 1 });
     expect(sequences).toContainEqual({ fromScope: "Frame Walls", toScope: "Install Sheetrock", groupKind: "sector", groupValue: "Healthcare", projects: 2, base: 3, type: "FS", lagDays: 2 });
-    // A link seen in only one project of a group isn't kept.
-    expect(sequences.filter((s) => s.groupValue === "OR Suite")).toEqual([]);
+    expect(groups).toContainEqual({ groupKind: "sector", groupValue: "Healthcare", projects: 4 });
+    expect(groups).toContainEqual({ groupKind: "buildingType", groupValue: "Clinic", projects: 2 });
+    // OR Suite has both names but never links them: its row records 0 of 1, pulling the blended share down.
+    expect(sequences).toContainEqual({ fromScope: "Frame Walls", toScope: "Install Sheetrock", groupKind: "buildingType", groupValue: "OR Suite", projects: 0, base: 1, type: "FS", lagDays: 0 });
+    // A link seen in only one project of a sector isn't kept at all.
+    const lone = aggregateFacts([fact("Clinic", ["Frame Walls", "Install Sheetrock"], [], true)]).sequences;
+    expect(lone).toEqual([]);
   });
 });
 

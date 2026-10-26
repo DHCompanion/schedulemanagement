@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { importQuality } from "@/lib/health/healthService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
-import { aggregate, aggregateFacts, blend, blendShare, outsideRange, scheduleFacts, scopeSpans, type Contribution, type Measure, type ProjectFacts, type Quartiles, type ScopeBenchmarkView, type ScopeRanges } from "@/lib/benchmarks/benchmarks";
+import { aggregate, aggregateFacts, blend, blendShare, outsideRange, scheduleFacts, scopeSpans, scopeWorkedDays, type Contribution, type ProjectFacts, type StoredMeasure, type Quartiles, type ScopeBenchmarkView, type ScopeRanges } from "@/lib/benchmarks/benchmarks";
 
 // Rough and junk files feed no benchmarks (Q70).
 const ELIGIBLE = new Set(["as_built", "baseline"]);
@@ -43,9 +43,12 @@ export async function recomputeBenchmarks(): Promise<{ projects: number; rows: n
         contributions.push({ scope, measure, sector: p.sector!, buildingType: p.buildingType, days });
       }
     }
+    for (const [scope, days] of scopeWorkedDays(earliest.activities, dictionary)) {
+      contributions.push({ scope, measure: "worked", sector: p.sector!, buildingType: p.buildingType, days });
+    }
   }
   const rows = aggregate(contributions);
-  const { criticality, sequences } = aggregateFacts(facts);
+  const { criticality, sequences, groups } = aggregateFacts(facts);
   const computedAt = new Date();
   await prisma.$transaction([
     prisma.scopeBenchmark.deleteMany(),
@@ -54,6 +57,8 @@ export async function recomputeBenchmarks(): Promise<{ projects: number; rows: n
     prisma.scopeCriticality.createMany({ data: criticality.map((r) => ({ ...r, computedAt })) }),
     prisma.scopeSequence.deleteMany(),
     prisma.scopeSequence.createMany({ data: sequences.map((r) => ({ ...r, computedAt })) }),
+    prisma.benchmarkGroup.deleteMany(),
+    prisma.benchmarkGroup.createMany({ data: groups.map((r) => ({ ...r, computedAt })) }),
   ]);
   return { projects: contributing, rows: rows.length, criticality: criticality.length, sequences: sequences.length };
 }
@@ -75,8 +80,8 @@ export async function getBenchmarkRanges(sector: string | null, buildingType: st
   const stat = new Map(rows.map((r) => [`${r.canonicalScope}|${r.measure}|${r.groupKind}`, r]));
   const ranges = new Map<string, ScopeRanges>();
   for (const scope of new Set(rows.map((r) => r.canonicalScope))) {
-    const range = (m: Measure) => blend(stat.get(`${scope}|${m}|sector`), stat.get(`${scope}|${m}|buildingType`));
-    const r = { actual: range("actual"), planned: range("planned") };
+    const range = (m: StoredMeasure) => blend(stat.get(`${scope}|${m}|sector`), stat.get(`${scope}|${m}|buildingType`));
+    const r = { actual: range("actual"), planned: range("planned"), worked: range("worked") };
     if (r.actual || r.planned) ranges.set(scope, r);
   }
   return ranges;
