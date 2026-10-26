@@ -20,7 +20,7 @@ describe("checkCompleteness", () => {
     expect(issues[0].finerScopes).toEqual(["Electrical Rough-In", "Mechanical Rough-In", "Plumbing Rough-In"]);
   });
 
-  it("flags an activity still spelled like a renamed rule's old name, under the current name", () => {
+  it("flags an activity mapped to a rule's name (an old spelling or a variant), under that name", () => {
     const rules = new Map([["MEP Trim Out", ["A", "B"]]]);
     const issues = checkCompleteness([act({ name: "MEP Trimout" })], rules, new Map([["mep trimout", "MEP Trim Out"]]));
     expect(issues.map((i) => i.coarseScope)).toEqual(["MEP Trim Out"]);

@@ -1,7 +1,7 @@
 import { Prisma, type Activity, type ScheduleImport, type CompletenessSplit } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { finerActivityKey } from "@/lib/msp/canonicalKey";
-import { getSplitRules } from "@/lib/completeness/splitRuleService";
+import { getCompletenessRules } from "@/lib/completeness/splitRuleService";
 import { getCompleteness } from "@/lib/completeness/completenessService";
 
 type CoarseProgress = Pick<
@@ -42,7 +42,7 @@ export async function acceptSplit(
   });
   if (!latest) throw new Error("No imported schedule to split.");
 
-  const splitRules = await getSplitRules();
+  const splitRules = await getCompletenessRules();
   const finerScopes = splitRules.get(coarseScope);
   if (!finerScopes || finerScopes.length === 0) throw new Error("No split rule found for this coarse scope.");
 

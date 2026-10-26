@@ -13,6 +13,21 @@ export async function getSplitRules(): Promise<Map<string, string[]>> {
   return map;
 }
 
+/**
+ * What the completeness check flags: split rules, plus names classified coarse
+ * with the names they cover (keyed on the classified name). A split rule wins
+ * a clash. Kept apart from getSplitRules so the admin rule list stays rules.
+ */
+export async function getCompletenessRules(): Promise<Map<string, string[]>> {
+  const [rules, classes] = await Promise.all([
+    getSplitRules(),
+    prisma.scopeNameClass.findMany({ where: { kind: "coarse", NOT: { covers: { isEmpty: true } } } }),
+  ]);
+  const taken = new Set([...rules.keys()].map(normalizeName));
+  for (const c of classes) if (!taken.has(c.normalizedName)) rules.set(c.normalizedName, c.covers);
+  return rules;
+}
+
 export async function addSplitRule(coarseScope: string, finerScope: string, createdBy?: string): Promise<void> {
   if (!coarseScope.trim() || !finerScope.trim()) return;
   // Split rules are admin-only, so writing one is the deliberate act that puts

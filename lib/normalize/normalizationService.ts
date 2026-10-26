@@ -71,9 +71,7 @@ export async function addStandardScope(scope: string): Promise<string> {
   return existing?.name ?? (await prisma.standardScope.create({ data: { name } })).name;
 }
 
-// createdBy on the dictionary entry that maps a renamed name's old spelling to
-// its new name. Split rules match raw activity names, so completeness checks
-// follow these aliases.
+// createdBy on the dictionary entry a rename makes from the old spelling to the new name.
 export const RENAME_ALIAS = "rename";
 
 export type NameOutcome =
@@ -84,29 +82,30 @@ export type NameOutcome =
 // One name, one outcome: mapping, ignoring or classifying a name clears the
 // other two and any pending request for it. Callers check the scope is approved.
 export async function settleName(normalizedName: string, outcome: NameOutcome, personId?: number | null): Promise<void> {
-  const where = { normalizedName };
+  await settleNames([{ normalizedName, outcome }], personId);
+}
+
+// settleName for many names (one item per name) in one transaction of
+// set-based statements: a 6,000-row sheet was a 10-minute load at one
+// transaction per name against Neon.
+export async function settleNames(items: { normalizedName: string; outcome: NameOutcome }[], personId?: number | null): Promise<void> {
+  const names = (keep: (o: NameOutcome) => boolean) => items.filter((i) => keep(i.outcome)).map((i) => i.normalizedName);
+  const maps = items.flatMap((i) => ("mapTo" in i.outcome ? [{ normalizedName: i.normalizedName, canonicalScope: i.outcome.mapTo }] : []));
+  const classes = items.flatMap((i) => ("class" in i.outcome ? [{ normalizedName: i.normalizedName, kind: i.outcome.class, covers: i.outcome.covers }] : []));
+  const byScope = new Map<string, string[]>();
+  for (const m of maps) byScope.set(m.canonicalScope, [...(byScope.get(m.canonicalScope) ?? []), m.normalizedName]);
+  const all = { in: items.map((i) => i.normalizedName) };
   await prisma.$transaction([
-    prisma.standardScopeRequest.deleteMany({ where }),
-    ...("mapTo" in outcome ? [] : [prisma.scopeDictionaryEntry.deleteMany({ where })]),
-    ...("ignore" in outcome ? [] : [prisma.scopeIgnoredName.deleteMany({ where })]),
-    ...("class" in outcome ? [] : [prisma.scopeNameClass.deleteMany({ where })]),
-    // Mapping a renamed name's old spelling somewhere new ends it being a rename alias.
-    ...("mapTo" in outcome
-      ? [prisma.scopeDictionaryEntry.updateMany({ where: { ...where, createdBy: RENAME_ALIAS, NOT: { canonicalScope: outcome.mapTo } }, data: { createdBy: null } })]
-      : []),
-    "mapTo" in outcome
-      ? prisma.scopeDictionaryEntry.upsert({
-          where,
-          create: { normalizedName, canonicalScope: outcome.mapTo },
-          update: { canonicalScope: outcome.mapTo, timesConfirmed: { increment: 1 } },
-        })
-      : "ignore" in outcome
-        ? prisma.scopeIgnoredName.upsert({ where, create: { normalizedName, personId: personId ?? null }, update: {} })
-        : prisma.scopeNameClass.upsert({
-            where,
-            create: { normalizedName, kind: outcome.class, covers: outcome.covers },
-            update: { kind: outcome.class, covers: outcome.covers },
-          }),
+    prisma.standardScopeRequest.deleteMany({ where: { normalizedName: all } }),
+    prisma.scopeDictionaryEntry.deleteMany({ where: { normalizedName: { in: names((o) => !("mapTo" in o)) } } }),
+    prisma.scopeIgnoredName.deleteMany({ where: { normalizedName: { in: names((o) => !("ignore" in o)) } } }),
+    // Classes are rewritten whole, so a reclassified name gets its new kind and covers.
+    prisma.scopeNameClass.deleteMany({ where: { normalizedName: all } }),
+    ...[...byScope].map(([canonicalScope, keys]) =>
+      prisma.scopeDictionaryEntry.updateMany({ where: { normalizedName: { in: keys } }, data: { canonicalScope, timesConfirmed: { increment: 1 } } })),
+    prisma.scopeDictionaryEntry.createMany({ data: maps, skipDuplicates: true }),
+    prisma.scopeIgnoredName.createMany({ data: names((o) => "ignore" in o).map((normalizedName) => ({ normalizedName, personId: personId ?? null })), skipDuplicates: true }),
+    prisma.scopeNameClass.createMany({ data: classes }),
   ]);
 }
 
