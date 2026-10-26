@@ -8,8 +8,9 @@ const ELIGIBLE = new Set(["as_built", "baseline"]);
 
 async function firstEligible(importIds: string[], dictionary: Map<string, string>) {
   for (const id of importIds) {
-    const imp = await prisma.scheduleImport.findUniqueOrThrow({ where: { id }, include: { activities: true, relationships: true } });
-    if (ELIGIBLE.has(importQuality(imp).tier)) return { ...imp, activities: withoutProcurement(imp.activities, dictionary) };
+    // Null when the project was deleted mid-recompute.
+    const imp = await prisma.scheduleImport.findUnique({ where: { id }, include: { activities: true, relationships: true } });
+    if (imp && ELIGIBLE.has(importQuality(imp).tier)) return { ...imp, activities: withoutProcurement(imp.activities, dictionary) };
   }
   return null;
 }
@@ -24,7 +25,7 @@ export async function recomputeBenchmarks(): Promise<{ projects: number; rows: n
   const [dictionary, projects] = await Promise.all([
     getDictionary(),
     prisma.project.findMany({
-      where: { sector: { not: null } },
+      where: { sector: { not: null }, useInBenchmarks: true },
       select: { sector: true, buildingType: true, imports: { where: { isSynthetic: false }, orderBy: { importedAt: "asc" }, select: { id: true } } },
     }),
   ]);

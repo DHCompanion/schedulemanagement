@@ -75,6 +75,24 @@ describe.runIf(!!process.env.DATABASE_URL)("POST /api/history/[id]", () => {
     expect((await post(id, { importId, tierOverride: "as_built" }, await admin())).status).toBe(422);
   });
 
+  it("changes only the fields sent, and marks the project edited", async () => {
+    const { id, importId } = await historical();
+    await post(id, { buildingType: "OR Suite", sizeSqFt: "4200" }, await admin());
+    expect((await post(id, { buildingType: "Clinic" }, await admin())).status).toBe(303);
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ buildingType: "Clinic", sector: "Healthcare", sizeSqFt: 4200 });
+    expect((await post(id, { sizeSqFt: "900" }, await admin())).status).toBe(303);
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ buildingType: "Clinic", sizeSqFt: 900 });
+
+    expect((await post(id, { useInBenchmarks: "false" }, await admin())).status).toBe(303);
+    expect(await prisma.project.findUnique({ where: { id } })).toMatchObject({ useInBenchmarks: false, buildingType: "Clinic" });
+    expect((await post(id, { useInBenchmarks: "maybe" }, await admin())).status).toBe(422);
+
+    // A tier override counts as an edit to the project, for "edited since last compute".
+    const before = (await prisma.project.findUniqueOrThrow({ where: { id } })).updatedAt;
+    await post(id, { importId, tierOverride: "rough" }, await admin());
+    expect((await prisma.project.findUniqueOrThrow({ where: { id } })).updatedAt.getTime()).toBeGreaterThan(before.getTime());
+  });
+
   it("only edits historical projects, and only their own imports", async () => {
     const live = await historical("active");
     expect((await post(live.id, { sector: "Healthcare" }, await admin())).status).toBe(404);
