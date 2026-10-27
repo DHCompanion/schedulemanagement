@@ -390,6 +390,30 @@ model StandardScope {
   createdAt DateTime @default(now())
 }
 
+// A suggested outcome for an unsettled name in the review backlog (2026-10-27):
+// from a one-off AI pass, or the matcher. Loaded by scripts/name-backlog.ts and
+// worked through in the /history/names dialog; a settled name stops showing.
+model ScopeNameSuggestion {
+  normalizedName String   @id
+  rawName        String
+  taskCount      Int
+  projectCount   Int
+  // [{ project, type, parent, days }]: example activities for the reviewer.
+  samples        Json
+  // map | coarse | procurement | ignore | new
+  kind           String
+  suggestion     String   @default("")
+  covers         String[]
+  // high | medium | low
+  confidence     String
+  reason         String   @default("")
+  // ai | matcher
+  source         String
+  // Leaf tasks in the eligible pool when loaded: the coverage denominator.
+  poolTasks      Int
+  createdAt      DateTime @default(now())
+}
+
 // Names an admin classified instead of mapping: "coarse" bundles several
 // standard names (covers, when known), "procurement" is a material/lead-time
 // line. Both stay out of activity benchmarks; neither is ignored.
