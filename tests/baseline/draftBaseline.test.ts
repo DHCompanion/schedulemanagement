@@ -32,6 +32,13 @@ describe("assembleDraft", () => {
     expect(draft.warnings.some((w) => w.startsWith("Notice to Proceed") || w.startsWith("Permit Issued"))).toBe(false);
   });
 
+  it("keeps Finish no earlier than a closing milestone", () => {
+    const draft = assembleDraft([scope("Frame", 5), scope("Turnover", 1)], [link("Frame", "Turnover")], start);
+    // Frame Mon 3 – Fri 7; Turnover Mon 10 08:00, the same working moment as Fri 17:00.
+    expect(byName(draft).get("Finish")!.start.getTime()).toBe(byName(draft).get("Turnover")!.start.getTime());
+    expect(draft.workingDays).toBe(5);
+  });
+
   it("schedules FS and SS links forward from the start milestone, P75 rounded up, and ties ends to a finish milestone", () => {
     const draft = assembleDraft([scope("Frame", 4.2), scope("Hang", 3), scope("Layout", 2)], [link("Frame", "Hang"), link("Frame", "Layout", 0.6, "SS", 1)], start);
     const a = byName(draft);

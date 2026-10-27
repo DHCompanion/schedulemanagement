@@ -155,6 +155,8 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
   const ef = (n: string) => es.get(n)! + nodes.get(n)!.days - 1;
   const hasSuccessor = new Set(usable.filter((l) => ef(l.to) >= ef(l.from)).map((l) => l.from));
   const lastDay = Math.max(0, ...order.map((n) => es.get(n)! + nodes.get(n)!.days - 1));
+  // A closing milestone sits at the next day's 08:00, the same working moment as lastDay's 17:00: Finish goes no earlier.
+  const finishAt = new Date(Math.max(dayEnd(lastDay).getTime(), ...order.filter((n) => nodes.get(n)!.days === 0).map((n) => dayStart(es.get(n)!).getTime())));
 
   const activities: DraftActivity[] = [
     { uid: 1, name: "Start", days: 0, start: dayStart(0), finish: dayStart(0), milestone: true, preds: [], lowConfidence: false },
@@ -167,7 +169,7 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
       };
     }),
     {
-      uid: order.length + 2, name: "Finish", days: 0, start: dayEnd(lastDay), finish: dayEnd(lastDay), milestone: true,
+      uid: order.length + 2, name: "Finish", days: 0, start: finishAt, finish: finishAt, milestone: true,
       preds: order.filter((n) => !hasSuccessor.has(n)).map((n) => ({ uid: uid.get(n)!, type: "FS" as const, lagDays: 0, weak: false })),
       lowConfidence: false,
     },
