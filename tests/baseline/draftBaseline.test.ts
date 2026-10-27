@@ -17,12 +17,17 @@ describe("assembleDraft", () => {
   });
 
   it("puts waiting-period names in as milestones, with or without duration data", () => {
-    const draft = assembleDraft([scope("Frame", 5), scope("Permit Issued", 25.5), scope("Notice to Proceed", null, 0, 0), scope("Hang", 3)], [link("Frame", "Permit Issued"), link("Permit Issued", "Hang")], start);
+    const draft = assembleDraft(
+      [scope("Frame", 5), scope("Permit Issued", 25.5), scope("Notice to Proceed", null, 0, 0), scope("Hang", 3), scope("Paint", 2), scope("Turnover", 9)],
+      [link("Frame", "Permit Issued"), link("Permit Issued", "Hang"), link("Hang", "Paint"), link("Paint", "Turnover", 0.8, "SS")],
+      start,
+    );
     const a = byName(draft);
-    // Frame Mon 3 – Fri 7; the permit lands at Frame's finish; Hang starts Mon 10.
+    // Frame Mon 3 – Fri 7; the permit opens Mon 10, Hang with it; Paint Thu 13; Turnover SS on Paint's start.
     expect(a.get("Permit Issued")).toMatchObject({ days: 0, milestone: true });
-    expect([day(a.get("Permit Issued")!.start), day(a.get("Permit Issued")!.finish)]).toEqual(["2025-03-07", "2025-03-07"]);
+    expect([a.get("Permit Issued")!.start, a.get("Permit Issued")!.finish].map((d) => d.toISOString())).toEqual(["2025-03-10T08:00:00.000Z", "2025-03-10T08:00:00.000Z"]);
     expect(day(a.get("Hang")!.start)).toBe("2025-03-10");
+    expect(a.get("Turnover")!.start.getTime()).toBe(a.get("Paint")!.start.getTime());
     expect(a.get("Notice to Proceed")).toMatchObject({ days: 0, milestone: true });
     expect(draft.warnings.some((w) => w.startsWith("Notice to Proceed") || w.startsWith("Permit Issued"))).toBe(false);
   });

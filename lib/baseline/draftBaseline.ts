@@ -160,11 +160,9 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
     { uid: 1, name: "Start", days: 0, start: dayStart(0), finish: dayStart(0), milestone: true, preds: [], lowConfidence: false },
     ...order.map((n) => {
       const { days, typeN } = nodes.get(n)!;
-      // A milestone sits at its predecessor's finish (the day before its index).
-      const at = days === 0 && es.get(n)! > 0 ? dayEnd(es.get(n)! - 1) : dayStart(es.get(n)!);
       const preds = incoming.get(n)!.map((l) => ({ uid: uid.get(l.from)!, type: l.type, lagDays: Math.round(l.lagDays), weak: weak.has(l) }));
       return {
-        uid: uid.get(n)!, name: n, days, start: days === 0 ? at : dayStart(es.get(n)!), finish: days === 0 ? at : dayEnd(es.get(n)! + days - 1), milestone: days === 0,
+        uid: uid.get(n)!, name: n, days, start: dayStart(es.get(n)!), finish: days === 0 ? dayStart(es.get(n)!) : dayEnd(es.get(n)! + days - 1), milestone: days === 0,
         preds: preds.length ? preds : [{ uid: 1, type: "FS" as const, lagDays: 0, weak: false }], lowConfidence: typeN < THIN,
       };
     }),

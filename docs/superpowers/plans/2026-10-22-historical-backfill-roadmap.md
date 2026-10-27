@@ -235,4 +235,3 @@ Duration review, 2026-10-27 (`Schedulecomparisions/_xml/duration-review.csv` lis
 - **Procurement:** every Procurement line is dropped from benchmarks. Only FY2025–26 schedules carry useful procurement, and real lead times live in the procurement tool.
 - **Outliers:** a name's top value per measure and sector is dropped when it is 20+ days and over 1.5× the next, with 3+ projects (a 265-day rough-in against a next-longest 40).
 - **Milestones:** waiting periods schedules model as tasks (Notice to Proceed, Owner Contract Executed, Permit Issued, …) go into drafts as milestones (`DRAFT_MILESTONES`).
-- **Earlier:** a duration review. Some long names (Doors & Hardware, Light Fixtures) likely carry procurement or delivery lines mapped as work.
