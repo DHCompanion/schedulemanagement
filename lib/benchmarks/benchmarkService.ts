@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { importQuality } from "@/lib/health/healthService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
-import { aggregate, aggregateFacts, blend, blendShare, outsideRange, scheduleFacts, scopeSpans, scopeWorkedDays, type Contribution, type ProjectFacts, type StoredMeasure, type Quartiles, type ScopeBenchmarkView, type ScopeRanges, withoutProcurement } from "@/lib/benchmarks/benchmarks";
+import { aggregate, aggregateFacts, blend, blendShare, outsideRange, scheduleFacts, scopeSpans, scopeWorkedDays, subTypeGroup, type Contribution, type ProjectFacts, type StoredMeasure, type Quartiles, type ScopeBenchmarkView, type ScopeRanges, withoutProcurement } from "@/lib/benchmarks/benchmarks";
 
 // Rough and junk files feed no benchmarks (Q70).
 const ELIGIBLE = new Set(["as_built", "baseline"]);
@@ -26,7 +26,7 @@ export async function recomputeBenchmarks(): Promise<{ projects: number; rows: n
     getDictionary(),
     prisma.project.findMany({
       where: { sector: { not: null }, useInBenchmarks: true },
-      select: { sector: true, buildingType: true, imports: { where: { isSynthetic: false }, orderBy: { importedAt: "asc" }, select: { id: true } } },
+      select: { sector: true, buildingType: true, subType: true, imports: { where: { isSynthetic: false }, orderBy: { importedAt: "asc" }, select: { id: true } } },
     }),
   ]);
   const contributions: Contribution[] = [];
@@ -38,14 +38,15 @@ export async function recomputeBenchmarks(): Promise<{ projects: number; rows: n
     if (!earliest) continue;
     const latest = (await firstEligible(ids.reverse(), dictionary)) ?? earliest;
     contributing++;
-    facts.push({ sector: p.sector!, buildingType: p.buildingType, ...scheduleFacts(earliest.activities, earliest.relationships, dictionary, earliest.minutesPerDay ?? 480) });
+    const group = { sector: p.sector!, buildingType: p.buildingType, subType: p.subType };
+    facts.push({ ...group, ...scheduleFacts(earliest.activities, earliest.relationships, dictionary, earliest.minutesPerDay ?? 480) });
     for (const [measure, imp] of [["planned", earliest], ["actual", latest]] as const) {
       for (const [scope, days] of scopeSpans(imp.activities, dictionary, measure)) {
-        contributions.push({ scope, measure, sector: p.sector!, buildingType: p.buildingType, days });
+        contributions.push({ scope, measure, ...group, days });
       }
     }
     for (const [scope, days] of scopeWorkedDays(earliest.activities, dictionary)) {
-      contributions.push({ scope, measure: "worked", sector: p.sector!, buildingType: p.buildingType, days });
+      contributions.push({ scope, measure: "worked", ...group, days });
     }
   }
   const rows = aggregate(contributions);
@@ -72,16 +73,26 @@ export async function getBenchmarkStatus(): Promise<{ computedAt: Date | null; r
   return { computedAt: latest?.computedAt ?? null, rows };
 }
 
-/** Per standard name, the planned and actual ranges for a project's sector, blended toward its building type. */
-export async function getBenchmarkRanges(sector: string | null, buildingType: string | null): Promise<Map<string, ScopeRanges>> {
+/** The benchmark rows of a sector, its building type and subtype. */
+export function groupFilter(sector: string, buildingType: string | null, subType: string | null = null) {
+  const sub = subTypeGroup(buildingType, subType);
+  return {
+    OR: [
+      { groupKind: "sector", groupValue: sector },
+      ...(buildingType ? [{ groupKind: "buildingType", groupValue: buildingType }] : []),
+      ...(sub ? [{ groupKind: "subType", groupValue: sub }] : []),
+    ],
+  };
+}
+
+/** Per standard name, the planned and actual ranges for a project's sector, blended toward its building type and subtype. */
+export async function getBenchmarkRanges(sector: string | null, buildingType: string | null, subType: string | null = null): Promise<Map<string, ScopeRanges>> {
   if (!sector) return new Map();
-  const rows = await prisma.scopeBenchmark.findMany({
-    where: { OR: [{ groupKind: "sector", groupValue: sector }, ...(buildingType ? [{ groupKind: "buildingType", groupValue: buildingType }] : [])] },
-  });
+  const rows = await prisma.scopeBenchmark.findMany({ where: groupFilter(sector, buildingType, subType) });
   const stat = new Map(rows.map((r) => [`${r.canonicalScope}|${r.measure}|${r.groupKind}`, r]));
   const ranges = new Map<string, ScopeRanges>();
   for (const scope of new Set(rows.map((r) => r.canonicalScope))) {
-    const range = (m: StoredMeasure) => blend(stat.get(`${scope}|${m}|sector`), stat.get(`${scope}|${m}|buildingType`));
+    const range = (m: StoredMeasure) => blend(stat.get(`${scope}|${m}|sector`), stat.get(`${scope}|${m}|buildingType`), stat.get(`${scope}|${m}|subType`));
     const r = { actual: range("actual"), planned: range("planned"), worked: range("worked") };
     if (r.actual || r.planned) ranges.set(scope, r);
   }
@@ -89,22 +100,20 @@ export async function getBenchmarkRanges(sector: string | null, buildingType: st
 }
 
 /** Per standard name, the share of projects that had it critical, blended like the ranges. */
-export async function getCriticality(sector: string | null, buildingType: string | null) {
+export async function getCriticality(sector: string | null, buildingType: string | null, subType: string | null = null) {
   if (!sector) return new Map<string, ReturnType<typeof blendShare>>();
-  const rows = await prisma.scopeCriticality.findMany({
-    where: { OR: [{ groupKind: "sector", groupValue: sector }, ...(buildingType ? [{ groupKind: "buildingType", groupValue: buildingType }] : [])] },
-  });
+  const rows = await prisma.scopeCriticality.findMany({ where: groupFilter(sector, buildingType, subType) });
   const share = (r: (typeof rows)[number] | undefined) => r && { n: r.n, share: r.critical / r.n };
   const by = new Map(rows.map((r) => [`${r.canonicalScope}|${r.groupKind}`, r]));
-  return new Map([...new Set(rows.map((r) => r.canonicalScope))].map((s) => [s, blendShare(share(by.get(`${s}|sector`)), share(by.get(`${s}|buildingType`)))]));
+  return new Map([...new Set(rows.map((r) => r.canonicalScope))].map((s) => [s, blendShare(share(by.get(`${s}|sector`)), share(by.get(`${s}|buildingType`)), share(by.get(`${s}|subType`)))]));
 }
 
 /** Benchmarks for every standard name in a project's latest schedule that has a range. */
 export async function getProjectBenchmarks(projectId: string): Promise<Map<string, ScopeBenchmarkView>> {
-  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { sector: true, buildingType: true } });
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { sector: true, buildingType: true, subType: true } });
   const [ranges, criticality] = await Promise.all([
-    getBenchmarkRanges(project?.sector ?? null, project?.buildingType ?? null),
-    getCriticality(project?.sector ?? null, project?.buildingType ?? null),
+    getBenchmarkRanges(project?.sector ?? null, project?.buildingType ?? null, project?.subType ?? null),
+    getCriticality(project?.sector ?? null, project?.buildingType ?? null, project?.subType ?? null),
   ]);
   if (ranges.size === 0) return new Map();
   const latest = await prisma.scheduleImport.findFirst({ where: { projectId }, orderBy: { importedAt: "desc" }, include: { activities: true } });

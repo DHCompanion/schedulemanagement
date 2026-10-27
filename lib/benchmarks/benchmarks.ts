@@ -1,6 +1,6 @@
 // Pure duration benchmarks (roadmap Phase 5, Q66–Q71): per project and
 // standard name, the span from first start to last finish of its mapped
-// activities, then P25/median/P75 across projects by sector and building type.
+// activities, then P25/median/P75 across projects by sector, building type and subtype.
 
 import { isWeekend, workingDaysBetween } from "@/lib/forecast/workingDays";
 import { isLeafActive } from "@/lib/msp/types";
@@ -9,7 +9,7 @@ import { normalizeName } from "@/lib/normalize/normalizeName";
 export type Measure = "planned" | "actual";
 /** "worked": planned working days on which any of the name's activities is in progress (drafts, 2026-10-26). */
 export type StoredMeasure = Measure | "worked";
-export type GroupKind = "sector" | "buildingType";
+export type GroupKind = "sector" | "buildingType" | "subType";
 
 export interface SpanActivity {
   name: string;
@@ -41,6 +41,7 @@ export interface Contribution {
   measure: StoredMeasure;
   sector: string;
   buildingType: string | null;
+  subType?: string | null;
   days: number;
 }
 
@@ -66,6 +67,11 @@ export interface ScopeBenchmarkView extends ScopeRanges {
 // Prior strength k (Q54): a building type with k projects counts half. Tune against the full backfill.
 export const PRIOR_STRENGTH = 5;
 export const MIN_SECTOR_PROJECTS = 5;
+// A subtype with 2 projects counts half against its type's blend: 4 IR projects make an IR draft about 2/3 IR (decided 2026-10-26).
+export const SUBTYPE_PRIOR = 2;
+
+/** Subtype group value: "Multiple" is a subtype of more than one type. */
+export const subTypeGroup = (buildingType: string | null, subType: string | null | undefined) => (buildingType && subType ? `${buildingType} / ${subType}` : null);
 
 /** Working days, inclusive, from each standard name's first start to its last finish. Actuals count only once every activity of the name has finished. */
 export function scopeSpans(activities: SpanActivity[], dictionary: Map<string, string>, measure: Measure): Map<string, number> {
@@ -140,7 +146,7 @@ export function quartiles(values: number[]): Quartiles {
   return { p25: at(0.25), median: at(0.5), p75: at(0.75) };
 }
 
-/** One row per standard name, measure and group (each sector, each building type). Callers pass one contribution per project. */
+/** One row per standard name, measure and group (each sector, building type and subtype). Callers pass one contribution per project. */
 export function aggregate(contributions: Contribution[]): BenchmarkStat[] {
   const groups = new Map<string, { key: Omit<BenchmarkStat, keyof Quartiles | "n">; days: number[] }>();
   const add = (c: Contribution, groupKind: GroupKind, groupValue: string) => {
@@ -152,21 +158,30 @@ export function aggregate(contributions: Contribution[]): BenchmarkStat[] {
   for (const c of contributions) {
     add(c, "sector", c.sector);
     if (c.buildingType) add(c, "buildingType", c.buildingType);
+    const sub = subTypeGroup(c.buildingType, c.subType);
+    if (sub) add(c, "subType", sub);
   }
   return [...groups.values()].map(({ key, days }) => ({ ...key, n: days.length, ...quartiles(days) }));
 }
 
-/** The building type's quartiles shrunk toward the sector's: (n·type + k·sector) / (n + k). No range under MIN_SECTOR_PROJECTS sector projects. */
+/** A value shrunk toward its prior: (n·own + k·prior) / (n + k). */
+function shrink<T extends { n: number }>(prior: number, own: T | undefined, k: number, value: (o: T) => number) {
+  return own ? (own.n * value(own) + k * prior) / (own.n + k) : prior;
+}
+
+/**
+ * The building type's quartiles shrunk toward the sector's, (n·type + k·sector) / (n + k),
+ * then the subtype's toward that with SUBTYPE_PRIOR. No range under MIN_SECTOR_PROJECTS sector projects.
+ */
 export function blend(
   sector: (Quartiles & { n: number }) | undefined,
   type: (Quartiles & { n: number }) | undefined,
-  k = PRIOR_STRENGTH,
+  sub?: Quartiles & { n: number },
 ): BenchmarkRange | null {
   if (!sector || sector.n < MIN_SECTOR_PROJECTS) return null;
   const typeN = type?.n ?? 0;
-  const w = typeN / (typeN + k);
-  const mix = (f: keyof Quartiles) => (type ? w * type[f] + (1 - w) * sector[f] : sector[f]);
-  return { p25: mix("p25"), median: mix("median"), p75: mix("p75"), n: sector.n, typeN, typeShare: w };
+  const mix = (f: keyof Quartiles) => shrink(shrink(sector[f], type, PRIOR_STRENGTH, (o) => o[f]), sub, SUBTYPE_PRIOR, (o) => o[f]);
+  return { p25: mix("p25"), median: mix("median"), p75: mix("p75"), n: sector.n, typeN, typeShare: typeN / (typeN + PRIOR_STRENGTH) };
 }
 
 /** Beyond the Tukey fences: below P25 − 1.5·IQR or above P75 + 1.5·IQR (Q71). */
@@ -194,6 +209,7 @@ export interface FactLink {
 export interface ProjectFacts {
   sector: string;
   buildingType: string | null;
+  subType?: string | null;
   scopes: Set<string>;
   /** Names with any activity on the file's critical path. */
   critical: Set<string>;
@@ -285,9 +301,9 @@ export function scheduleFacts(
 }
 
 /**
- * Criticality per name and links between names, per sector and building type.
+ * Criticality per name and links between names, per sector, building type and subtype.
  * A sector keeps links seen in at least minPairProjects of its projects; each
- * building type keeps every link its sector keeps that it has both names for,
+ * building type and subtype keeps every link its sector keeps that it has both names for,
  * even at 0 or 1 links, so a type that rarely links a pair pulls its share down.
  */
 export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): {
@@ -297,7 +313,7 @@ export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): {
 } {
   const groups = new Map<string, { groupKind: GroupKind; groupValue: string; facts: ProjectFacts[] }>();
   for (const f of facts) {
-    for (const [groupKind, groupValue] of [["sector", f.sector], ["buildingType", f.buildingType]] as const) {
+    for (const [groupKind, groupValue] of [["sector", f.sector], ["buildingType", f.buildingType], ["subType", subTypeGroup(f.buildingType, f.subType)]] as const) {
       if (!groupValue) continue;
       const id = `${groupKind}|${groupValue}`;
       const g = groups.get(id) ?? { groupKind, groupValue, facts: [] };
@@ -334,7 +350,7 @@ export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): {
     const [fromScope, toScope] = JSON.parse(key) as [string, string];
     const base = g.fs.filter((f) => f.scopes.has(fromScope) && f.scopes.has(toScope)).length;
     if (base === 0) return;
-    // A building-type row with no links of its own only carries its count; type and lag come from the sector.
+    // A type or subtype row with no links of its own only carries its count; type and lag come from the sector.
     const [type, lagDays] = l.types.length ? [mode(l.types), quartiles(l.lags).median] : ["FS", 0];
     sequences.push({ fromScope, toScope, groupKind: g.groupKind, groupValue: g.groupValue, projects: l.types.length, base, type, lagDays });
   };
@@ -344,21 +360,21 @@ export function aggregateFacts(facts: ProjectFacts[], minPairProjects = 2): {
     sectorPairs.set(g.groupValue, keys);
     for (const key of keys) push(g, key);
   }
-  for (const g of linked.filter((g) => g.groupKind === "buildingType")) {
+  for (const g of linked.filter((g) => g.groupKind !== "sector")) {
     for (const key of sectorPairs.get(g.fs[0].sector) ?? []) push(g, key);
   }
   const sizes = [...groups.values()].map(({ groupKind, groupValue, facts: fs }) => ({ groupKind, groupValue, projects: fs.length }));
   return { criticality, sequences, groups: sizes };
 }
 
-/** A share blended like blend(): (n·type + k·sector) / (n + k), nothing under MIN_SECTOR_PROJECTS. */
+/** A share blended like blend(): type toward sector, then subtype toward that; nothing under MIN_SECTOR_PROJECTS. */
 export function blendShare(
   sector: { n: number; share: number } | undefined,
   type: { n: number; share: number } | undefined,
-  k = PRIOR_STRENGTH,
+  sub?: { n: number; share: number },
 ): { share: number; n: number; typeN: number } | null {
   if (!sector || sector.n < MIN_SECTOR_PROJECTS) return null;
-  const typeN = type?.n ?? 0;
-  const w = typeN / (typeN + k);
-  return { share: type ? w * type.share + (1 - w) * sector.share : sector.share, n: sector.n, typeN };
+  const s = (o: { share: number }) => o.share;
+  const share = shrink(shrink(sector.share, type, PRIOR_STRENGTH, s), sub, SUBTYPE_PRIOR, s);
+  return { share, n: sector.n, typeN: type?.n ?? 0 };
 }

@@ -58,6 +58,13 @@ describe("aggregate", () => {
     expect(rows).toContainEqual({ canonicalScope: "Paint", measure: "actual", groupKind: "buildingType", groupValue: "Clinic", n: 2, p25: 12.5, median: 15, p75: 17.5 });
     expect(rows).toHaveLength(3);
   });
+
+  it("adds a subtype group, keyed under its type", () => {
+    const c = (days: number, subType: string | null) => ({ scope: "Paint", measure: "actual" as const, sector: "Healthcare", buildingType: "Special Procedure (EP, Cath, IR)", subType, days });
+    const rows = aggregate([c(10, "IR"), c(20, "IR"), c(30, "EP"), c(40, null)]);
+    expect(rows).toContainEqual({ canonicalScope: "Paint", measure: "actual", groupKind: "subType", groupValue: "Special Procedure (EP, Cath, IR) / IR", n: 2, p25: 12.5, median: 15, p75: 17.5 });
+    expect(rows).toHaveLength(4);
+  });
 });
 
 describe("blend", () => {
@@ -68,6 +75,10 @@ describe("blend", () => {
   it("uses the sector alone without building-type data, and nothing under 5 sector projects", () => {
     expect(blend(sector, undefined)).toMatchObject({ median: 20, typeN: 0, typeShare: 0 });
     expect(blend({ ...sector, n: 4 }, { n: 4, p25: 1, median: 2, p75: 3 })).toBeNull();
+  });
+  it("then shrinks the subtype toward that by n / (n + 2)", () => {
+    // Type-blended median 25; 2 IR projects at 45 weigh half: 35.
+    expect(blend(sector, { n: 5, p25: 20, median: 30, p75: 40 }, { n: 2, p25: 35, median: 45, p75: 55 })).toMatchObject({ p25: 25, median: 35, p75: 45, typeN: 5 });
   });
 });
 
