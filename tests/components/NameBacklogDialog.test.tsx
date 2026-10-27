@@ -49,4 +49,20 @@ describe("NameBacklogDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Map 1 name" }));
     await waitFor(() => expect(posts).toEqual([{ approveHigh: true }]));
   });
+
+  it("skipping asks for more names, so later ones are reachable", async () => {
+    const urls: string[] = [];
+    const all = [row("a"), row("b")];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      urls.push(url);
+      const limit = Number(new URL(url, "http://x").searchParams.get("limit"));
+      return Response.json({ rows: all.slice(0, Math.min(limit, 1 + urls.length - 1)), progress: { names: 2, settledNames: 0, poolTasks: 100, coverage: 0.9, high: 0 }, high: [] });
+    }));
+    render(<NameBacklogDialog scopes={["Paint"]} />);
+    fireEvent.click(screen.getByRole("button", { name: /Review backlog/ }));
+    expect(await screen.findByText("a")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Skip" }));
+    expect(await screen.findByText("b")).toBeTruthy();
+    expect(urls.at(-1)).toContain("limit=26");
+  });
 });

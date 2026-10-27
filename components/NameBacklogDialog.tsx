@@ -16,11 +16,13 @@ export function NameBacklogDialog({ scopes }: { scopes: string[] }) {
   const [message, setMessage] = useState("");
   const [high, setHigh] = useState<{ rawName: string; suggestion: string }[]>([]);
   const [confirming, setConfirming] = useState(false);
+  // ponytail: skips live until the page reloads and cap at 475 (the API's 500 limit).
+  const [skipped] = useState(() => new Set<string>());
 
   async function load() {
-    const res = await fetch(appPath(API));
+    const res = await fetch(appPath(`${API}?limit=${25 + skipped.size}`));
     const data = await res.json();
-    setRows(data.rows ?? []);
+    setRows(((data.rows ?? []) as BacklogRow[]).filter((r) => !skipped.has(r.normalizedName)));
     setProgress(data.progress ?? null);
     setHigh(data.high ?? []);
   }
@@ -47,6 +49,14 @@ export function NameBacklogDialog({ scopes }: { scopes: string[] }) {
 
   async function act(body: Record<string, unknown>) {
     if (!(await post({ name: rows[0].normalizedName, ...body }))) return;
+    setOther("");
+    const rest = rows.slice(1);
+    setRows(rest);
+    if (rest.length < 5) await load();
+  }
+
+  async function skip() {
+    skipped.add(rows[0].normalizedName);
     setOther("");
     const rest = rows.slice(1);
     setRows(rest);
@@ -115,7 +125,7 @@ export function NameBacklogDialog({ scopes }: { scopes: string[] }) {
                 <button type="button" disabled={busy} onClick={() => act({ action: "coarse", covers: [] })} className={btn}>Coarse</button>
                 <button type="button" disabled={busy} onClick={() => act({ action: "procurement" })} className={btn}>Procurement</button>
                 <button type="button" disabled={busy} onClick={() => act({ action: "ignore" })} className={btn}>Ignore</button>
-                <button type="button" disabled={busy} onClick={() => { setRows([...rows.slice(1), r]); setOther(""); }} className={btn}>Skip</button>
+                <button type="button" disabled={busy} onClick={skip} className={btn}>Skip</button>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <input list="backlog-standard-names" value={other} onChange={(e) => setOther(e.target.value)} aria-label="Another standard name" placeholder="Another standard name…"

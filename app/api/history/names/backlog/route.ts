@@ -8,7 +8,9 @@ const ACTIONS = new Set<string>(BACKLOG_KINDS);
 // The /history/names backlog dialog: the next names to review, and one action per name.
 export async function GET(req: Request) {
   if (!(await isAdminRequest(req))) return error("Admin access required.", 403);
-  return NextResponse.json(await getBacklog());
+  // The dialog asks for a page plus the names it skipped, so skipping reaches later names.
+  const limit = Math.min(500, Math.max(1, Number(new URL(req.url).searchParams.get("limit")) || 25));
+  return NextResponse.json(await getBacklog(limit));
 }
 
 export async function POST(req: Request) {
