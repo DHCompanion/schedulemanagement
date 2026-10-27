@@ -21,7 +21,7 @@ export interface NameReviewRow extends NameCount {
 export function buildNameReview(counts: NameCount[], dict: Map<string, string>, settled: Set<string>, knownScopes: string[]): NameReviewRow[] {
   return counts
     .filter((c) => !dict.has(c.normalizedName) && !settled.has(c.normalizedName))
-    .map((c) => ({ ...c, suggestion: suggestScopes(c.sampleName, knownScopes, 1)[0] ?? "" }));
+    .map((c) => ({ ...c, suggestion: suggestScopes(c.sampleName, knownScopes, 1, dict)[0] ?? "" }));
 }
 
 // The SQL key must equal normalizeName(): collapse every whitespace run (tabs and

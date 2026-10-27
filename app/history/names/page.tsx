@@ -4,6 +4,7 @@ import { appPath } from "@/lib/http";
 import { isAdminSession } from "@/lib/adminSession";
 import { getKnownScopes } from "@/lib/normalize/normalizationService";
 import { getNameRequests, getNameReview } from "@/lib/normalize/nameReview";
+import { NameBacklogDialog } from "@/components/NameBacklogDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function NameReviewPage(props: { searchParams: Promise<{ mi
         names, mark it coarse (bundles several) or procurement (a material or lead-time line), or ignore it if it isn&apos;t work.
       </p>
       <div className="mb-4 flex flex-wrap items-end gap-4">
+        <NameBacklogDialog scopes={scopes} />
         <form className="flex items-end gap-2 text-sm">
           <label className="flex flex-col text-xs text-slate-600">Used in at least
             <input name="min" type="number" min={1} defaultValue={min} className={`${input} w-24`} />
