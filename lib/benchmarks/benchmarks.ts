@@ -7,7 +7,7 @@ import { isLeafActive } from "@/lib/msp/types";
 import { normalizeName } from "@/lib/normalize/normalizeName";
 
 export type Measure = "planned" | "actual";
-/** "worked": planned working days on which any of the name's activities is in progress (drafts, 2026-10-26). */
+/** "worked": the name's longest single planned activity, in working days (drafts, 2026-10-27). The key predates that change. */
 export type StoredMeasure = Measure | "worked";
 export type GroupKind = "sector" | "buildingType" | "subType";
 
@@ -100,32 +100,28 @@ export function scopeSpans(activities: SpanActivity[], dictionary: Map<string, s
 }
 
 /**
- * Planned working days on which at least one of a name's activities is in
- * progress. Unlike the span, idle time between phases doesn't count: doors
- * hung in phase 1 and phase 3 months apart are a few weeks of work, not months.
+ * Working days of each name's longest single planned activity. Zones that
+ * repeat a task (doors in six zones at 11 days each) don't add up: a draft has
+ * one activity per name, and the PM copies it per zone (decided 2026-10-27).
  */
-export function scopeWorkedDays(activities: SpanActivity[], dictionary: Map<string, string>): Map<string, number> {
-  const days = new Map<string, Set<number>>();
+export function scopeLongestActivity(activities: SpanActivity[], dictionary: Map<string, string>): Map<string, number> {
+  const longest = new Map<string, number>();
   for (const a of activities) {
     if (!isLeafActive(a) || a.isMilestone || !a.plannedStart || !a.plannedFinish) continue;
     const scope = dictionary.get(normalizeName(a.name));
     if (!scope) continue;
-    const set = days.get(scope) ?? new Set<number>();
-    const day = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-    for (let t = day(a.plannedStart); t <= day(a.plannedFinish); t += 86_400_000) {
-      if (!isWeekend(new Date(t))) set.add(t);
-    }
-    days.set(scope, set);
+    const days = workingDaysBetween(a.plannedStart, a.plannedFinish) + (isWeekend(a.plannedStart) ? 0 : 1);
+    if (days > (longest.get(scope) ?? 0)) longest.set(scope, days);
   }
-  return new Map([...days].filter(([, s]) => s.size > 0).map(([scope, s]) => [scope, s.size]));
+  return longest;
 }
 
 // Procurement belongs to the procurement tool, not the schedule (decided 2026-10-26).
-// "Doors" under Long Lead Items is a delivery, not the install it maps to.
-const PROCUREMENT_SUMMARY = /procure|long lead|submittal|material/i;
+// "Doors" under Long Lead Items is a delivery, not the install it maps to; "Electrical" under Early Release Buyout is a buyout package.
+const PROCUREMENT_SUMMARY = /procure|long lead|submittal|material|buyout/i;
 const PRECONSTRUCTION = new Set(["Procurement", "Submittals", "Project Buyout", "Permitting", "Bidding", "CD Pricing", "Task Order"]);
 
-/** Blanks the name of a line whose nearest summary is procurement, unless it maps to a preconstruction step. */
+/** Blanks the name of a line whose nearest summary is procurement or buyout, unless it maps to a preconstruction step. */
 export function withoutProcurement<T extends { externalUid: number; parentExternalUid: number | null; name: string }>(activities: T[], dictionary: Map<string, string>): T[] {
   const nameOf = new Map(activities.map((a) => [a.externalUid, a.name]));
   return activities.map((a) => {

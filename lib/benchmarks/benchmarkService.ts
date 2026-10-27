@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { importQuality } from "@/lib/health/healthService";
 import { getDictionary } from "@/lib/normalize/normalizationService";
-import { aggregate, aggregateFacts, blend, blendShare, outsideRange, scheduleFacts, scopeSpans, scopeWorkedDays, subTypeGroup, type Contribution, type ProjectFacts, type StoredMeasure, type Quartiles, type ScopeBenchmarkView, type ScopeRanges, withoutProcurement } from "@/lib/benchmarks/benchmarks";
+import { aggregate, aggregateFacts, blend, blendShare, outsideRange, scheduleFacts, scopeSpans, scopeLongestActivity, subTypeGroup, type Contribution, type ProjectFacts, type StoredMeasure, type Quartiles, type ScopeBenchmarkView, type ScopeRanges, withoutProcurement } from "@/lib/benchmarks/benchmarks";
 
 // Rough and junk files feed no benchmarks (Q70).
 const ELIGIBLE = new Set(["as_built", "baseline"]);
@@ -45,7 +45,7 @@ export async function recomputeBenchmarks(): Promise<{ projects: number; rows: n
         contributions.push({ scope, measure, ...group, days });
       }
     }
-    for (const [scope, days] of scopeWorkedDays(earliest.activities, dictionary)) {
+    for (const [scope, days] of scopeLongestActivity(earliest.activities, dictionary)) {
       contributions.push({ scope, measure: "worked", ...group, days });
     }
   }

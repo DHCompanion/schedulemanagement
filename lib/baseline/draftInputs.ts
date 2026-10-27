@@ -61,7 +61,7 @@ export async function buildDraft(g: DraftGroup, names: string[], start: Date): P
     prisma.scopeSequence.findMany({ where: { ...groupWhere(g), fromScope: { in: names }, toScope: { in: names } } }),
   ]);
   const scopes = names.map((name) => {
-    // Days worked, not first-to-last span: phased work would otherwise count its idle months.
+    // The longest single activity, not the span or zones added up: phased and zoned work would otherwise count every zone.
     const worked = ranges.get(name)?.worked ?? null;
     return { name, days: worked?.p75 ?? null, typeN: worked?.typeN ?? 0, n: worked?.n ?? 0 };
   });

@@ -56,7 +56,7 @@ describe.runIf(!!process.env.DATABASE_URL)("benchmarkService (db)", () => {
       ["planned", "buildingType", "OR Suite", 2, 9],
       ["planned", "sector", "Healthcare", 5, 6],
       ["planned", "subType", "OR Suite / Multiple", 1, 10],
-      // One continuous activity per project: days worked equal the planned span.
+      // One activity per project: its length equals the planned span.
       ["worked", "buildingType", "Clinic", 3, 4],
       ["worked", "buildingType", "OR Suite", 2, 9],
       ["worked", "sector", "Healthcare", 5, 6],
