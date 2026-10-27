@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { appPath } from "@/lib/http";
 import { isAdminSession } from "@/lib/adminSession";
 import { PROJECT_TYPES, SECTORS, SUBTYPES } from "@/lib/historical";
+import { DraftTypePicker } from "@/components/DraftTypePicker";
+import { DraftChecklist } from "@/components/DraftChecklist";
 import { getKnownScopes } from "@/lib/normalize/normalizationService";
 import { buildDraft, getChecklist, getDraftGroup, readDraftQuery } from "@/lib/baseline/draftInputs";
 import { fmtShortDate } from "@/lib/schedule/weekBuckets";
@@ -26,7 +28,7 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
   const raw = await props.searchParams;
   const q = new URLSearchParams(Object.entries(raw).flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).map((x) => [k, x])));
   const { type, subType: picked, start, scopes } = readDraftQuery(q);
-  // A subtype of another type is dropped with a note (the download route still rejects one).
+  // A subtype of another type (a hand-edited URL) is dropped; the download route rejects one.
   const subType = SUBTYPES[type]?.includes(picked) ? picked : "";
   const startText = q.get("start") || nextMonday();
   const group = type ? await getDraftGroup(type, subType) : null;
@@ -50,26 +52,11 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
       </p>
 
       <form className="mb-4 flex flex-wrap items-end gap-2">
-        <select name="type" defaultValue={type} aria-label="Project type" className={input} required>
-          <option value="">Project type…</option>
-          {SECTORS.map((s) => (
-            <optgroup key={s} label={s}>
-              {PROJECT_TYPES[s].map((t) => <option key={t}>{t}</option>)}
-            </optgroup>
-          ))}
-        </select>
-        {/* Always shown: no script swaps it when the type changes. One not in the type's list is dropped above. */}
-        <select name="sub" defaultValue={subType} aria-label="Subtype" className={input}>
-          <option value="">Any subtype</option>
-          {Object.entries(SUBTYPES).map(([t, subs]) => (
-            <optgroup key={t} label={t}>{subs.map((x) => <option key={x}>{x}</option>)}</optgroup>
-          ))}
-        </select>
+        <DraftTypePicker types={SECTORS.map((s) => ({ sector: s, types: PROJECT_TYPES[s] }))} subTypes={SUBTYPES} type={type} subType={subType} className={input} />
         <input type="date" name="start" defaultValue={startText} aria-label="Start date" className={input} required />
         <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Choose names</button>
       </form>
 
-      {picked && !subType && type && <p className="mb-2 text-sm text-amber-700">{picked} isn&apos;t a subtype of {type}; showing all {type} projects.</p>}
       {group && "error" in group && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{group.error}</p>}
 
       {ready && (
@@ -81,15 +68,7 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
           <p className="mb-2 text-sm text-slate-600">
             {ready.sectorProjects} {ready.sector} projects, {ready.typeProjects} of them {type}{ready.subType && `, ${ready.subTypeProjects} ${ready.subType}`}. Ticked: names in at least a quarter of them.
           </p>
-          <div className="mb-3 grid max-h-96 grid-cols-1 gap-x-4 overflow-y-auto sm:grid-cols-2">
-            {checklist.map((c) => (
-              <label key={c.name} className="flex items-center gap-2 py-0.5 text-sm">
-                <input type="checkbox" name="scope" value={c.name} defaultChecked={chosen.includes(c.name)} />
-                <span>{c.name}</span>
-                <span className="text-xs text-slate-400">{Math.round(c.share * 100)}%</span>
-              </label>
-            ))}
-          </div>
+          <DraftChecklist items={checklist.map((c) => ({ ...c, checked: chosen.includes(c.name) }))} />
           <div className="flex flex-wrap items-end gap-2">
             <input name="scope" list="known-scopes" placeholder="Add a standard name" aria-label="Add a standard name" className={`${input} w-64`} />
             <datalist id="known-scopes">{known.map((s) => <option key={s} value={s} />)}</datalist>
