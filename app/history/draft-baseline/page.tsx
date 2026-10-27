@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { appPath } from "@/lib/http";
 import { isAdminSession } from "@/lib/adminSession";
-import { SUBTYPES } from "@/lib/historical";
+import { PROJECT_TYPES, SECTORS, SUBTYPES } from "@/lib/historical";
 import { DraftTypePicker } from "@/components/DraftTypePicker";
 import { getKnownScopes } from "@/lib/normalize/normalizationService";
 import { buildDraft, getChecklist, getDraftGroup, readDraftQuery } from "@/lib/baseline/draftInputs";
@@ -51,7 +51,7 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
       </p>
 
       <form className="mb-4 flex flex-wrap items-end gap-2">
-        <DraftTypePicker type={type} subType={subType} className={input} />
+        <DraftTypePicker types={SECTORS.map((s) => ({ sector: s, types: PROJECT_TYPES[s] }))} subTypes={SUBTYPES} type={type} subType={subType} className={input} />
         <input type="date" name="start" defaultValue={startText} aria-label="Start date" className={input} required />
         <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Choose names</button>
       </form>
