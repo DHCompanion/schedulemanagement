@@ -228,4 +228,11 @@ Decisions, 2026-10-26:
 - **Checklist:** every name seen in the sector, pre-ticked at ≥ 25% of past projects. At 50%, an Imaging draft had 8 names.
 - **Links:** keep a link when ≥ 50% of the projects with both names use it. An activity left with no predecessor or successor gets its commonest one as a weaker link. Links are counted through milestones and unnamed activities.
 - **Out of v1:** size (Q67), split-rule children, phase grouping. Calendar: Mon–Fri, 8 hours, no holidays.
-- **Next:** a duration review. Some long names (Doors & Hardware, Light Fixtures) likely carry procurement or delivery lines mapped as work.
+Duration review, 2026-10-27 (`Schedulecomparisions/_xml/duration-review.csv` lists each name's source schedules and activities):
+
+- **Durations:** the P75 of each project's **longest single activity** for the name. Adding up zones inflated names repeated per zone (six 11-day door zones made 63). The stored measure key stays `worked`.
+- **Buyout:** lines under a buyout summary are buyout packages and drop out like procurement lines.
+- **Procurement:** every Procurement line is dropped from benchmarks. Only FY2025–26 schedules carry useful procurement, and real lead times live in the procurement tool.
+- **Outliers:** a name's top value per measure and sector is dropped when it is 20+ days and over 1.5× the next, with 3+ projects (a 265-day rough-in against a next-longest 40).
+- **Milestones:** waiting periods schedules model as tasks (Notice to Proceed, Owner Contract Executed, Permit Issued, …) go into drafts as milestones (`DRAFT_MILESTONES`).
+- **Earlier:** a duration review. Some long names (Doors & Hardware, Light Fixtures) likely carry procurement or delivery lines mapped as work.

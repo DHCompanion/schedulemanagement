@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aggregate, blend, outsideRange, quartiles, scopeLongestActivity, scopeSpans, withoutProcurement } from "@/lib/benchmarks/benchmarks";
+import { aggregate, blend, dropOutliers, outsideRange, quartiles, scopeLongestActivity, scopeSpans, withoutProcurement } from "@/lib/benchmarks/benchmarks";
 
 const d = (s: string) => new Date(`${s}T08:00:00Z`);
 const act = (name: string, start: string, finish: string, actual?: [string | null, string | null]) => ({
@@ -67,6 +67,20 @@ describe("aggregate", () => {
   });
 });
 
+describe("dropOutliers", () => {
+  const c = (days: number, scope = "Paint", sector = "Healthcare") => ({ scope, measure: "worked" as const, sector, buildingType: null, days });
+  it("drops a name's top value when it is 20+ days and over 1.5× the next, with 3+ projects in the sector", () => {
+    expect(dropOutliers([c(265), c(40), c(10)]).map((x) => x.days)).toEqual([40, 10]);
+    // 1.5× exactly stays; under 20 days stays; 2 projects stay.
+    expect(dropOutliers([c(60), c(40), c(10)])).toHaveLength(3);
+    expect(dropOutliers([c(19), c(5), c(5)])).toHaveLength(3);
+    expect(dropOutliers([c(100), c(10)])).toHaveLength(2);
+  });
+  it("judges each name, measure and sector on its own", () => {
+    expect(dropOutliers([c(100), c(10), c(10), c(100, "Frame"), c(90, "Frame"), c(10, "Frame"), c(100, "Paint", "Commercial")])).toHaveLength(6);
+  });
+});
+
 describe("blend", () => {
   const sector = { n: 20, p25: 10, median: 20, p75: 30 };
   it("shrinks the building type toward the sector by n / (n + 5)", () => {
@@ -92,7 +106,7 @@ describe("outsideRange", () => {
 });
 
 describe("withoutProcurement", () => {
-  it("unnames lines under a procurement or buyout summary, except preconstruction steps", () => {
+  it("unnames lines under a procurement or buyout summary, except preconstruction steps, and every Procurement line", () => {
     const line = (externalUid: number, name: string, parentExternalUid: number | null) => ({ externalUid, name, parentExternalUid });
     const acts = [
       line(1, "Long Lead Items", null), line(2, "Doors", 1),
@@ -100,8 +114,9 @@ describe("withoutProcurement", () => {
       line(5, "Submittal Review", null), line(6, "Submittals", 5),
       line(7, "Equipment Install", null), line(8, "Doors", 7),
       line(9, "Early Release Buyout", null), line(10, "Doors", 9), line(11, "Buyout", 9),
+      line(12, "Milestones", null), line(13, "Procurement", 12),
     ];
-    const names = withoutProcurement(acts, new Map([["doors", "Install Doors & Hardware"], ["submittals", "Submittals"], ["buyout", "Project Buyout"]])).map((a) => a.name);
-    expect(names).toEqual(["Long Lead Items", "", "Interior Finishout", "Doors", "Submittal Review", "Submittals", "Equipment Install", "Doors", "Early Release Buyout", "", "Buyout"]);
+    const names = withoutProcurement(acts, new Map([["doors", "Install Doors & Hardware"], ["submittals", "Submittals"], ["buyout", "Project Buyout"], ["procurement", "Procurement"]])).map((a) => a.name);
+    expect(names).toEqual(["Long Lead Items", "", "Interior Finishout", "Doors", "Submittal Review", "Submittals", "Equipment Install", "Doors", "Early Release Buyout", "", "Buyout", "Milestones", ""]);
   });
 });

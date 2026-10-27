@@ -16,6 +16,17 @@ describe("assembleDraft", () => {
     expect(draft.warnings.some((w) => w.includes("lean on the sector"))).toBe(false);
   });
 
+  it("puts waiting-period names in as milestones, with or without duration data", () => {
+    const draft = assembleDraft([scope("Frame", 5), scope("Permit Issued", 25.5), scope("Notice to Proceed", null, 0, 0), scope("Hang", 3)], [link("Frame", "Permit Issued"), link("Permit Issued", "Hang")], start);
+    const a = byName(draft);
+    // Frame Mon 3 – Fri 7; the permit lands at Frame's finish; Hang starts Mon 10.
+    expect(a.get("Permit Issued")).toMatchObject({ days: 0, milestone: true });
+    expect([day(a.get("Permit Issued")!.start), day(a.get("Permit Issued")!.finish)]).toEqual(["2025-03-07", "2025-03-07"]);
+    expect(day(a.get("Hang")!.start)).toBe("2025-03-10");
+    expect(a.get("Notice to Proceed")).toMatchObject({ days: 0, milestone: true });
+    expect(draft.warnings.some((w) => w.startsWith("Notice to Proceed") || w.startsWith("Permit Issued"))).toBe(false);
+  });
+
   it("schedules FS and SS links forward from the start milestone, P75 rounded up, and ties ends to a finish milestone", () => {
     const draft = assembleDraft([scope("Frame", 4.2), scope("Hang", 3), scope("Layout", 2)], [link("Frame", "Hang"), link("Frame", "Layout", 0.6, "SS", 1)], start);
     const a = byName(draft);

@@ -119,14 +119,16 @@ export function scopeLongestActivity(activities: SpanActivity[], dictionary: Map
 // Procurement belongs to the procurement tool, not the schedule (decided 2026-10-26).
 // "Doors" under Long Lead Items is a delivery, not the install it maps to; "Electrical" under Early Release Buyout is a buyout package.
 const PROCUREMENT_SUMMARY = /procure|long lead|submittal|material|buyout/i;
-const PRECONSTRUCTION = new Set(["Procurement", "Submittals", "Project Buyout", "Permitting", "Bidding", "CD Pricing", "Task Order"]);
+// Procurement durations live in the procurement tool, and old schedules' are guesses: every Procurement line is dropped (2026-10-27).
+const PRECONSTRUCTION = new Set(["Submittals", "Project Buyout", "Permitting", "Bidding", "CD Pricing", "Task Order"]);
 
-/** Blanks the name of a line whose nearest summary is procurement or buyout, unless it maps to a preconstruction step. */
+/** Blanks every Procurement line, and any line whose nearest summary is procurement or buyout unless it maps to a preconstruction step. */
 export function withoutProcurement<T extends { externalUid: number; parentExternalUid: number | null; name: string }>(activities: T[], dictionary: Map<string, string>): T[] {
   const nameOf = new Map(activities.map((a) => [a.externalUid, a.name]));
   return activities.map((a) => {
     const parent = a.parentExternalUid === null ? undefined : nameOf.get(a.parentExternalUid);
-    if (!parent || !PROCUREMENT_SUMMARY.test(parent) || PRECONSTRUCTION.has(dictionary.get(normalizeName(a.name)) ?? "")) return a;
+    const scope = dictionary.get(normalizeName(a.name)) ?? "";
+    if (scope !== "Procurement" && (!parent || !PROCUREMENT_SUMMARY.test(parent) || PRECONSTRUCTION.has(scope))) return a;
     return { ...a, name: "" };
   });
 }
@@ -140,6 +142,27 @@ export function quartiles(values: number[]): Quartiles {
     return s[lo] + (s[Math.ceil(i)] - s[lo]) * (i - lo);
   };
   return { p25: at(0.25), median: at(0.5), p75: at(0.75) };
+}
+
+// A name's top value is a one-off when it is OUTLIER_MIN_DAYS+ and over OUTLIER_RATIO × the next (decided 2026-10-27).
+export const OUTLIER_MIN_DAYS = 20;
+export const OUTLIER_RATIO = 1.5;
+const OUTLIER_MIN_PROJECTS = 3;
+
+/** Drops each name's, measure's and sector's one-off top value: a 265-day rough-in when the next longest is 40. */
+export function dropOutliers(contributions: Contribution[]): Contribution[] {
+  const groups = new Map<string, Contribution[]>();
+  for (const c of contributions) {
+    const id = JSON.stringify([c.scope, c.measure, c.sector]);
+    groups.set(id, [...(groups.get(id) ?? []), c]);
+  }
+  const drop = new Set<Contribution>();
+  for (const g of groups.values()) {
+    if (g.length < OUTLIER_MIN_PROJECTS) continue;
+    const [top, next] = [...g].sort((a, b) => b.days - a.days);
+    if (top.days >= OUTLIER_MIN_DAYS && top.days > OUTLIER_RATIO * next.days) drop.add(top);
+  }
+  return contributions.filter((c) => !drop.has(c));
 }
 
 /** One row per standard name, measure and group (each sector, building type and subtype). Callers pass one contribution per project. */
