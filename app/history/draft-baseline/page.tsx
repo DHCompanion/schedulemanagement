@@ -4,6 +4,7 @@ import { appPath } from "@/lib/http";
 import { isAdminSession } from "@/lib/adminSession";
 import { PROJECT_TYPES, SECTORS, SUBTYPES } from "@/lib/historical";
 import { DraftTypePicker } from "@/components/DraftTypePicker";
+import { DraftChecklist } from "@/components/DraftChecklist";
 import { getKnownScopes } from "@/lib/normalize/normalizationService";
 import { buildDraft, getChecklist, getDraftGroup, readDraftQuery } from "@/lib/baseline/draftInputs";
 import { fmtShortDate } from "@/lib/schedule/weekBuckets";
@@ -67,15 +68,7 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
           <p className="mb-2 text-sm text-slate-600">
             {ready.sectorProjects} {ready.sector} projects, {ready.typeProjects} of them {type}{ready.subType && `, ${ready.subTypeProjects} ${ready.subType}`}. Ticked: names in at least a quarter of them.
           </p>
-          <div className="mb-3 grid max-h-96 grid-cols-1 gap-x-4 overflow-y-auto sm:grid-cols-2">
-            {checklist.map((c) => (
-              <label key={c.name} className="flex items-center gap-2 py-0.5 text-sm">
-                <input type="checkbox" name="scope" value={c.name} defaultChecked={chosen.includes(c.name)} />
-                <span>{c.name}</span>
-                <span className="text-xs text-slate-400">{Math.round(c.share * 100)}%</span>
-              </label>
-            ))}
-          </div>
+          <DraftChecklist items={checklist.map((c) => ({ ...c, checked: chosen.includes(c.name) }))} />
           <div className="flex flex-wrap items-end gap-2">
             <input name="scope" list="known-scopes" placeholder="Add a standard name" aria-label="Add a standard name" className={`${input} w-64`} />
             <datalist id="known-scopes">{known.map((s) => <option key={s} value={s} />)}</datalist>
