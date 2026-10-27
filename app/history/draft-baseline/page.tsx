@@ -26,9 +26,8 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
   const raw = await props.searchParams;
   const q = new URLSearchParams(Object.entries(raw).flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).map((x) => [k, x])));
   const { type, subType: picked, start, scopes } = readDraftQuery(q);
-  // The form keeps the old subtype when the type changes; drop it here (the download route still rejects one).
-  const subTypes = SUBTYPES[type];
-  const subType = subTypes?.includes(picked) ? picked : "";
+  // A subtype of another type is dropped with a note (the download route still rejects one).
+  const subType = SUBTYPES[type]?.includes(picked) ? picked : "";
   const startText = q.get("start") || nextMonday();
   const group = type ? await getDraftGroup(type, subType) : null;
   const ready = group && !("error" in group) ? group : null;
@@ -59,17 +58,18 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
             </optgroup>
           ))}
         </select>
-        {/* Shows once a type with subtypes is chosen. */}
-        {subTypes && (
-          <select name="sub" defaultValue={subType} aria-label="Subtype" className={input}>
-            <option value="">Any subtype</option>
-            {subTypes.map((t) => <option key={t}>{t}</option>)}
-          </select>
-        )}
+        {/* Always shown: no script swaps it when the type changes. One not in the type's list is dropped above. */}
+        <select name="sub" defaultValue={subType} aria-label="Subtype" className={input}>
+          <option value="">Any subtype</option>
+          {Object.entries(SUBTYPES).map(([t, subs]) => (
+            <optgroup key={t} label={t}>{subs.map((x) => <option key={x}>{x}</option>)}</optgroup>
+          ))}
+        </select>
         <input type="date" name="start" defaultValue={startText} aria-label="Start date" className={input} required />
         <button className="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white">Choose names</button>
       </form>
 
+      {picked && !subType && type && <p className="mb-2 text-sm text-amber-700">{picked} isn&apos;t a subtype of {type}; showing all {type} projects.</p>}
       {group && "error" in group && <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{group.error}</p>}
 
       {ready && (
