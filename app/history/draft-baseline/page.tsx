@@ -87,7 +87,7 @@ export default async function DraftBaselinePage(props: { searchParams: Promise<R
               Download MS Project XML
             </a>
           </div>
-          <p className="mb-2 text-xs text-slate-500">Durations are P75 days worked in past projects. <span className="italic">Italic</span> predecessors are weaker links.</p>
+          <p className="mb-2 text-xs text-slate-500">Durations are the P75 of each past project's longest activity for the name. <span className="italic">Italic</span> predecessors are weaker links.</p>
           {draft.warnings.length > 0 && (
             <ul className="mb-3 list-disc rounded border border-amber-200 bg-amber-50 py-2 pl-6 pr-3 text-sm text-amber-800">
               {draft.warnings.map((w) => <li key={w}>{w}</li>)}
