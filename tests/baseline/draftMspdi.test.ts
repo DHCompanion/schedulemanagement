@@ -6,7 +6,7 @@ import { parseMspXml } from "@/lib/msp/parseMspXml";
 describe("draftToMspdi", () => {
   it("writes a file our own importer reads back: tasks, durations, links, lags", () => {
     const draft = assembleDraft(
-      [{ name: "Frame Walls", days: 5, typeN: 9 }, { name: "Tape & Bed", days: 3, typeN: 9 }],
+      [{ name: "Frame Walls", days: 5, typeN: 9, n: 20 }, { name: "Tape & Bed", days: 3, typeN: 9, n: 20 }],
       [{ from: "Frame Walls", to: "Tape & Bed", share: 0.8, base: 20, type: "SS", lagDays: 2 }],
       new Date("2025-03-03T00:00:00Z"),
     );

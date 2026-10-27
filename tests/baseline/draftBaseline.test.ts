@@ -2,12 +2,20 @@ import { describe, it, expect } from "vitest";
 import { assembleDraft, type DraftLink } from "@/lib/baseline/draftBaseline";
 
 const start = new Date("2025-03-03T00:00:00Z"); // a Monday
-const scope = (name: string, days: number | null, typeN = 5) => ({ name, days, typeN });
+const scope = (name: string, days: number | null, typeN = 5, n = 20) => ({ name, days, typeN, n });
 const link = (from: string, to: string, share = 0.8, type: DraftLink["type"] = "FS", lagDays = 0, base = 10): DraftLink => ({ from, to, share, base, type, lagDays });
 const day = (d: Date) => d.toISOString().slice(0, 10);
 const byName = (draft: ReturnType<typeof assembleDraft>) => new Map(draft.activities.map((a) => [a.name, a]));
 
 describe("assembleDraft", () => {
+  it("keeps a name with under 5 projects behind it, flagged thin, and leaves out one with none", () => {
+    const draft = assembleDraft([scope("Install MRI Equipment", 18, 3, 3), scope("Ramp Down MRI", null, 0, 0), scope("Frame", 4)], [], start);
+    expect(byName(draft).get("Install MRI Equipment")).toMatchObject({ days: 18, lowConfidence: true });
+    expect(draft.warnings).toContain("Install MRI Equipment: only 3 projects, duration is a rough guess.");
+    expect(draft.warnings).toContain("Ramp Down MRI: no duration data, left out.");
+    expect(draft.warnings.some((w) => w.includes("lean on the sector"))).toBe(false);
+  });
+
   it("schedules FS and SS links forward from the start milestone, P75 rounded up, and ties ends to a finish milestone", () => {
     const draft = assembleDraft([scope("Frame", 4.2), scope("Hang", 3), scope("Layout", 2)], [link("Frame", "Hang"), link("Frame", "Layout", 0.6, "SS", 1)], start);
     const a = byName(draft);

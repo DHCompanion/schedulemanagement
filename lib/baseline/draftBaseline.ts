@@ -11,6 +11,8 @@ export interface DraftScope {
   days: number | null;
   /** Projects of the building type behind the range; under THIN it leans on the sector. */
   typeN: number;
+  /** Sector projects behind the range; under THIN the duration is a rough guess. */
+  n: number;
 }
 
 export interface DraftLink {
@@ -83,10 +85,11 @@ function breakLoops(names: string[], links: DraftLink[], warnings: string[]): Dr
 
 export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: Date): Draft {
   const warnings: string[] = [];
-  const nodes = new Map<string, { days: number; typeN: number }>();
+  const nodes = new Map<string, { days: number; typeN: number; n: number }>();
   for (const s of scopes) {
-    if (s.days === null) warnings.push(`${s.name}: no duration data, left out.`);
-    else nodes.set(s.name, { days: Math.max(1, Math.ceil(s.days)), typeN: s.typeN });
+    if (s.days === null) { warnings.push(`${s.name}: no duration data, left out.`); continue; }
+    if (s.n < THIN) warnings.push(`${s.name}: only ${s.n} project${s.n === 1 ? "" : "s"}, duration is a rough guess.`);
+    nodes.set(s.name, { days: Math.max(1, Math.ceil(s.days)), typeN: s.typeN, n: s.n });
   }
   const names = [...nodes.keys()].sort((a, b) => a.localeCompare(b));
   // Links most projects with both names use; then, for an activity left with
@@ -170,7 +173,8 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
   if (weakKept) warnings.push(`${weakKept} link${weakKept === 1 ? " is" : "s are"} an activity's commonest neighbour but used by under half the projects.`);
   const thinLinks = usable.filter((l) => l.base < THIN).length;
   if (thinLinks) warnings.push(`${thinLinks} link${thinLinks === 1 ? " rests" : "s rest"} on fewer than ${THIN} projects.`);
-  const thinNames = order.filter((n) => nodes.get(n)!.typeN < THIN).length;
+  // Names under THIN sector projects were warned about one by one above.
+  const thinNames = order.filter((n) => nodes.get(n)!.typeN < THIN && nodes.get(n)!.n >= THIN).length;
   if (thinNames) warnings.push(`${thinNames} of ${order.length} durations lean on the sector (fewer than ${THIN} projects of this type).`);
   return { activities, warnings, workingDays: order.length ? lastDay + 1 : 0 };
 }

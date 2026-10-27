@@ -86,13 +86,13 @@ export function groupFilter(sector: string, buildingType: string | null, subType
 }
 
 /** Per standard name, the planned and actual ranges for a project's sector, blended toward its building type and subtype. */
-export async function getBenchmarkRanges(sector: string | null, buildingType: string | null, subType: string | null = null): Promise<Map<string, ScopeRanges>> {
+export async function getBenchmarkRanges(sector: string | null, buildingType: string | null, subType: string | null = null, minSector?: number): Promise<Map<string, ScopeRanges>> {
   if (!sector) return new Map();
   const rows = await prisma.scopeBenchmark.findMany({ where: groupFilter(sector, buildingType, subType) });
   const stat = new Map(rows.map((r) => [`${r.canonicalScope}|${r.measure}|${r.groupKind}`, r]));
   const ranges = new Map<string, ScopeRanges>();
   for (const scope of new Set(rows.map((r) => r.canonicalScope))) {
-    const range = (m: StoredMeasure) => blend(stat.get(`${scope}|${m}|sector`), stat.get(`${scope}|${m}|buildingType`), stat.get(`${scope}|${m}|subType`));
+    const range = (m: StoredMeasure) => blend(stat.get(`${scope}|${m}|sector`), stat.get(`${scope}|${m}|buildingType`), stat.get(`${scope}|${m}|subType`), minSector);
     const r = { actual: range("actual"), planned: range("planned"), worked: range("worked") };
     if (r.actual || r.planned) ranges.set(scope, r);
   }

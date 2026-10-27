@@ -171,14 +171,16 @@ function shrink<T extends { n: number }>(prior: number, own: T | undefined, k: n
 
 /**
  * The building type's quartiles shrunk toward the sector's, (n·type + k·sector) / (n + k),
- * then the subtype's toward that with SUBTYPE_PRIOR. No range under MIN_SECTOR_PROJECTS sector projects.
+ * then the subtype's toward that with SUBTYPE_PRIOR. No range under minSector sector projects
+ * (drafts pass 1 and flag the result thin).
  */
 export function blend(
   sector: (Quartiles & { n: number }) | undefined,
   type: (Quartiles & { n: number }) | undefined,
   sub?: Quartiles & { n: number },
+  minSector = MIN_SECTOR_PROJECTS,
 ): BenchmarkRange | null {
-  if (!sector || sector.n < MIN_SECTOR_PROJECTS) return null;
+  if (!sector || sector.n < minSector) return null;
   const typeN = type?.n ?? 0;
   const mix = (f: keyof Quartiles) => shrink(shrink(sector[f], type, PRIOR_STRENGTH, (o) => o[f]), sub, SUBTYPE_PRIOR, (o) => o[f]);
   return { p25: mix("p25"), median: mix("median"), p75: mix("p75"), n: sector.n, typeN, typeShare: typeN / (typeN + PRIOR_STRENGTH) };
