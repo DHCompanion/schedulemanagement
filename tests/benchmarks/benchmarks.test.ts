@@ -75,6 +75,8 @@ describe("blend", () => {
   it("uses the sector alone without building-type data, and nothing under 5 sector projects", () => {
     expect(blend(sector, undefined)).toMatchObject({ median: 20, typeN: 0, typeShare: 0 });
     expect(blend({ ...sector, n: 4 }, { n: 4, p25: 1, median: 2, p75: 3 })).toBeNull();
+    // Drafts lower the floor and flag the result thin instead.
+    expect(blend({ ...sector, n: 4 }, undefined, undefined, 1)).toMatchObject({ median: 20, n: 4 });
   });
   it("then shrinks the subtype toward that by n / (n + 2)", () => {
     // Type-blended median 25; 2 IR projects at 45 weigh half: 35.

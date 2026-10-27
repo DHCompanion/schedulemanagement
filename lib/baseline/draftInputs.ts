@@ -56,13 +56,14 @@ export async function getChecklist(g: DraftGroup): Promise<ChecklistItem[]> {
 
 export async function buildDraft(g: DraftGroup, names: string[], start: Date): Promise<Draft> {
   const [ranges, sequences] = await Promise.all([
-    getBenchmarkRanges(g.sector, g.buildingType, g.subType),
+    // Any project counts here: a ticked specialty name with a few schedules beats none (flagged thin).
+    getBenchmarkRanges(g.sector, g.buildingType, g.subType, 1),
     prisma.scopeSequence.findMany({ where: { ...groupWhere(g), fromScope: { in: names }, toScope: { in: names } } }),
   ]);
   const scopes = names.map((name) => {
     // Days worked, not first-to-last span: phased work would otherwise count its idle months.
     const worked = ranges.get(name)?.worked ?? null;
-    return { name, days: worked?.p75 ?? null, typeN: worked?.typeN ?? 0 };
+    return { name, days: worked?.p75 ?? null, typeN: worked?.typeN ?? 0, n: worked?.n ?? 0 };
   });
   // Pairs come from the sector; the building type's and subtype's own counts pull
   // the share where they have one. No 5-project floor here: thin links are kept and warned about.
