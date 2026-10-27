@@ -48,7 +48,11 @@ export function NameBacklogDialog({ scopes }: { scopes: string[] }) {
   }
 
   async function act(body: Record<string, unknown>) {
-    if (!(await post({ name: rows[0].normalizedName, ...body }))) return;
+    const done = rows[0];
+    if (!(await post({ name: done.normalizedName, ...body }))) return;
+    // Keep the bulk preview and progress true without waiting for a reload.
+    setHigh((h) => h.filter((x) => x.rawName !== done.rawName));
+    setProgress((p) => p && { ...p, settledNames: p.settledNames + 1, coverage: p.poolTasks ? p.coverage + done.taskCount / p.poolTasks : p.coverage });
     setOther("");
     const rest = rows.slice(1);
     setRows(rest);
@@ -97,7 +101,9 @@ export function NameBacklogDialog({ scopes }: { scopes: string[] }) {
         )}
         <div className="px-4 py-3">
           {!r ? (
-            <p className="text-sm text-slate-600">{progress ? "Nothing left to review." : "Loading…"}</p>
+            <p className="text-sm text-slate-600">
+              {!progress ? "Loading…" : skipped.size && progress.settledNames < progress.names ? "Only names you skipped are left. Reload the page to see them again." : "Nothing left to review."}
+            </p>
           ) : (
             <>
               <div className="flex flex-wrap items-baseline justify-between gap-x-4">

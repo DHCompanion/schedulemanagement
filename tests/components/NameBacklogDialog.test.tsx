@@ -18,7 +18,7 @@ describe("NameBacklogDialog", () => {
     const all = [row("paint walls"), row("vavs", { kind: "procurement", suggestion: "", confidence: "medium" })];
     vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
       if (init?.method === "POST") { posts.push(JSON.parse(String(init.body))); return Response.json({ ok: true }); }
-      return Response.json({ rows: all.filter((r) => !posts.some((p) => p.name === r.normalizedName)), progress: { names: 2, settledNames: 0, poolTasks: 100, coverage: 0.9, high: 1 }, high: [] });
+      return Response.json({ rows: all.filter((r) => !posts.some((p) => p.name === r.normalizedName)), progress: { names: 2, settledNames: posts.length, poolTasks: 100, coverage: 0.9, high: 1 }, high: [] });
     }));
     render(<NameBacklogDialog scopes={["Paint", "Frame"]} />);
     fireEvent.click(screen.getByRole("button", { name: /Review backlog/ }));
@@ -30,6 +30,7 @@ describe("NameBacklogDialog", () => {
     await waitFor(() => expect(posts).toEqual([{ name: "paint walls", action: "map", scope: "Paint" }]));
 
     expect(await screen.findByText("vavs")).toBeTruthy();
+    expect(screen.getByText(/1 of 2 names done/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Another standard name"), { target: { value: "Frame" } });
     fireEvent.click(screen.getByRole("button", { name: "Map" }));
     await waitFor(() => expect(posts.at(-1)).toEqual({ name: "vavs", action: "map", scope: "Frame" }));
