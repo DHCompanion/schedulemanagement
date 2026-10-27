@@ -51,6 +51,8 @@ export interface Draft {
 }
 
 export const LINK_SHARE = 0.5;
+// Waiting periods schedules model as tasks (NTP Received at 186 days): a draft makes them milestones (decided 2026-10-27).
+export const DRAFT_MILESTONES = new Set(["Notice of Award", "Notice to Proceed", "Owner Contract Executed", "Permit Issued", "Permit Received", "Substantial Completion", "Certificate of Occupancy", "Turnover"]);
 export const THIN = 5;
 
 const DAY_START_H = 8;
@@ -87,6 +89,7 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
   const warnings: string[] = [];
   const nodes = new Map<string, { days: number; typeN: number; n: number }>();
   for (const s of scopes) {
+    if (DRAFT_MILESTONES.has(s.name)) { nodes.set(s.name, { days: 0, typeN: s.typeN, n: s.n }); continue; }
     if (s.days === null) { warnings.push(`${s.name}: no duration data, left out.`); continue; }
     if (s.n < THIN) warnings.push(`${s.name}: only ${s.n} project${s.n === 1 ? "" : "s"}, duration is a rough guess.`);
     nodes.set(s.name, { days: Math.max(1, Math.ceil(s.days)), typeN: s.typeN, n: s.n });
@@ -152,6 +155,8 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
   const ef = (n: string) => es.get(n)! + nodes.get(n)!.days - 1;
   const hasSuccessor = new Set(usable.filter((l) => ef(l.to) >= ef(l.from)).map((l) => l.from));
   const lastDay = Math.max(0, ...order.map((n) => es.get(n)! + nodes.get(n)!.days - 1));
+  // A closing milestone sits at the next day's 08:00, the same working moment as lastDay's 17:00: Finish goes no earlier.
+  const finishAt = new Date(Math.max(dayEnd(lastDay).getTime(), ...order.filter((n) => nodes.get(n)!.days === 0).map((n) => dayStart(es.get(n)!).getTime())));
 
   const activities: DraftActivity[] = [
     { uid: 1, name: "Start", days: 0, start: dayStart(0), finish: dayStart(0), milestone: true, preds: [], lowConfidence: false },
@@ -159,12 +164,12 @@ export function assembleDraft(scopes: DraftScope[], links: DraftLink[], start: D
       const { days, typeN } = nodes.get(n)!;
       const preds = incoming.get(n)!.map((l) => ({ uid: uid.get(l.from)!, type: l.type, lagDays: Math.round(l.lagDays), weak: weak.has(l) }));
       return {
-        uid: uid.get(n)!, name: n, days, start: dayStart(es.get(n)!), finish: dayEnd(es.get(n)! + days - 1), milestone: false,
+        uid: uid.get(n)!, name: n, days, start: dayStart(es.get(n)!), finish: days === 0 ? dayStart(es.get(n)!) : dayEnd(es.get(n)! + days - 1), milestone: days === 0,
         preds: preds.length ? preds : [{ uid: 1, type: "FS" as const, lagDays: 0, weak: false }], lowConfidence: typeN < THIN,
       };
     }),
     {
-      uid: order.length + 2, name: "Finish", days: 0, start: dayEnd(lastDay), finish: dayEnd(lastDay), milestone: true,
+      uid: order.length + 2, name: "Finish", days: 0, start: finishAt, finish: finishAt, milestone: true,
       preds: order.filter((n) => !hasSuccessor.has(n)).map((n) => ({ uid: uid.get(n)!, type: "FS" as const, lagDays: 0, weak: false })),
       lowConfidence: false,
     },
