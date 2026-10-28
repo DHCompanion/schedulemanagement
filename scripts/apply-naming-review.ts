@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { prisma } from "@/lib/db";
 import { getKnownScopes } from "@/lib/normalize/normalizationService";
 import { applyNamingPlan, planListChange, planNamingSheet } from "@/lib/normalize/namingSheet";
-import { readCsv } from "./manifestRules";
+import { readCsv } from "./readCsv";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -30,7 +30,7 @@ async function main() {
   // Each file sees the list as the previous one left it — in a dry run too.
   let approved = await getKnownScopes();
   for (const file of files) {
-    const plan = planNamingSheet(readCsv(readFileSync(file, "utf8").replace(/^\uFEFF/, "")), approved, approveNew);
+    const plan = planNamingSheet(readCsv(readFileSync(file, "utf8")), approved, approveNew);
     const kinds = plan.ops.reduce<Record<string, number>>((n, o) => ({ ...n, [o.kind]: (n[o.kind] ?? 0) + 1 }), {});
     console.log(`\n${file}\n  rows to write: ${JSON.stringify(kinds)}`);
     const change = plan.standard ? await planListChange({ ...plan, standard: plan.standard }, approved) : null;

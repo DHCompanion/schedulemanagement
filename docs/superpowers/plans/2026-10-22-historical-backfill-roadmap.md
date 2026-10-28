@@ -181,7 +181,7 @@ Phases 1–3 are merged (#39, #40, #41, plus #42 for the logic tier on Data Heal
 - **Standard names (Q60):** the existing standard list is the set of `canonicalScope` values in `ScopeDictionaryEntry` (plus each scope's own name). No new list is drafted.
 - **Name review (Q61–Q63):** an admin page `/history/names` lists names the standard list doesn't cover, from historical **and** live projects, ranked by how many projects use them (default 3+, adjustable). Each row shows samples and the closest existing scope from `suggestScopes.ts`. Actions: approve the suggestion, pick another, add as a new standard scope, or ignore (a small table keeps ignored names hidden). The admin action is the approval. **No local model**, now or later.
 - **Controlled standard names (Q72–Q75, 2026-10-24), superseding Q60:** the standard list is its own table, `StandardScope`, seeded from every name in use and then trimmed to the reviewed `naming-dictionary-review.csv` (221 names). A mapping can only point at a listed name (`confirmMapping` refuses anything else). Only admins add names: on `/history/names`, by approving a request, or by writing a split rule. "Use as-is" is gone; users press **Request as new name**, and requests sit at the top of `/history/names` until an admin maps, approves, classifies or ignores the name. Besides map and ignore, a name can be classified **coarse** (bundles several standard names; optional list of which) or **procurement** (a material or lead-time line, kept for lead-time benchmarks). Both stay out of activity benchmarks. Reviewed sheets load through `scripts/apply-naming-review.ts` (dry run by default). Exact-name coverage tops out well below 95% (14,865 of 17,570 names appear on a single project), so the 95% goal is met by the approved list plus a better matcher, not by mapping every name. Rename/merge of a standard name comes next (PR 2); the matcher after that.
-- **Split-rule mining:** WBS parent→children patterns, matched against the existing `ScopeSplitRule`s first; only novel ones get queued. Details decided before that PR.
+- **Split-rule mining: dropped (2026-10-27).** Of 454 summary rows across the 139 benchmark schedules, 32 map to a standard name and about 6 give a real split; the rest are phase or trade headers. Not worth a tool; add those few by hand in the Split Rules panel.
 - **Sub identity (Q64):** deferred; nothing in Phases 5–7 uses it.
 
 ## Phase 5 — Benchmarks + surfacing
@@ -210,6 +210,7 @@ Decisions, 2026-10-23 (Q65–Q71):
 ## Phase 6 — Full FY2020–2026 backfill
 
 - The Phase 3 script on the full set, with the admin review queues worked in batches. Delete `scripts/backfill.ts` afterwards. Move `readCsv` out of `scripts/manifestRules.ts` first: `scripts/apply-naming-review.ts` uses it.
+- **Done (2026-10-27):** the backfill tooling is deleted (`backfill.ts`, `manifest.ts`, `manifestRules.ts`, `convert-mpp.sh`); `readCsv` lives in `scripts/readCsv.ts` for the review-sheet loaders.
 
 ## Phase 7 — Draft baseline generator
 

@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { prisma } from "@/lib/db";
 import { fiscalYear, planProjectNumbers } from "@/lib/historical";
-import { readCsv } from "./manifestRules";
+import { readCsv } from "./readCsv";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -21,7 +21,7 @@ async function main() {
 
   const projects = (await prisma.project.findMany({ where: { status: "historical" }, select: { id: true, name: true, externalProjectKey: true, projectNumber: true } }))
     .map((p) => ({ ...p, fy: fiscalYear(p.externalProjectKey) }));
-  const plan = planProjectNumbers(readCsv(readFileSync(file, "utf8").replace(/^﻿/, "")), projects);
+  const plan = planProjectNumbers(readCsv(readFileSync(file, "utf8")), projects);
   console.log(`numbers to write: ${plan.updates.length}`);
   console.log(`projects to delete: ${plan.deletes.length}`);
   for (const d of plan.deletes) console.log(`  DELETE ${d.label}`);
