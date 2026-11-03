@@ -115,6 +115,16 @@ describe.runIf(hasDb)("agent draft write", () => {
     expect(await prisma.agentWrite.count({ where: { progressUpdateId: draft.id, idempotencyKey: write.idempotencyKey } })).toBe(1);
   }, 30000);
 
+  it("answers many failing activities within the contract's 1,000-character message limit", async () => {
+    const { osProjectId, projectId } = await fixture("Agent Many");
+    const imp = (await prisma.scheduleImport.findFirst({ where: { projectId } }))!;
+    const name = "Install rooftop air handling unit and curb with crane pick, level ";
+    await prisma.activity.createMany({ data: Array.from({ length: 15 }, (_, i) => ({ scheduleImportId: imp.id, externalUid: 100 + i, canonicalActivityKey: `9.${i}|x`, name: name + i, type: "task" })) });
+    const r = await saveAgentDraft(osProjectId, input({ entries: Array.from({ length: 15 }, (_, i) => entry(`9.${i}|x`, { actualStart: null })) }), who);
+    expect(r).toMatchObject({ saved: false, reason: "invalid" });
+    expect(r.message!.length).toBeLessThanOrEqual(1000);
+  }, 30000);
+
   it("answers no_schedule for a project with nothing linked", async () => {
     expect(await saveAgentDraft(2_100_000_000, input(), who)).toMatchObject({ saved: false, reason: "no_schedule" });
   });

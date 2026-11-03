@@ -44,7 +44,8 @@ export async function saveAgentDraft(osProjectId: number, input: DraftWriteInput
     return await prisma.$transaction((tx) => write(tx, osProjectId, input, who, payloadHash, answer), { timeout: 15_000 });
   } catch (e) {
     if (e instanceof Refused) return e.result;
-    if (e instanceof SaveRefused) return { saved: false, asOfDate: null, activities: [], reason: e.status === 409 ? "finalized" : "invalid", message: e.message };
+    // The form's messages name every failing activity; the contract allows 1,000 characters.
+    if (e instanceof SaveRefused) return { saved: false, asOfDate: null, activities: [], reason: e.status === 409 ? "finalized" : "invalid", message: e.message.length > 1000 ? `${e.message.slice(0, 999)}…` : e.message };
     // The same write committed concurrently (a resend racing the first attempt), or someone started the draft.
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       const raced = await prior();
