@@ -39,14 +39,19 @@ describe.runIf(hasDb)("person draft date and discard", () => {
     await expect(changeDraftDate(draftId, "2026-11-10")).rejects.toMatchObject({ status: 409 });
   }, 30000);
 
-  it("discards an open draft with its entries and agent writes, never a finalized update", async () => {
+  it("discards an open draft with its entries, keeping agent write keys so a late resend can't bring it back; never a finalized update", async () => {
     const { project, draftId } = await fixture("Person Discard");
-    await saveAgentDraft(project.osProjectId!, { projectId: 1, idempotencyKey: "discard-key-0001", expectedDraftAsOfDate: "2026-11-03", entries: [{ key: "2|b", status: "in_progress", percentComplete: 10, actualStart: "2026-11-02", actualFinish: null, expectedDraft: null }] }, { personId: 7, agentId: "a", clientKey: "claude" });
-    expect(await prisma.agentWrite.count({ where: { progressUpdateId: draftId } })).toBe(1);
+    const who = { personId: 7, agentId: `a-${draftId}`, clientKey: "claude" };
+    const write = { projectId: 1, idempotencyKey: "discard-key-0001", expectedDraftAsOfDate: "2026-11-03", entries: [{ key: "2|b", status: "in_progress", percentComplete: 10, actualStart: "2026-11-02", actualFinish: null, expectedDraft: null }] };
+    const first = await saveAgentDraft(project.osProjectId!, write, who);
+    expect(first.saved).toBe(true);
     await discardDraft(draftId);
     expect(await prisma.progressUpdate.findUnique({ where: { id: draftId } })).toBeNull();
     expect(await prisma.progressEntry.count({ where: { progressUpdateId: draftId } })).toBe(0);
-    expect(await prisma.agentWrite.count({ where: { progressUpdateId: draftId } })).toBe(0);
+    // The resend gets its first answer; the discarded draft stays gone.
+    expect(await saveAgentDraft(project.osProjectId!, write, who)).toEqual(first);
+    expect(await prisma.progressUpdate.count({ where: { projectId: project.id, state: "draft" } })).toBe(0);
+    await prisma.agentWrite.deleteMany({ where: { agentId: who.agentId } });
     const finalized = (await prisma.progressUpdate.findFirst({ where: { projectId: project.id, state: "finalized" } }))!;
     await expect(discardDraft(finalized.id)).rejects.toMatchObject({ status: 409 });
     expect(await prisma.progressUpdate.findUnique({ where: { id: finalized.id } })).not.toBeNull();

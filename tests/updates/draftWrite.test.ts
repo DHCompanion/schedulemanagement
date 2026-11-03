@@ -11,6 +11,8 @@ describe.runIf(hasDb)("agent draft write", () => {
   const projectIds: string[] = [];
   afterAll(async () => {
     await prisma.project.deleteMany({ where: { id: { in: projectIds } } });
+    // Agent writes outlive their draft (ON DELETE SET NULL); remove this suite's.
+    await prisma.agentWrite.deleteMany({ where: { personId: who.personId, agentId: who.agentId, progressUpdateId: null } });
     await prisma.$disconnect();
   });
 
