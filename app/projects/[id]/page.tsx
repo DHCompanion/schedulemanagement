@@ -10,6 +10,7 @@ import { ProjectTabs } from "@/components/ProjectTabs";
 import { isAdminSession } from "@/lib/adminSession";
 import { StatStrip } from "@/components/StatStrip";
 import { ExportMenu } from "@/components/ExportMenu";
+import { agentSummary } from "@/lib/updates/agentSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,11 @@ export default async function ProjectPage(props: {
     orderBy: { asOfDate: "desc" },
     select: { asOfDate: true },
   });
+  const draft = await prisma.progressUpdate.findFirst({
+    where: { projectId: project.id, state: "draft" },
+    select: { id: true, agentWrites: { select: { result: true } } },
+  });
+  const agentCount = draft ? agentSummary(draft.agentWrites).length : 0;
   const lastUpdate = lastFinalized
     ? { daysAgo: Math.max(0, Math.floor((Date.now() - lastFinalized.asOfDate.getTime()) / 86_400_000)) }
     : null;
@@ -53,6 +59,7 @@ export default async function ProjectPage(props: {
             atRiskCount={schedule.atRiskCount}
             percentComplete={health.hasImport ? health.progress.percentComplete : 0}
             lastUpdate={lastUpdate}
+            agentDraft={draft && agentCount ? { updateId: draft.id, count: agentCount } : null}
           />
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap gap-2 text-xs text-slate-600">

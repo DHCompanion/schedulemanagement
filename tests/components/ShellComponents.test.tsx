@@ -44,6 +44,12 @@ describe("StatStrip", () => {
     const stale = screen.getByText("14d ago");
     expect(stale.className).toContain("text-amber-700");
   });
+  it("flags an open draft the agent updated, linking straight to it", () => {
+    render(<StatStrip projectId="p1" driftDays={0} atRiskCount={0} percentComplete={10} lastUpdate={{ daysAgo: 3 }} agentDraft={{ updateId: "u9", count: 2 }} />);
+    const line = screen.getByText("Agent updated 2 · review");
+    expect(line.closest("a")!.getAttribute("href")).toBe("/projects/p1/updates/u9");
+    expect(line.closest("a")!.className).toContain("border-amber-300");
+  });
   it("says never when no update has been finalized", () => {
     render(<StatStrip projectId="p1" driftDays={0} atRiskCount={0} percentComplete={0} lastUpdate={null} />);
     expect(screen.getByText("never")).toBeTruthy();
