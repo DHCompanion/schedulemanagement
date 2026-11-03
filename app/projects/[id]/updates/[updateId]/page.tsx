@@ -6,6 +6,7 @@ import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { getFinalizedEntries, overlayEntries } from "@/lib/updates/updateService";
 import { LookaheadUpdateForm, type LookaheadFormRow } from "@/components/LookaheadUpdateForm";
 import { deriveSectionInfo } from "@/lib/schedule/wbsGrouping";
+import { agentSummary } from "@/lib/updates/agentSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function UpdateEditorPage(props: { params: Promise<{ id: st
   const params = await props.params;
   const update = await prisma.progressUpdate.findUnique({
     where: { id: params.updateId },
-    include: { entries: true, scheduleImport: { include: { activities: true } } },
+    include: { entries: true, agentWrites: { select: { result: true } }, scheduleImport: { include: { activities: true } } },
   });
   if (!update || update.projectId !== params.id) notFound();
 
@@ -87,7 +88,8 @@ export default async function UpdateEditorPage(props: { params: Promise<{ id: st
       <p className="mb-4 text-sm text-slate-500">
         {update.lookaheadWeeks}-week lookahead · {finalized ? "finalized" : "draft"} · {rows.length} activities
       </p>
-      <LookaheadUpdateForm updateId={update.id} projectId={params.id} rows={rows} readOnly={finalized} />
+      <LookaheadUpdateForm updateId={update.id} projectId={params.id} rows={rows} readOnly={finalized}
+        asOfDate={isoDay(update.asOfDate)} agentKeys={finalized ? [] : agentSummary(update.agentWrites)} />
     </main>
   );
 }

@@ -2,6 +2,7 @@
 // data date, what is due and late, and the open draft update. The same functions as the draft update screen
 // and the schedule body, so an agent sees what a person sees. Schedule data only: no procurement, people or notes.
 import { prisma } from "@/lib/db";
+import { parseDay } from "@/lib/updates/dataDate";
 import { computeForecast, type ActivityForecast } from "@/lib/forecast/computeForecast";
 import { resolveForecastStatusDate } from "@/lib/forecast/resolveStatusDate";
 import { computeLookahead, type ActivityProgress, type LookaheadRow } from "@/lib/lookahead/computeLookahead";
@@ -32,12 +33,7 @@ const status = (s: string) => (STATUSES.has(s) ? s : "not_started");
 /** A draft entry as the read shows it. The draft write compares against exactly this to detect newer edits. */
 export const draftView = (d: DraftEntry) => ({ status: status(d.status), percentComplete: pct(d.percentComplete), actualStart: day(d.actualStart), actualFinish: day(d.actualFinish) });
 
-/** YYYY-MM-DD as UTC midnight, or null if it is not a real calendar date. */
-export function parseDay(s: string): Date | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
-  const d = new Date(`${s}T00:00:00.000Z`);
-  return !Number.isNaN(d.getTime()) && day(d) === s ? d : null;
-}
+export { parseDay };
 
 /** Contract-shaped data: late, then due, then expected start; whole activities dropped from the end to fit. */
 export function toResult(src: UpdateStateSource, fits: (data: unknown) => boolean) {

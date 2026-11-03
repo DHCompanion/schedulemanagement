@@ -84,8 +84,14 @@ function toEntry(r: LookaheadFormRow) {
 }
 
 export function LookaheadUpdateForm({
-  updateId, projectId, rows, readOnly,
-}: { updateId: string; projectId: string; rows: LookaheadFormRow[]; readOnly: boolean }) {
+  updateId, projectId, rows, readOnly, asOfDate = "", agentKeys = [],
+}: {
+  updateId: string; projectId: string; rows: LookaheadFormRow[]; readOnly: boolean;
+  /** The draft's data date (YYYY-MM-DD), for the Change data date control. */
+  asOfDate?: string;
+  /** Activities a person's agent saved into this draft (lib/updates/agentSummary.ts). */
+  agentKeys?: string[];
+}) {
   const router = useRouter();
   // A refresh after saving hands down fresh rows; reset to them so the form
   // (and the unsaved baseline) is the server's truth again.
@@ -103,7 +109,9 @@ export function LookaheadUpdateForm({
   const dirtyCount = data.filter(isDirty).length;
   const invalid = data.filter((r) => isDirty(r) && validate(r)).length;
   const upcomingCount = data.filter((r) => !r.dueByDataDate).length;
-  const visible = data.filter((r) => showUpcoming || r.dueByDataDate || isDirty(r));
+  const byAgent = new Set(agentKeys);
+  const visible = data.filter((r) => showUpcoming || r.dueByDataDate || isDirty(r) || byAgent.has(r.canonicalActivityKey));
+  const [newDate, setNewDate] = useState(asOfDate);
 
   useEffect(() => {
     if (!dirtyCount || readOnly) return;
@@ -136,6 +144,26 @@ export function LookaheadUpdateForm({
     }
     if (impacts.length) { setReview({ impacts, adjust: new Set(), finalize }); setBusy(false); return; }
     await persist(data.filter(isDirty).map(toEntry), finalize);
+  }
+
+  // Both reload the page from the server, so unsaved edits are saved (or dropped) first.
+  async function changeDate() {
+    setError(null);
+    setBusy(true);
+    const err = await sendJson(`/api/updates/${updateId}/date`, { asOfDate: newDate }).catch(() => "Couldn't change the data date. Try again.");
+    setBusy(false);
+    if (err) setError(err);
+    else router.refresh();
+  }
+
+  async function discard() {
+    if (!window.confirm("Discard this draft update? Its progress entries, including any your agent saved, are deleted.")) return;
+    setError(null);
+    setBusy(true);
+    const err = await sendJson(`/api/updates/${updateId}/discard`, {}).catch(() => "Couldn't discard the draft. Try again.");
+    setBusy(false);
+    if (err) setError(err);
+    else router.push(`/projects/${projectId}/updates`);
   }
 
   async function confirmReview() {
@@ -195,6 +223,27 @@ export function LookaheadUpdateForm({
         )}
       </div>
 
+      {!readOnly && agentKeys.length > 0 && (
+        <div role="status" className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span>
+            Your agent updated {agentKeys.length === 1 ? "1 activity" : `${agentKeys.length} activities`} in this draft.
+            Review the marked rows, then confirm to finalize the week.
+          </span>
+          <button type="button" disabled={busy} onClick={() => check(true)} className="rounded bg-amber-600 px-3 py-1.5 font-medium text-white disabled:opacity-50">Confirm &amp; finalize</button>
+        </div>
+      )}
+
+      {!readOnly && (
+        <div className="mb-3 flex flex-wrap items-end gap-2 text-sm">
+          <label className="text-xs font-medium text-slate-500">Data date
+            <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="mt-1 block rounded border border-slate-300 px-2 py-1 text-sm text-slate-900" />
+          </label>
+          <button type="button" disabled={busy || dirtyCount > 0 || !newDate || newDate === asOfDate} title={dirtyCount ? "Save your changes first" : undefined} onClick={changeDate}
+            className="rounded border border-slate-300 bg-white px-3 py-1.5 font-medium disabled:opacity-50">Change data date</button>
+          <button type="button" disabled={busy} onClick={discard} className="ml-auto rounded border border-red-200 px-3 py-1.5 font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">Discard draft</button>
+        </div>
+      )}
+
       {error && <p role="alert" className="mb-3 rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {visible.length === 0 ? (
@@ -214,6 +263,7 @@ export function LookaheadUpdateForm({
                 r={r}
                 readOnly={readOnly}
                 dirty={isDirty(r)}
+                agent={byAgent.has(r.canonicalActivityKey)}
                 problem={showErrors && isDirty(r) ? validate(r) : null}
                 onChange={(p) => patch(r.externalUid, p)}
               />
@@ -267,20 +317,21 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const inputClass = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm text-slate-900 disabled:bg-slate-50 disabled:text-slate-400";
 
-function ActivityRow({ r, readOnly, dirty, problem, onChange }: {
-  r: LookaheadFormRow; readOnly: boolean; dirty: boolean; problem: string | null;
+function ActivityRow({ r, readOnly, dirty, agent = false, problem, onChange }: {
+  r: LookaheadFormRow; readOnly: boolean; dirty: boolean; agent?: boolean; problem: string | null;
   onChange: (p: Partial<LookaheadFormRow>) => void;
 }) {
   const notStarted = r.status === "not_started";
   const complete = isComplete(r.status);
   const s = slip[r.slippage];
   return (
-    <li className={`border-l-4 px-3 py-3 ${dirty ? "border-indigo-500 bg-indigo-50/30" : "border-transparent"} ${problem ? "bg-red-50/40" : ""}`}>
+    <li className={`border-l-4 px-3 py-3 ${dirty ? "border-indigo-500 bg-indigo-50/30" : agent ? "border-amber-400 bg-amber-50/40" : "border-transparent"} ${problem ? "bg-red-50/40" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
         <span>
           <span className="mr-2 text-xs text-slate-400">{r.wbsCode}</span>
           <span className="font-medium text-slate-900">{r.name}</span>
           {r.type === "milestone" && <span className="ml-2 text-xs text-indigo-600" title="Milestone">◆</span>}
+          {agent && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">Updated by your agent</span>}
         </span>
         <span className={`rounded-full px-2 py-0.5 text-xs ring-1 ring-inset ${s.className}`}>{s.label}</span>
       </div>
