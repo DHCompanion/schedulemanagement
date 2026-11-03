@@ -6,11 +6,14 @@ export interface StatStripProps {
   atRiskCount: number;
   percentComplete: number;
   lastUpdate: { daysAgo: number } | null;
+  /** The open draft, when a person's agent has saved progress into it. */
+  agentDraft?: { updateId: string; count: number } | null;
 }
 
 // Every stat links into the body: drift sorts by slip, at-risk filters to flagged.
-export function StatStrip({ projectId, driftDays, atRiskCount, percentComplete, lastUpdate }: StatStripProps) {
-  const stale = lastUpdate !== null && lastUpdate.daysAgo > 7;
+export function StatStrip({ projectId, driftDays, atRiskCount, percentComplete, lastUpdate, agentDraft }: StatStripProps) {
+  // Amber when the update is overdue or the agent left work to review.
+  const stale = (lastUpdate !== null && lastUpdate.daysAgo > 7) || !!agentDraft;
   const box = "rounded border p-3 text-center";
   return (
     <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -29,13 +32,14 @@ export function StatStrip({ projectId, driftDays, atRiskCount, percentComplete, 
         <div className="text-xs text-slate-500">complete</div>
       </Link>
       <Link
-        href={`/projects/${projectId}/updates`}
+        href={agentDraft ? `/projects/${projectId}/updates/${agentDraft.updateId}` : `/projects/${projectId}/updates`}
         className={`${box} hover:bg-slate-50 ${stale ? "border-amber-300 bg-amber-50" : "border-slate-200 bg-white"}`}
       >
         <div className={`text-xl font-bold ${stale ? "text-amber-700" : "text-slate-900"}`}>
           {lastUpdate ? `${lastUpdate.daysAgo}d ago` : "never"}
         </div>
         <div className="text-xs text-slate-500">last update</div>
+        {agentDraft && <div className="mt-1 text-xs font-medium text-amber-800">Agent updated {agentDraft.count} · review</div>}
       </Link>
     </div>
   );
