@@ -95,6 +95,26 @@ describe.runIf(hasDb)("agent draft write", () => {
     expect(await saveAgentDraft(osProjectId, input({ expectedDraftAsOfDate: "2026-11-07", entries: [entry("3|c", { actualStart: null })] }), who)).toMatchObject({ saved: false, reason: "invalid" });
   }, 30000);
 
+  it("runs overlapping writes one at a time: a newer date is never undone, and a racing resend gets the first answer", async () => {
+    const { osProjectId, projectId } = await fixture("Agent Race");
+    await getOrCreateDraft(projectId, "2026-11-03", 3);
+    // Two writes from the same read: one wins, the other is stale, and the winner's date stands.
+    const [a, b] = await Promise.all([
+      saveAgentDraft(osProjectId, input({ asOfDate: "2026-11-06", expectedDraftAsOfDate: "2026-11-03" }), who),
+      saveAgentDraft(osProjectId, input({ asOfDate: "2026-11-07", expectedDraftAsOfDate: "2026-11-03", entries: [entry("2|b")] }), who),
+    ]);
+    expect([a.saved, b.saved].sort()).toEqual([false, true]);
+    const won = a.saved ? a : b;
+    expect((a.saved ? b : a).reason).toBe("stale");
+    const draft = (await draftOf(projectId))!;
+    expect(draft.asOfDate.toISOString().slice(0, 10)).toBe(won.asOfDate);
+    // The same write sent twice at once: both answers say saved, and it is recorded once.
+    const write = input({ expectedDraftAsOfDate: won.asOfDate, entries: [entry("1|a")] });
+    const both = await Promise.all([saveAgentDraft(osProjectId, write, who), saveAgentDraft(osProjectId, write, who)]);
+    expect(both.map((r) => r.saved)).toEqual([true, true]);
+    expect(await prisma.agentWrite.count({ where: { progressUpdateId: draft.id, idempotencyKey: write.idempotencyKey } })).toBe(1);
+  }, 30000);
+
   it("answers no_schedule for a project with nothing linked", async () => {
     expect(await saveAgentDraft(2_100_000_000, input(), who)).toMatchObject({ saved: false, reason: "no_schedule" });
   });

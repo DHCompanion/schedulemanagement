@@ -41,7 +41,7 @@ export async function saveAgentDraft(osProjectId: number, input: DraftWriteInput
   const stored = await prior();
   if (stored) return answer(stored);
   try {
-    return await prisma.$transaction((tx) => write(tx, osProjectId, input, who, payloadHash), { timeout: 15_000 });
+    return await prisma.$transaction((tx) => write(tx, osProjectId, input, who, payloadHash, answer), { timeout: 15_000 });
   } catch (e) {
     if (e instanceof Refused) return e.result;
     if (e instanceof SaveRefused) return { saved: false, asOfDate: null, activities: [], reason: e.status === 409 ? "finalized" : "invalid", message: e.message };
@@ -55,7 +55,8 @@ export async function saveAgentDraft(osProjectId: number, input: DraftWriteInput
   }
 }
 
-async function write(tx: Prisma.TransactionClient, osProjectId: number, input: DraftWriteInput, who: Writer, payloadHash: string): Promise<DraftWriteResult> {
+async function write(tx: Prisma.TransactionClient, osProjectId: number, input: DraftWriteInput, who: Writer, payloadHash: string,
+  answer: (row: { payloadHash: string; result: Prisma.JsonValue }) => DraftWriteResult): Promise<DraftWriteResult> {
   const keys = input.entries.map((e) => e.key);
   const dates = [input.asOfDate, input.expectedDraftAsOfDate, ...input.entries.flatMap((e) => [e.actualStart, e.actualFinish, e.expectedDraft?.actualStart, e.expectedDraft?.actualFinish])];
   if (dates.some((d) => d != null && !parseDay(d))) refuse("invalid", "A date is not a real YYYY-MM-DD date.");
@@ -65,7 +66,13 @@ async function write(tx: Prisma.TransactionClient, osProjectId: number, input: D
   const latest = project && await tx.scheduleImport.findFirst({ where: { projectId: project.id }, orderBy: { importedAt: "desc" }, select: { id: true, statusDate: true, importedAt: true } });
   if (!project || !latest) return refuse("no_schedule", "This project has no schedule in Schedule Manager yet, so there is no update to fill.");
 
-  const draft = await tx.progressUpdate.findFirst({ where: { projectId: project.id, state: "draft" }, select: { id: true, asOfDate: true, scheduleImportId: true } });
+  // Lock the open draft before comparing anything, so concurrent writes (and resends) on it run one at a time.
+  const found = await tx.progressUpdate.findFirst({ where: { projectId: project.id, state: "draft" }, select: { id: true } });
+  if (found) await tx.$queryRaw`SELECT id FROM "ProgressUpdate" WHERE id = ${found.id} FOR UPDATE`;
+  const draft = found && await tx.progressUpdate.findFirst({ where: { id: found.id, state: "draft" }, select: { id: true, asOfDate: true, scheduleImportId: true } });
+  // A resend of this same write that committed while we waited for the lock: its answer, not a "stale" refusal.
+  const replay = await tx.agentWrite.findUnique({ where: { personId_agentId_idempotencyKey: { personId: who.personId, agentId: who.agentId, idempotencyKey: input.idempotencyKey } } });
+  if (replay) return answer(replay);
   if (day(draft?.asOfDate) !== input.expectedDraftAsOfDate)
     refuse("stale", draft ? `The draft update's data date is now ${day(draft.asOfDate)}. Read the update state again, then resend.` : "The draft update was finalized or removed since you read it. Read the update state again, then resend.", [], day(draft?.asOfDate));
   const target = input.asOfDate ?? day(draft?.asOfDate) ?? day(await resolveForecastStatusDate(project.id, latest))!;
@@ -78,7 +85,6 @@ async function write(tx: Prisma.TransactionClient, osProjectId: number, input: D
     data: { projectId: project.id, scheduleImportId: latest.id, asOfDate: parseDay(target)!, lookaheadWeeks: 3, state: "draft", personId: who.personId },
     select: { id: true },
   })).id;
-  // Locks the draft (as saveEntriesIn does) before anything is compared.
   const open = await tx.progressUpdate.updateMany({ where: { id: updateId, state: "draft" }, data: { asOfDate: parseDay(target)! } });
   if (!open.count) refuse("finalized", "This update was finalized and can no longer be edited.");
 
