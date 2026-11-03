@@ -166,7 +166,8 @@ export function LookaheadUpdateForm({
     if (entriesErr) { setError(entriesErr === "offline" || entriesErr === "Request failed." ? "Failed to save." : entriesErr); setBusy(false); return; }
     if (finalize) {
       const fin = await fetch(appPath(`/api/updates/${updateId}/finalize`), { method: "POST" }).catch(() => null);
-      if (!fin?.ok) { setError("Failed to finalize."); setBusy(false); return; }
+      // The entries did save: reload their new versions so Finalize can simply be retried.
+      if (!fin?.ok) { setError("Failed to finalize."); setBusy(false); router.refresh(); return; }
     }
     setBusy(false);
     setShowErrors(false);

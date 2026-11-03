@@ -197,6 +197,15 @@ describe("LookaheadUpdateForm", () => {
     expect(calls[2].body).toBeUndefined();
   });
 
+  it("reloads saved versions when finalize fails after the entries saved", async () => {
+    stubFetch(noImpacts, { ok: true }, { ok: false });
+    renderForm([row]);
+    touch();
+    fireEvent.click(screen.getByText("Finalize"));
+    await waitFor(() => expect(screen.getByText("Failed to finalize.")).toBeTruthy());
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it("asks before moving pushed activities, and saves forecast dates for the ones adjusted", async () => {
     const { calls } = stubFetch({ ok: true, body: { impacts: [impact] } }, { ok: true });
     renderForm([row]);
