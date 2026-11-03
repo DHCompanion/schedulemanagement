@@ -218,6 +218,7 @@ model ProgressUpdate {
   updatedAt        DateTime       @updatedAt
   finalizedAt      DateTime?
   entries          ProgressEntry[]
+  agentWrites      AgentWrite[]
 
   // One open draft per project: partial unique index "ProgressUpdate_one_draft_per_project"
   // lives in migration 20261103120000_safe_draft_saves (Prisma can't express partial indexes).
@@ -567,4 +568,27 @@ model BenchmarkGroup {
   computedAt DateTime @default(now())
 
   @@id([groupKind, groupValue])
+}
+
+/// One saved Connect agent draft write (connect.tool.write/1), keyed by the agent's idempotency key, so a resend of
+/// the same write returns its first answer instead of saving again. Refusals are not stored: a resend re-checks.
+model AgentWrite {
+  id               String         @id @default(cuid())
+  /// Connect person and named agent the write was made for.
+  personId         Int
+  agentId          String
+  clientKey        String
+  idempotencyKey   String
+  /// sha256 of the write's canonical arguments; the same key with other arguments is refused.
+  payloadHash      String
+  progressUpdateId String
+  progressUpdate   ProgressUpdate @relation(fields: [progressUpdateId], references: [id], onDelete: Cascade)
+  /// The draft's data date before this write; null when the write created the draft.
+  fromAsOfDate     DateTime?
+  /// The contract-shaped answer returned to the agent.
+  result           Json
+  createdAt        DateTime       @default(now())
+
+  @@unique([personId, agentId, idempotencyKey])
+  @@index([progressUpdateId])
 }

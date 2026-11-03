@@ -126,57 +126,60 @@ export async function getOrCreateDraft(
  * or changed since the caller loaded it.
  */
 export async function saveEntries(updateId: string, entries: EntryInput[], personId: number | null = null): Promise<void> {
-  await prisma.$transaction(async (tx) => {
-    // Locks the draft row, so saves and finalize on one draft run one at a time.
-    const open = await tx.progressUpdate.updateMany({ where: { id: updateId, state: "draft" }, data: { updatedAt: new Date() } });
-    const update = await tx.progressUpdate.findUnique({ where: { id: updateId }, select: { scheduleImportId: true } });
-    if (!update) throw new SaveRefused("Update not found.", 404);
-    if (!open.count) throw new SaveRefused("This update is finalized and can no longer be edited.", 409);
-    const { scheduleImportId } = update;
-    if (entries.some(malformed)) throw new SaveRefused("An entry is malformed.", 422);
-    const keys = entries.map((e) => e.canonicalActivityKey);
-    if (new Set(keys).size !== keys.length) throw new SaveRefused("The same activity was sent twice.", 422);
-    const activities = await tx.activity.findMany({
-      where: { scheduleImportId, canonicalActivityKey: { in: keys } },
-      select: { externalUid: true, canonicalActivityKey: true, name: true },
-    });
-    const byKey = new Map(activities.map((a) => [a.canonicalActivityKey, a]));
-    const problems = entries.flatMap((e) => {
-      const p = entryProblem(e, byKey.get(e.canonicalActivityKey));
-      return p ? [`${byKey.get(e.canonicalActivityKey)?.name ?? e.canonicalActivityKey} ${p}`] : [];
-    });
-    if (problems.length) throw new SaveRefused(problems.join(" "), 422);
+  await prisma.$transaction((tx) => saveEntriesIn(tx, updateId, entries, personId));
+}
 
-    const existing = new Map((await tx.progressEntry.findMany({
-      where: { progressUpdateId: updateId, canonicalActivityKey: { in: keys } },
-      select: { canonicalActivityKey: true, updatedAt: true },
-    })).map((x) => [x.canonicalActivityKey, x.updatedAt.toISOString()]));
-    const stale = entries.filter((e) => (existing.get(e.canonicalActivityKey) ?? null) !== e.expectedVersion);
-    if (stale.length) {
-      const names = stale.map((e) => byKey.get(e.canonicalActivityKey)!.name).join(", ");
-      throw new SaveRefused(
-        `${stale.length === 1 ? "1 activity was" : `${stale.length} activities were`} changed by someone else since you opened this update: ${names}. Reload to see the changes. Nothing was saved.`,
-        409,
-      );
-    }
+/** saveEntries inside the caller's transaction, so other draft changes commit or roll back with it. */
+export async function saveEntriesIn(tx: Prisma.TransactionClient, updateId: string, entries: EntryInput[], personId: number | null): Promise<void> {
+  // Locks the draft row, so saves and finalize on one draft run one at a time.
+  const open = await tx.progressUpdate.updateMany({ where: { id: updateId, state: "draft" }, data: { updatedAt: new Date() } });
+  const update = await tx.progressUpdate.findUnique({ where: { id: updateId }, select: { scheduleImportId: true } });
+  if (!update) throw new SaveRefused("Update not found.", 404);
+  if (!open.count) throw new SaveRefused("This update is finalized and can no longer be edited.", 409);
+  const { scheduleImportId } = update;
+  if (entries.some(malformed)) throw new SaveRefused("An entry is malformed.", 422);
+  const keys = entries.map((e) => e.canonicalActivityKey);
+  if (new Set(keys).size !== keys.length) throw new SaveRefused("The same activity was sent twice.", 422);
+  const activities = await tx.activity.findMany({
+    where: { scheduleImportId, canonicalActivityKey: { in: keys } },
+    select: { externalUid: true, canonicalActivityKey: true, name: true },
+  });
+  const byKey = new Map(activities.map((a) => [a.canonicalActivityKey, a]));
+  const problems = entries.flatMap((e) => {
+    const p = entryProblem(e, byKey.get(e.canonicalActivityKey));
+    return p ? [`${byKey.get(e.canonicalActivityKey)?.name ?? e.canonicalActivityKey} ${p}`] : [];
+  });
+  if (problems.length) throw new SaveRefused(problems.join(" "), 422);
 
-    // Versions are checked under the draft lock, so replacing the sent rows is safe; two round trips for any size.
-    await tx.progressEntry.deleteMany({ where: { progressUpdateId: updateId, canonicalActivityKey: { in: keys } } });
-    await tx.progressEntry.createMany({
-      data: entries.filter(isMeaningful).map((e) => ({
-        progressUpdateId: updateId,
-        activityExternalUid: e.activityExternalUid,
-        canonicalActivityKey: e.canonicalActivityKey,
-        status: e.status,
-        actualStart: toDbDate(e.actualStart),
-        actualFinish: toDbDate(e.actualFinish),
-        percentComplete: e.percentComplete,
-        note: e.note,
-        forecastStart: toDbDate(e.forecastStart ?? null),
-        forecastFinish: toDbDate(e.forecastFinish ?? null),
-        changedByPersonId: personId,
-      })),
-    });
+  const existing = new Map((await tx.progressEntry.findMany({
+    where: { progressUpdateId: updateId, canonicalActivityKey: { in: keys } },
+    select: { canonicalActivityKey: true, updatedAt: true },
+  })).map((x) => [x.canonicalActivityKey, x.updatedAt.toISOString()]));
+  const stale = entries.filter((e) => (existing.get(e.canonicalActivityKey) ?? null) !== e.expectedVersion);
+  if (stale.length) {
+    const names = stale.map((e) => byKey.get(e.canonicalActivityKey)!.name).join(", ");
+    throw new SaveRefused(
+      `${stale.length === 1 ? "1 activity was" : `${stale.length} activities were`} changed by someone else since you opened this update: ${names}. Reload to see the changes. Nothing was saved.`,
+      409,
+    );
+  }
+
+  // Versions are checked under the draft lock, so replacing the sent rows is safe; two round trips for any size.
+  await tx.progressEntry.deleteMany({ where: { progressUpdateId: updateId, canonicalActivityKey: { in: keys } } });
+  await tx.progressEntry.createMany({
+    data: entries.filter(isMeaningful).map((e) => ({
+      progressUpdateId: updateId,
+      activityExternalUid: e.activityExternalUid,
+      canonicalActivityKey: e.canonicalActivityKey,
+      status: e.status,
+      actualStart: toDbDate(e.actualStart),
+      actualFinish: toDbDate(e.actualFinish),
+      percentComplete: e.percentComplete,
+      note: e.note,
+      forecastStart: toDbDate(e.forecastStart ?? null),
+      forecastFinish: toDbDate(e.forecastFinish ?? null),
+      changedByPersonId: personId,
+    })),
   });
 }
 

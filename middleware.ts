@@ -11,9 +11,9 @@ import { SCOPE_COOKIE, readScope, readSession } from "@/lib/scope";
 // /api/os-context is authenticated, just not by a cookie: it carries an HMAC
 // signature the route verifies. Without it here every OS callback would be
 // redirected to /login, and the OS would report this tool unreachable.
-// /api/gateway/reads is Connect's signed agent read: the Ed25519 signature the route
-// verifies is its only credential.
-const PUBLIC_PATHS = ["/login", "/api/login", "/launch", "/api/health", "/api/os-context", "/api/gateway/reads"];
+// /api/gateway/reads and /api/gateway/writes are Connect's signed agent read and draft write:
+// the Ed25519 signature each route verifies is its only credential.
+const PUBLIC_PATHS = ["/login", "/api/login", "/launch", "/api/health", "/api/os-context", "/api/gateway/reads", "/api/gateway/writes"];
 
 // Exact match, or a real path segment beneath it. A bare startsWith would also
 // have let through /launchX, /api/healthz and /api/os-contextY — none of which
