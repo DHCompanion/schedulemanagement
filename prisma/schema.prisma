@@ -219,6 +219,8 @@ model ProgressUpdate {
   finalizedAt      DateTime?
   entries          ProgressEntry[]
 
+  // One open draft per project: partial unique index "ProgressUpdate_one_draft_per_project"
+  // lives in migration 20261103120000_safe_draft_saves (Prisma can't express partial indexes).
   @@index([projectId])
   @@index([scheduleImportId])
 }
@@ -236,9 +238,12 @@ model ProgressEntry {
   note                 String?
   forecastStart        DateTime?
   forecastFinish       DateTime?
+  /// Connect person who last changed this entry; null on entries saved before this column.
+  changedByPersonId    Int?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
+  @@unique([progressUpdateId, canonicalActivityKey])
   @@index([progressUpdateId])
   @@index([canonicalActivityKey])
 }

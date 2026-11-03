@@ -24,7 +24,9 @@ const row: LookaheadFormRow = {
   forecastStart: null,
   forecastFinish: null,
   dueByDataDate: true,
+  version: null,
 };
+const touch = () => fireEvent.change(screen.getAllByLabelText("Note")[0], { target: { value: "crew short" } });
 const noImpacts = { ok: true, body: { impacts: [] } };
 const impact = {
   externalUid: 20, canonicalActivityKey: "1.3|paint", name: "Paint", wbsCode: "1.3",
@@ -111,9 +113,10 @@ describe("LookaheadUpdateForm", () => {
     expect(screen.getByText("1 unsaved change")).toBeTruthy();
   });
 
-  it("checks impacts, then posts every row's entry to the entries endpoint", async () => {
+  it("checks impacts, then posts the changed row's entry to the entries endpoint", async () => {
     const { calls } = stubFetch(noImpacts, { ok: true });
     renderForm([row]);
+    touch();
     fireEvent.click(screen.getByText("Save draft"));
 
     await waitFor(() => expect(calls).toHaveLength(2));
@@ -128,6 +131,7 @@ describe("LookaheadUpdateForm", () => {
   it("normalises completed_as_planned to complete before sending", async () => {
     const { calls } = stubFetch(noImpacts, { ok: true });
     renderForm([{ ...row, status: "completed_as_planned", actualStart: "2026-08-01", actualFinish: "2026-08-05", percentComplete: 100 }]);
+    touch();
     fireEvent.click(screen.getByText("Save draft"));
 
     await waitFor(() => expect(calls).toHaveLength(2));
@@ -137,11 +141,33 @@ describe("LookaheadUpdateForm", () => {
   it("sends empty strings as null", async () => {
     const { calls } = stubFetch(noImpacts, { ok: true });
     renderForm([row]);
+    fireEvent.click(screen.getByRole("button", { name: "Started on plan" }));
     fireEvent.click(screen.getByText("Save draft"));
 
     await waitFor(() => expect(calls).toHaveLength(2));
-    expect(entriesOf(calls[1])[0].actualStart).toBeNull();
+    expect(entriesOf(calls[1])[0].actualFinish).toBeNull();
     expect(entriesOf(calls[1])[0].note).toBeNull();
+  });
+
+  it("sends only changed rows, each with the version it was loaded at", async () => {
+    const { calls } = stubFetch(noImpacts, { ok: true });
+    renderForm([{ ...row, version: "2026-11-03T10:00:00.000Z" }, { ...row, externalUid: 8, canonicalActivityKey: "1.2|tape", name: "Tape", version: "v-tape" }]);
+    touch();
+    fireEvent.click(screen.getByText("Save draft"));
+
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(entriesOf(calls[0]).map((e) => e.activityExternalUid)).toEqual([7]); // the impacts preview merges the same way
+    expect(entriesOf(calls[1])).toEqual([expect.objectContaining({ activityExternalUid: 7, expectedVersion: "2026-11-03T10:00:00.000Z" })]);
+  });
+
+  it("shows the server's reason when it refuses a stale save", async () => {
+    const message = "1 activity was changed by someone else since you opened this update: Hang Drywall. Reload to see the changes. Nothing was saved.";
+    stubFetch(noImpacts, { ok: false, body: { error: { message } } });
+    renderForm([row]);
+    touch();
+    fireEvent.click(screen.getByText("Save draft"));
+    await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("shows a failure message and does not refresh", async () => {
@@ -171,6 +197,15 @@ describe("LookaheadUpdateForm", () => {
     expect(calls[2].body).toBeUndefined();
   });
 
+  it("reloads saved versions when finalize fails after the entries saved", async () => {
+    stubFetch(noImpacts, { ok: true }, { ok: false });
+    renderForm([row]);
+    touch();
+    fireEvent.click(screen.getByText("Finalize"));
+    await waitFor(() => expect(screen.getByText("Failed to finalize.")).toBeTruthy());
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it("asks before moving pushed activities, and saves forecast dates for the ones adjusted", async () => {
     const { calls } = stubFetch({ ok: true, body: { impacts: [impact] } }, { ok: true });
     renderForm([row]);
@@ -193,6 +228,7 @@ describe("LookaheadUpdateForm", () => {
   it("leaves pushed activities alone by default", async () => {
     const { calls } = stubFetch({ ok: true, body: { impacts: [impact] } }, { ok: true });
     renderForm([row]);
+    touch();
     fireEvent.click(screen.getByText("Save draft"));
     await screen.findByRole("dialog");
     fireEvent.click(screen.getByRole("button", { name: "Continue and save draft" }));
