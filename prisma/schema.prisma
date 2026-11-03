@@ -581,8 +581,9 @@ model AgentWrite {
   idempotencyKey   String
   /// sha256 of the write's canonical arguments; the same key with other arguments is refused.
   payloadHash      String
-  progressUpdateId String
-  progressUpdate   ProgressUpdate @relation(fields: [progressUpdateId], references: [id], onDelete: Cascade)
+  /// Null once the draft is discarded: the key and its answer stay, so a late resend can't recreate the draft.
+  progressUpdateId String?
+  progressUpdate   ProgressUpdate? @relation(fields: [progressUpdateId], references: [id], onDelete: SetNull)
   /// The draft's data date before this write; null when the write created the draft.
   fromAsOfDate     DateTime?
   /// The contract-shaped answer returned to the agent.

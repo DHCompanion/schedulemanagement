@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { toDbDate } from "@/lib/import/commitImport";
 import { carryProgressThroughSplits, type FinalizedEntry } from "@/lib/lookahead/currentProgress";
 import type { ActivityProgress, ProgressStatus } from "@/lib/lookahead/computeLookahead";
+import { dataDateProblem, parseDay } from "@/lib/updates/dataDate";
 
 export interface EntryInput {
   activityExternalUid: number;
@@ -99,6 +100,8 @@ export async function getOrCreateDraft(
   if (existing) return { id: existing.id };
   const latest = await prisma.scheduleImport.findFirst({ where: { projectId }, orderBy: { importedAt: "desc" } });
   if (!latest) throw new Error("Cannot start an update: this project has no schedule import yet.");
+  const early = await dataDateProblem(prisma, projectId, asOfDate, []);
+  if (early) throw new SaveRefused(early.message, 422);
   try {
     const created = await prisma.progressUpdate.create({
       data: {
@@ -181,6 +184,33 @@ export async function saveEntriesIn(tx: Prisma.TransactionClient, updateId: stri
       changedByPersonId: personId,
     })),
   });
+}
+
+/** Moves an open draft's data date, under the agent write's rules (lib/updates/dataDate.ts). */
+export async function changeDraftDate(updateId: string, asOfDate: string): Promise<void> {
+  const date = parseDay(asOfDate);
+  if (!date) throw new SaveRefused("Enter a real date.", 422);
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "ProgressUpdate" WHERE id = ${updateId} FOR UPDATE`;
+    const update = await tx.progressUpdate.findUnique({ where: { id: updateId }, include: { entries: true } });
+    if (!update) throw new SaveRefused("Update not found.", 404);
+    if (update.state !== "draft") throw new SaveRefused("This update is finalized and can no longer be edited.", 409);
+    const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+    const problem = await dataDateProblem(tx, update.projectId, asOfDate, update.entries.map((e) => ({ key: e.canonicalActivityKey, actualStart: day(e.actualStart), actualFinish: day(e.actualFinish) })));
+    if (problem) {
+      const names = (await tx.activity.findMany({ where: { scheduleImportId: update.scheduleImportId, canonicalActivityKey: { in: problem.keys } }, select: { name: true } })).map((a) => a.name);
+      throw new SaveRefused(names.length ? `${problem.message} (${names.join(", ")})` : problem.message, 422);
+    }
+    await tx.progressUpdate.update({ where: { id: updateId }, data: { asOfDate: date } });
+  });
+}
+
+/** Deletes an open draft with its entries and agent writes. A finalized update is history and stays. */
+export async function discardDraft(updateId: string): Promise<void> {
+  const done = await prisma.progressUpdate.deleteMany({ where: { id: updateId, state: "draft" } });
+  if (done.count) return;
+  const exists = await prisma.progressUpdate.findUnique({ where: { id: updateId }, select: { id: true } });
+  throw new SaveRefused(exists ? "A finalized update can't be discarded." : "Update not found.", exists ? 409 : 404);
 }
 
 export async function finalizeUpdate(updateId: string): Promise<void> {

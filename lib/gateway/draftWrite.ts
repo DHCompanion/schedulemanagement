@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { resolveForecastStatusDate } from "@/lib/forecast/resolveStatusDate";
 import { SaveRefused, saveEntriesIn, type EntryInput } from "@/lib/updates/updateService";
+import { dataDateProblem } from "@/lib/updates/dataDate";
 import { day, draftView, parseDay } from "./updateState";
 
 type Progress = { status: string; percentComplete: number | null; actualStart: string | null; actualFinish: string | null };
@@ -77,9 +78,9 @@ async function write(tx: Prisma.TransactionClient, osProjectId: number, input: D
   if (day(draft?.asOfDate) !== input.expectedDraftAsOfDate)
     refuse("stale", draft ? `The draft update's data date is now ${day(draft.asOfDate)}. Read the update state again, then resend.` : "The draft update was finalized or removed since you read it. Read the update state again, then resend.", [], day(draft?.asOfDate));
   const target = input.asOfDate ?? day(draft?.asOfDate) ?? day(await resolveForecastStatusDate(project.id, latest))!;
-  const finalized = await tx.progressUpdate.findFirst({ where: { projectId: project.id, state: "finalized" }, orderBy: { asOfDate: "desc" }, select: { asOfDate: true } });
-  if (finalized && target <= day(finalized.asOfDate)!)
-    refuse("invalid", `The data date must be after the last finalized update (${day(finalized.asOfDate)}).`, [], day(draft?.asOfDate));
+  // Checked before anything is created; the actual dates are checked once the draft's entries are known.
+  const early = await dataDateProblem(tx, project.id, target, []);
+  if (early) refuse("invalid", early.message, [], day(draft?.asOfDate));
 
   // Creating races the one-open-draft index; the loser answers "stale" (see saveAgentDraft).
   const updateId = draft?.id ?? (await tx.progressUpdate.create({
@@ -96,12 +97,11 @@ async function write(tx: Prisma.TransactionClient, osProjectId: number, input: D
     refuse("stale", `${stale.length === 1 ? "1 activity was" : `${stale.length} activities were`} changed in Schedule Manager since you read them. Read the update state again; nothing was saved.`, stale, day(draft?.asOfDate));
 
   // No progress recorded after the date the update is "as of", whether sent now or already in the draft.
-  const late = [
-    ...input.entries.filter((e) => [e.actualStart, e.actualFinish].some((d) => d && d > target)).map((e) => e.key),
-    ...current.filter((c) => !keys.includes(c.canonicalActivityKey) && [c.actualStart, c.actualFinish].some((d) => d && day(d)! > target)).map((c) => c.canonicalActivityKey),
-  ];
-  if (late.length)
-    refuse("invalid", `Actual dates can't be after the data date ${target}. Change those dates or the data date.`, late.slice(0, 15), day(draft?.asOfDate));
+  const late = await dataDateProblem(tx, project.id, target, [
+    ...input.entries,
+    ...current.filter((c) => !keys.includes(c.canonicalActivityKey)).map((c) => ({ key: c.canonicalActivityKey, actualStart: day(c.actualStart), actualFinish: day(c.actualFinish) })),
+  ]);
+  if (late) refuse("invalid", late.message, late.keys.slice(0, 15), day(draft?.asOfDate));
 
   const activities = new Map((await tx.activity.findMany({
     where: { scheduleImportId: draft?.scheduleImportId ?? latest.id, canonicalActivityKey: { in: keys } },

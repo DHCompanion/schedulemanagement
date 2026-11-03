@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
-import { stubFetch } from "../helpers/renderClient";
+import { stubConfirm, stubFetch } from "../helpers/renderClient";
 import { LookaheadUpdateForm, type LookaheadFormRow } from "@/components/LookaheadUpdateForm";
 
 const refresh = vi.hoisted(() => vi.fn());
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 const row: LookaheadFormRow = {
   externalUid: 7,
   canonicalActivityKey: "1.1|hang drywall",
@@ -256,5 +257,60 @@ describe("LookaheadUpdateForm", () => {
     renderForm([row], true);
     expect(screen.queryByText("Save draft")).toBeNull();
     expect(screen.queryByText("Finalize")).toBeNull();
+  });
+});
+
+describe("LookaheadUpdateForm agent draft", () => {
+  const tape = { ...row, externalUid: 8, canonicalActivityKey: "1.2|tape", name: "Tape", dueByDataDate: false };
+  const renderDraft = (agentKeys: string[]) =>
+    render(<LookaheadUpdateForm updateId="u1" projectId="p1" rows={[row, tape]} readOnly={false} asOfDate="2026-11-03" agentKeys={agentKeys} />);
+
+  it("says how many activities the agent updated, marks them (even upcoming ones), and confirms through finalize", async () => {
+    const { calls } = stubFetch(noImpacts, { ok: true }, { ok: true });
+    renderDraft(["1.1|hang drywall", "1.2|tape"]);
+    expect(screen.getByRole("status").textContent).toMatch(/Your agent updated 2 activities/);
+    expect(screen.getAllByText("Updated by your agent")).toHaveLength(2);
+    expect(screen.getByText("Tape")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm & finalize" }));
+    await waitFor(() => expect(calls.map((c) => c.url)).toEqual([expect.stringMatching(/impacts$/), expect.stringMatching(/entries$/), expect.stringMatching(/finalize$/)]));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/projects/p1/updates"));
+  });
+
+  it("shows no agent notice without agent writes", () => {
+    renderDraft([]);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Updated by your agent")).toBeNull();
+  });
+
+  it("changes the data date and shows the server's refusal", async () => {
+    const { calls } = stubFetch({ ok: false, body: { error: { message: "The data date must be after the last finalized update (2026-10-21)." } } });
+    renderDraft([]);
+    fireEvent.change(screen.getByLabelText("Data date"), { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change data date" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/after the last finalized update/));
+    expect(calls[0]).toMatchObject({ url: expect.stringMatching(/\/api\/updates\/u1\/date$/), body: { asOfDate: "2026-10-20" } });
+  });
+
+  it("locks the rows from a date change until the refreshed rows arrive, so no edit is lost", async () => {
+    stubFetch({ ok: true });
+    const { rerender } = renderDraft([]);
+    fireEvent.change(screen.getByLabelText("Data date"), { target: { value: "2026-11-07" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change data date" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.getAllByLabelText("Note")[0].closest("fieldset")?.disabled).toBe(true);
+    rerender(<LookaheadUpdateForm updateId="u1" projectId="p1" rows={[{ ...row }, tape]} readOnly={false} asOfDate="2026-11-07" agentKeys={[]} />);
+    expect(screen.getAllByLabelText("Note")[0].closest("fieldset")?.disabled).toBe(false);
+  });
+
+  it("discards the draft only after the person confirms", async () => {
+    const { calls } = stubFetch({ ok: true });
+    stubConfirm(false);
+    renderDraft([]);
+    fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+    expect(calls).toHaveLength(0);
+    stubConfirm(true);
+    fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/projects/p1/updates"));
+    expect(calls[0].url).toMatch(/\/api\/updates\/u1\/discard$/);
   });
 });
