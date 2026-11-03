@@ -160,11 +160,13 @@ export async function saveEntries(updateId: string, entries: EntryInput[], perso
       );
     }
 
-    for (const e of entries) {
-      const where = { progressUpdateId_canonicalActivityKey: { progressUpdateId: updateId, canonicalActivityKey: e.canonicalActivityKey } };
-      if (!isMeaningful(e)) { await tx.progressEntry.deleteMany({ where: where.progressUpdateId_canonicalActivityKey }); continue; }
-      const data = {
+    // Versions are checked under the draft lock, so replacing the sent rows is safe; two round trips for any size.
+    await tx.progressEntry.deleteMany({ where: { progressUpdateId: updateId, canonicalActivityKey: { in: keys } } });
+    await tx.progressEntry.createMany({
+      data: entries.filter(isMeaningful).map((e) => ({
+        progressUpdateId: updateId,
         activityExternalUid: e.activityExternalUid,
+        canonicalActivityKey: e.canonicalActivityKey,
         status: e.status,
         actualStart: toDbDate(e.actualStart),
         actualFinish: toDbDate(e.actualFinish),
@@ -173,9 +175,8 @@ export async function saveEntries(updateId: string, entries: EntryInput[], perso
         forecastStart: toDbDate(e.forecastStart ?? null),
         forecastFinish: toDbDate(e.forecastFinish ?? null),
         changedByPersonId: personId,
-      };
-      await tx.progressEntry.upsert({ where, update: data, create: { ...data, progressUpdateId: updateId, canonicalActivityKey: e.canonicalActivityKey } });
-    }
+      })),
+    });
   });
 }
 

@@ -156,7 +156,7 @@ describe("LookaheadUpdateForm", () => {
     fireEvent.click(screen.getByText("Save draft"));
 
     await waitFor(() => expect(calls).toHaveLength(2));
-    expect(calls[0].body).toMatchObject({ entries: [{ activityExternalUid: 7 }, { activityExternalUid: 8 }] }); // impacts still sees every row
+    expect(entriesOf(calls[0]).map((e) => e.activityExternalUid)).toEqual([7]); // the impacts preview merges the same way
     expect(entriesOf(calls[1])).toEqual([expect.objectContaining({ activityExternalUid: 7, expectedVersion: "2026-11-03T10:00:00.000Z" })]);
   });
 

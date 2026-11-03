@@ -6,7 +6,7 @@ import { resolveCurrentProgress } from "@/lib/lookahead/currentProgress";
 import { computeImpacts } from "@/lib/updates/computeImpacts";
 import { getFinalizedEntries, overlayEntries, storedShape, type EntryInput } from "@/lib/updates/updateService";
 
-/** Dry run for the update review screen: which not-started activities the unsaved entries would push or pull. */
+/** Dry run for the update review screen: which not-started activities the changed entries would push or pull. */
 export async function POST(req: Request, props: { params: Promise<{ updateId: string }> }) {
   const params = await props.params;
   const body = (await req.json()) as { entries?: EntryInput[] };
@@ -21,7 +21,10 @@ export async function POST(req: Request, props: { params: Promise<{ updateId: st
 
   const carry = resolveCurrentProgress(await getFinalizedEntries(update.projectId));
   const { activities, relationships, minutesPerDay } = update.scheduleImport;
-  const after = overlayEntries(carry, storedShape(body.entries ?? []));
+  // Same merge as a save: sent activities replace the draft's own entries, the rest stay as saved.
+  const sent = body.entries ?? [];
+  const sentKeys = new Set(sent.map((e) => e.canonicalActivityKey));
+  const after = overlayEntries(carry, [...update.entries.filter((e) => !sentKeys.has(e.canonicalActivityKey)), ...storedShape(sent)]);
   const impacts = computeImpacts({
     activities,
     relationships,

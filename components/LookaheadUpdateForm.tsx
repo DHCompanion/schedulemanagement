@@ -125,7 +125,7 @@ export function LookaheadUpdateForm({
       const res = await fetch(appPath(`/api/updates/${updateId}/impacts`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entries: data.map(toEntry) }),
+        body: JSON.stringify({ entries: data.filter(isDirty).map(toEntry) }),
       });
       if (!res.ok) throw new Error();
       impacts = ((await res.json()) as { impacts?: Impact[] }).impacts ?? [];
