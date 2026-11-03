@@ -25,16 +25,18 @@ export type UpdateStateSource = {
   forecasts: Map<number, ActivityForecast>;
 };
 
-const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+export const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
 const pct = (n: number | null | undefined) => (n == null ? null : Math.min(100, Math.max(0, Math.round(n))));
 const STATUSES = new Set(["not_started", "in_progress", "complete"]);
 const status = (s: string) => (STATUSES.has(s) ? s : "not_started");
+/** A draft entry as the read shows it. The draft write compares against exactly this to detect newer edits. */
+export const draftView = (d: DraftEntry) => ({ status: status(d.status), percentComplete: pct(d.percentComplete), actualStart: day(d.actualStart), actualFinish: day(d.actualFinish) });
 
 /** YYYY-MM-DD as UTC midnight, or null if it is not a real calendar date. */
 export function parseDay(s: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
   const d = new Date(`${s}T00:00:00.000Z`);
-  return day(d) === s ? d : null;
+  return !Number.isNaN(d.getTime()) && day(d) === s ? d : null;
 }
 
 /** Contract-shaped data: late, then due, then expected start; whole activities dropped from the end to fit. */
@@ -67,7 +69,7 @@ export function toResult(src: UpdateStateSource, fits: (data: unknown) => boolea
         percentComplete: pct(r.progress.percentComplete),
         slippage: r.slippage,
         dueByDataDate: r.dueByDataDate,
-        draft: d ? { status: status(d.status), percentComplete: pct(d.percentComplete), actualStart: day(d.actualStart), actualFinish: day(d.actualFinish) } : null,
+        draft: d ? draftView(d) : null,
       };
     });
   const data = {
