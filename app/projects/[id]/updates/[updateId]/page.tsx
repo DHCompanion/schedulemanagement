@@ -57,6 +57,7 @@ export default async function UpdateEditorPage(props: { params: Promise<{ id: st
     // Every activity this draft touched stays in the form, so a re-save never drops its entry.
     new Set(update.entries.map((e) => e.canonicalActivityKey)),
   );
+  const versionByKey = new Map(update.entries.map((e) => [e.canonicalActivityKey, e.updatedAt.toISOString()]));
   const rows: LookaheadFormRow[] = lookahead.map((r) => ({
     externalUid: r.externalUid,
     canonicalActivityKey: r.canonicalActivityKey,
@@ -75,6 +76,7 @@ export default async function UpdateEditorPage(props: { params: Promise<{ id: st
     forecastStart: r.progress.forecastStart?.toISOString() ?? null,
     forecastFinish: r.progress.forecastFinish?.toISOString() ?? null,
     dueByDataDate: r.dueByDataDate,
+    version: versionByKey.get(r.canonicalActivityKey) ?? null,
   }));
 
   const finalized = update.state === "finalized";

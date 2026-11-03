@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { toDbDate } from "@/lib/import/commitImport";
 import { carryProgressThroughSplits, type FinalizedEntry } from "@/lib/lookahead/currentProgress";
@@ -13,6 +14,33 @@ export interface EntryInput {
   note: string | null;
   forecastStart?: string | null;
   forecastFinish?: string | null;
+  /** The entry's updatedAt (ISO) when the caller loaded it; null when it had no entry. */
+  expectedVersion?: string | null;
+}
+
+/** A save the server refused; `status` is the HTTP status the route returns. */
+export class SaveRefused extends Error {
+  constructor(message: string, readonly status: number) { super(message); }
+}
+
+const STATUSES = new Set(["not_started", "in_progress", "complete"]);
+const badDate = (s: unknown) => s != null && s !== "" && (typeof s !== "string" || Number.isNaN(toDbDate(s)!.getTime()));
+const malformed = (e: EntryInput) =>
+  typeof e?.canonicalActivityKey !== "string" || typeof e.activityExternalUid !== "number" || typeof e.status !== "string" ||
+  (e.note != null && typeof e.note !== "string") || (e.percentComplete != null && typeof e.percentComplete !== "number");
+
+/** Why one entry can't be saved, or null. `activity` is the draft-import activity with its key. */
+export function entryProblem(e: EntryInput, activity: { externalUid: number; canonicalActivityKey: string } | undefined): string | null {
+  if (!activity || activity.externalUid !== e.activityExternalUid) return "is not in this update's schedule.";
+  if (e.expectedVersion === undefined) return "was sent without its version. Reload the update and try again.";
+  if (!STATUSES.has(e.status)) return "has an unknown status.";
+  if (e.percentComplete != null && !(Number.isInteger(e.percentComplete) && e.percentComplete >= 0 && e.percentComplete <= 100))
+    return "% complete must be a whole number 0–100.";
+  if ([e.actualStart, e.actualFinish, e.forecastStart, e.forecastFinish].some(badDate)) return "has an invalid date.";
+  if (e.status === "in_progress" && !e.actualStart) return "is in progress but has no actual start.";
+  if (e.status === "complete" && !e.actualFinish) return "is complete but has no actual finish.";
+  if (e.actualStart && e.actualFinish && toDbDate(e.actualFinish)! < toDbDate(e.actualStart)!) return "has an actual finish before its actual start.";
+  return null;
 }
 
 function isMeaningful(e: EntryInput): boolean {
@@ -71,50 +99,91 @@ export async function getOrCreateDraft(
   if (existing) return { id: existing.id };
   const latest = await prisma.scheduleImport.findFirst({ where: { projectId }, orderBy: { importedAt: "desc" } });
   if (!latest) throw new Error("Cannot start an update: this project has no schedule import yet.");
-  const created = await prisma.progressUpdate.create({
-    data: {
-      projectId,
-      scheduleImportId: latest.id,
-      asOfDate: toDbDate(asOfDate) ?? new Date(),
-      lookaheadWeeks: [1, 3, 6].includes(lookaheadWeeks) ? lookaheadWeeks : 3,
-      state: "draft",
-      personId: personId ?? null,
-    },
-  });
-  return { id: created.id };
+  try {
+    const created = await prisma.progressUpdate.create({
+      data: {
+        projectId,
+        scheduleImportId: latest.id,
+        asOfDate: toDbDate(asOfDate) ?? new Date(),
+        lookaheadWeeks: [1, 3, 6].includes(lookaheadWeeks) ? lookaheadWeeks : 3,
+        state: "draft",
+        personId: personId ?? null,
+      },
+    });
+    return { id: created.id };
+  } catch (e) {
+    // A concurrent start won the one-open-draft index; use its draft.
+    if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
+    const winner = await prisma.progressUpdate.findFirst({ where: { projectId, state: "draft" } });
+    if (!winner) throw e;
+    return { id: winner.id };
+  }
 }
 
-export async function saveEntries(updateId: string, entries: EntryInput[]): Promise<void> {
-  const update = await prisma.progressUpdate.findUnique({ where: { id: updateId } });
-  if (!update) throw new Error("Update not found.");
-  if (update.state !== "draft") throw new Error("This update is finalized and can no longer be edited.");
-  const meaningful = entries.filter(isMeaningful);
+/**
+ * Saves only the activities sent: a meaningful entry is written, an emptied one is removed,
+ * and unsent activities are untouched. Refused whole (nothing written) if any entry is invalid
+ * or changed since the caller loaded it.
+ */
+export async function saveEntries(updateId: string, entries: EntryInput[], personId: number | null = null): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    await tx.progressEntry.deleteMany({ where: { progressUpdateId: updateId } });
-    if (meaningful.length) {
-      await tx.progressEntry.createMany({
-        data: meaningful.map((e) => ({
-          progressUpdateId: updateId,
-          activityExternalUid: e.activityExternalUid,
-          canonicalActivityKey: e.canonicalActivityKey,
-          status: e.status,
-          actualStart: toDbDate(e.actualStart),
-          actualFinish: toDbDate(e.actualFinish),
-          percentComplete: e.percentComplete,
-          note: e.note,
-          forecastStart: toDbDate(e.forecastStart ?? null),
-          forecastFinish: toDbDate(e.forecastFinish ?? null),
-        })),
-      });
+    // Locks the draft row, so saves and finalize on one draft run one at a time.
+    const open = await tx.progressUpdate.updateMany({ where: { id: updateId, state: "draft" }, data: { updatedAt: new Date() } });
+    const update = await tx.progressUpdate.findUnique({ where: { id: updateId }, select: { scheduleImportId: true } });
+    if (!update) throw new SaveRefused("Update not found.", 404);
+    if (!open.count) throw new SaveRefused("This update is finalized and can no longer be edited.", 409);
+    const { scheduleImportId } = update;
+    if (entries.some(malformed)) throw new SaveRefused("An entry is malformed.", 422);
+    const keys = entries.map((e) => e.canonicalActivityKey);
+    if (new Set(keys).size !== keys.length) throw new SaveRefused("The same activity was sent twice.", 422);
+    const activities = await tx.activity.findMany({
+      where: { scheduleImportId, canonicalActivityKey: { in: keys } },
+      select: { externalUid: true, canonicalActivityKey: true, name: true },
+    });
+    const byKey = new Map(activities.map((a) => [a.canonicalActivityKey, a]));
+    const problems = entries.flatMap((e) => {
+      const p = entryProblem(e, byKey.get(e.canonicalActivityKey));
+      return p ? [`${byKey.get(e.canonicalActivityKey)?.name ?? e.canonicalActivityKey} ${p}`] : [];
+    });
+    if (problems.length) throw new SaveRefused(problems.join(" "), 422);
+
+    const existing = new Map((await tx.progressEntry.findMany({
+      where: { progressUpdateId: updateId, canonicalActivityKey: { in: keys } },
+      select: { canonicalActivityKey: true, updatedAt: true },
+    })).map((x) => [x.canonicalActivityKey, x.updatedAt.toISOString()]));
+    const stale = entries.filter((e) => (existing.get(e.canonicalActivityKey) ?? null) !== e.expectedVersion);
+    if (stale.length) {
+      const names = stale.map((e) => byKey.get(e.canonicalActivityKey)!.name).join(", ");
+      throw new SaveRefused(
+        `${stale.length === 1 ? "1 activity was" : `${stale.length} activities were`} changed by someone else since you opened this update: ${names}. Reload to see the changes. Nothing was saved.`,
+        409,
+      );
+    }
+
+    for (const e of entries) {
+      const where = { progressUpdateId_canonicalActivityKey: { progressUpdateId: updateId, canonicalActivityKey: e.canonicalActivityKey } };
+      if (!isMeaningful(e)) { await tx.progressEntry.deleteMany({ where: where.progressUpdateId_canonicalActivityKey }); continue; }
+      const data = {
+        activityExternalUid: e.activityExternalUid,
+        status: e.status,
+        actualStart: toDbDate(e.actualStart),
+        actualFinish: toDbDate(e.actualFinish),
+        percentComplete: e.percentComplete,
+        note: e.note,
+        forecastStart: toDbDate(e.forecastStart ?? null),
+        forecastFinish: toDbDate(e.forecastFinish ?? null),
+        changedByPersonId: personId,
+      };
+      await tx.progressEntry.upsert({ where, update: data, create: { ...data, progressUpdateId: updateId, canonicalActivityKey: e.canonicalActivityKey } });
     }
   });
 }
 
 export async function finalizeUpdate(updateId: string): Promise<void> {
-  const update = await prisma.progressUpdate.findUnique({ where: { id: updateId } });
-  if (!update) throw new Error("Update not found.");
-  if (update.state !== "draft") throw new Error("This update is already finalized.");
-  await prisma.progressUpdate.update({ where: { id: updateId }, data: { state: "finalized", finalizedAt: new Date() } });
+  const done = await prisma.progressUpdate.updateMany({ where: { id: updateId, state: "draft" }, data: { state: "finalized", finalizedAt: new Date() } });
+  if (done.count) return;
+  const exists = await prisma.progressUpdate.findUnique({ where: { id: updateId }, select: { id: true } });
+  throw new Error(exists ? "This update is already finalized." : "Update not found.");
 }
 
 export async function getFinalizedEntries(projectId: string): Promise<FinalizedEntry[]> {

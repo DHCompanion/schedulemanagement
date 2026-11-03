@@ -26,6 +26,8 @@ export interface LookaheadFormRow {
   forecastFinish: string | null;
   /** Incomplete work that should have started by the data date, or is underway. */
   dueByDataDate: boolean;
+  /** This draft's entry updatedAt (ISO) when loaded; null if the draft has no entry for it. */
+  version: string | null;
 }
 
 /** One not-started activity the unsaved entries would move, as POST /impacts returns it. */
@@ -77,6 +79,7 @@ function toEntry(r: LookaheadFormRow) {
     note: r.note || null,
     forecastStart: r.forecastStart,
     forecastFinish: r.forecastFinish,
+    expectedVersion: r.version,
   };
 }
 
@@ -132,14 +135,15 @@ export function LookaheadUpdateForm({
       return;
     }
     if (impacts.length) { setReview({ impacts, adjust: new Set(), finalize }); setBusy(false); return; }
-    await persist(data.map(toEntry), finalize);
+    await persist(data.filter(isDirty).map(toEntry), finalize);
   }
 
   async function confirmReview() {
     if (!review) return;
     const adjusted = review.impacts.filter((i) => review.adjust.has(i.externalUid));
     const byUid = new Map(adjusted.map((i) => [i.externalUid, i]));
-    const entries = data.map((r) => {
+    // Only changed rows and rows the review adjusted; the rest stay as saved.
+    const entries = data.filter((r) => isDirty(r) || byUid.has(r.externalUid)).map((r) => {
       const i = byUid.get(r.externalUid);
       return toEntry(i ? { ...r, forecastStart: i.proposedStart, forecastFinish: i.proposedFinish } : r);
     });
@@ -148,7 +152,7 @@ export function LookaheadUpdateForm({
       entries.push({
         activityExternalUid: i.externalUid, canonicalActivityKey: i.canonicalActivityKey, status: "not_started",
         actualStart: null, actualFinish: null, percentComplete: null, note: i.note,
-        forecastStart: i.proposedStart, forecastFinish: i.proposedFinish,
+        forecastStart: i.proposedStart, forecastFinish: i.proposedFinish, expectedVersion: null,
       });
     }
     setReview(null);
@@ -157,11 +161,9 @@ export function LookaheadUpdateForm({
   }
 
   async function persist(entries: ReturnType<typeof toEntry>[], finalize: boolean) {
-    // sendJson's own transport is used here, but its returned message is not —
-    // this endpoint has never surfaced the server's wording (see the
-    // component test locking in "Failed to save." for any failure body).
+    // The server explains its refusals (stale or invalid rows); anything else is a plain failure.
     const entriesErr = await sendJson(`/api/updates/${updateId}/entries`, { entries }).catch(() => "offline");
-    if (entriesErr) { setError("Failed to save."); setBusy(false); return; }
+    if (entriesErr) { setError(entriesErr === "offline" || entriesErr === "Request failed." ? "Failed to save." : entriesErr); setBusy(false); return; }
     if (finalize) {
       const fin = await fetch(appPath(`/api/updates/${updateId}/finalize`), { method: "POST" }).catch(() => null);
       if (!fin?.ok) { setError("Failed to finalize."); setBusy(false); return; }
