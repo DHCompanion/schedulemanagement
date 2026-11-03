@@ -31,11 +31,11 @@ const signed = (body: unknown, key = privateKey) => {
 };
 const saved: DraftWriteResult = { saved: true, asOfDate: "2026-11-07", activities: ["1.1|set ahu-1"], reason: null, message: null };
 function deps(current = true, result: DraftWriteResult = saved) {
-  const introspected: string[] = [], saves: [number, DraftWriteInput, Writer][] = [], afterSaves: unknown[][] = [];
+  const introspected: string[] = [], saves: [number, DraftWriteInput, Writer][] = [], afterSaves: unknown[] = [];
   const d: WriteDeps = {
     publicKey, connectOrigin: "https://connect.example", now: () => NOW,
     save: async (projectId, input, who) => { saves.push([projectId, input, who]); return result; },
-    afterSave: (...a) => { afterSaves.push(a); },
+    afterSave: (a) => { afterSaves.push(a); },
     fetch: (async (url: string, init: RequestInit) => { introspected.push(`${url} ${new Headers(init.headers).get("X-Connect-Read-Signature")}`); return Response.json({ current }); }) as unknown as typeof fetch,
   };
   return { d, introspected, saves, afterSaves };
@@ -56,7 +56,7 @@ describe("gateway draft write", () => {
   it("hands a saved write to afterSave with Connect's requestId, and a refused one to nobody", async () => {
     const ok = deps();
     await call(delegation(), ok.d);
-    expect(ok.afterSaves).toEqual([[41, "req-1", saved]]);
+    expect(ok.afterSaves).toEqual([{ osProjectId: 41, requestId: "req-1", who: { personId: 7, agentId: "480397a0-2449-432a-abcf-29abe1d90a56", clientKey: "claude" }, idempotencyKey: "key-0001-abcd", data: saved }]);
     const refused = deps(true, { saved: false, asOfDate: null, activities: [], reason: "stale", message: "x" });
     expect((await call(delegation(), refused.d)).status).toBe(200);
     expect(refused.afterSaves).toEqual([]);

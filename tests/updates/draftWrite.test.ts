@@ -1,8 +1,9 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { randomInt } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { saveAgentDraft, type DraftWriteEntry, type DraftWriteInput } from "@/lib/gateway/draftWrite";
 import { finalizeUpdate, getOrCreateDraft, saveEntries } from "@/lib/updates/updateService";
+import { emitAgentDrafted } from "@/lib/spine";
 
 const hasDb = !!process.env.DATABASE_URL;
 const who = { personId: 7, agentId: "480397a0-2449-432a-abcf-29abe1d90a56", clientKey: "claude" };
@@ -125,6 +126,33 @@ describe.runIf(hasDb)("agent draft write", () => {
     const r = await saveAgentDraft(osProjectId, input({ entries: Array.from({ length: 15 }, (_, i) => entry(`9.${i}|x`, { actualStart: null })) }), who);
     expect(r).toMatchObject({ saved: false, reason: "invalid" });
     expect(r.message!.length).toBeLessThanOrEqual(1000);
+  }, 30000);
+
+  it("tells Connect about the draft the write landed in, and nothing once that draft is finalized", async () => {
+    const { osProjectId, projectId } = await fixture("Agent Spine");
+    vi.stubEnv("SKILES_OS_API_BASE_URL", "https://api.example/api");
+    vi.stubEnv("SCHEDULE_MANAGER_CONTEXT_SECRET", "s".repeat(32));
+    const posted: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      if (url.endsWith("/activity-events")) posted.push(JSON.parse(String(init.body)));
+      return Response.json({ token: "svc" });
+    });
+    try {
+      const write = input({ entries: [entry("1|a")] });
+      const data = await saveAgentDraft(osProjectId, write, who);
+      const saved = { osProjectId, requestId: "req-1", who, idempotencyKey: write.idempotencyKey, data };
+      await emitAgentDrafted(saved);
+      const draft = (await draftOf(projectId))!;
+      expect(posted).toEqual([expect.objectContaining({ sourceRecordId: draft.id, idempotencyKey: `agent_drafted:${draft.id}`, payload: { requestId: "req-1", asOfDate: "2026-11-03", activityCount: 1 } })]);
+      // A replay after the draft is finalized and a new one is open must not point Connect at the new draft.
+      await finalizeUpdate(draft.id);
+      await getOrCreateDraft(projectId, "2026-11-10", 3);
+      await emitAgentDrafted(saved);
+      expect(posted).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
   }, 30000);
 
   it("answers no_schedule for a project with nothing linked", async () => {

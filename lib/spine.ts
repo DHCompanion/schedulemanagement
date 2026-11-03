@@ -3,7 +3,7 @@
 // Best effort: callers run this after the response, and a failure is logged, never thrown.
 import { call, mintServiceToken } from "@/lib/os-gateway";
 import { prisma } from "@/lib/db";
-import type { DraftWriteResult } from "@/lib/gateway/draftWrite";
+import type { SavedWrite } from "@/lib/gateway/writes";
 
 export type UpdateEvent = {
   osProjectId: number | null;
@@ -29,11 +29,16 @@ export async function emitUpdateEvent(e: UpdateEvent): Promise<void> {
   }
 }
 
-/** After a saved agent write: the open draft it landed in, keyed so every write to one draft makes one task. */
-export async function emitAgentDrafted(osProjectId: number, requestId: string, data: DraftWriteResult): Promise<void> {
+/** After a saved agent write: the update that write landed in (not whichever draft is open now, which a replay or a
+ * finalize-and-reopen could change), only while it is still a draft. Keyed so every write to one draft makes one task. */
+export async function emitAgentDrafted({ osProjectId, requestId, who, idempotencyKey, data }: SavedWrite): Promise<void> {
   try {
-    const draft = await prisma.progressUpdate.findFirst({ where: { project: { osProjectId }, state: "draft" }, select: { id: true } });
-    if (!draft) return;
+    const write = await prisma.agentWrite.findUnique({
+      where: { personId_agentId_idempotencyKey: { personId: who.personId, agentId: who.agentId, idempotencyKey } },
+      select: { progressUpdate: { select: { id: true, state: true } } },
+    });
+    const draft = write?.progressUpdate;
+    if (draft?.state !== "draft") return;
     const n = data.activities.length;
     await emitUpdateEvent({
       osProjectId, eventType: "schedule-manager.update.agent_drafted", updateId: draft.id,

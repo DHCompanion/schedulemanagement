@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const publicKey = createPublicKey(process.env.SCHEDULE_MANAGER_GATEWAY_CONNECT_PUBLIC_KEY ?? "");
     if (publicKey.asymmetricKeyType !== "ed25519") throw Error();
     return await handleGatewayWrite(raw, request.headers.get("X-Connect-Read-Signature"), { publicKey, connectOrigin: origin.origin, save: saveAgentDraft,
-      afterSave: (projectId, requestId, data) => after(() => emitAgentDrafted(projectId, requestId, data)),
+      afterSave: (saved) => after(() => emitAgentDrafted(saved)),
     });
   } catch {
     return Response.json({ error: "unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
