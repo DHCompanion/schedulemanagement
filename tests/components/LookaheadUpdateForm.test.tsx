@@ -291,6 +291,17 @@ describe("LookaheadUpdateForm agent draft", () => {
     expect(calls[0]).toMatchObject({ url: expect.stringMatching(/\/api\/updates\/u1\/date$/), body: { asOfDate: "2026-10-20" } });
   });
 
+  it("locks the rows from a date change until the refreshed rows arrive, so no edit is lost", async () => {
+    stubFetch({ ok: true });
+    const { rerender } = renderDraft([]);
+    fireEvent.change(screen.getByLabelText("Data date"), { target: { value: "2026-11-07" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change data date" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.getAllByLabelText("Note")[0].closest("fieldset")?.disabled).toBe(true);
+    rerender(<LookaheadUpdateForm updateId="u1" projectId="p1" rows={[{ ...row }, tape]} readOnly={false} asOfDate="2026-11-07" agentKeys={[]} />);
+    expect(screen.getAllByLabelText("Note")[0].closest("fieldset")?.disabled).toBe(false);
+  });
+
   it("discards the draft only after the person confirms", async () => {
     const { calls } = stubFetch({ ok: true });
     stubConfirm(false);

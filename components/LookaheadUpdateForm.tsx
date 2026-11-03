@@ -97,8 +97,8 @@ export function LookaheadUpdateForm({
   // (and the unsaved baseline) is the server's truth again.
   const [base, setBase] = useState(rows);
   const [data, setData] = useState(rows);
-  if (rows !== base) { setBase(rows); setData(rows); }
   const [busy, setBusy] = useState(false);
+  if (rows !== base) { setBase(rows); setData(rows); setBusy(false); }
   const [error, setError] = useState<string | null>(null);
   const [showUpcoming, setShowUpcoming] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
@@ -151,8 +151,8 @@ export function LookaheadUpdateForm({
     setError(null);
     setBusy(true);
     const err = await sendJson(`/api/updates/${updateId}/date`, { asOfDate: newDate }).catch(() => "Couldn't change the data date. Try again.");
-    setBusy(false);
-    if (err) setError(err);
+    // On success the rows stay locked until the refreshed rows replace them (above), so no edit is lost.
+    if (err) { setError(err); setBusy(false); }
     else router.refresh();
   }
 
@@ -251,6 +251,7 @@ export function LookaheadUpdateForm({
           Nothing was due to start by the data date.{upcomingCount > 0 && " Show upcoming to update work ahead of plan."}
         </p>
       ) : (
+        <fieldset disabled={busy} className="contents">
         <ul className="divide-y divide-slate-200 rounded border border-slate-200 bg-white">
           {visible.map((r, i) => (
             <Fragment key={r.externalUid}>
@@ -270,6 +271,7 @@ export function LookaheadUpdateForm({
             </Fragment>
           ))}
         </ul>
+        </fieldset>
       )}
 
       {!readOnly && (
