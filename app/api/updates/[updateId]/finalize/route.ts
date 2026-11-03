@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
-import { guardUpdate } from "@/lib/updates/updateRoute";
+import { NextResponse, after } from "next/server";
+import { emitUpdateEvent } from "@/lib/spine";
+import { closedEvent, guardUpdate } from "@/lib/updates/updateRoute";
 import { finalizeUpdate } from "@/lib/updates/updateService";
 
 export async function POST(req: Request, props: { params: Promise<{ updateId: string }> }) {
@@ -8,7 +9,9 @@ export async function POST(req: Request, props: { params: Promise<{ updateId: st
   if (denied) return denied;
 
   try {
+    const event = await closedEvent(params.updateId, "finalized");
     await finalizeUpdate(params.updateId);
+    after(() => emitUpdateEvent(event));
     return NextResponse.json({ ok: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to finalize.";

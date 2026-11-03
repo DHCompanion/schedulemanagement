@@ -31,6 +31,8 @@ export type WriteDeps = {
   publicKey: KeyObject;
   connectOrigin: string;
   save: (osProjectId: number, input: DraftWriteInput, who: Writer) => Promise<DraftWriteResult>;
+  /** Told about each saved write (the route tells Connect after responding); never awaited for the answer. */
+  afterSave?: (osProjectId: number, requestId: string, data: DraftWriteResult) => void;
   fetch?: typeof fetch;
   now?: () => number;
 };
@@ -44,6 +46,7 @@ export async function handleGatewayWrite(raw: string, signature: string | null, 
     // Current means authorized, not revoked, and still the pending attempt for its key.
     if (!(await stillCurrent(raw, signature!, deps, d.expiresAt)) || now() >= d.expiresAt) return unavailable();
     const data = await deps.save(d.projectId, d.arguments as unknown as DraftWriteInput, { personId: d.personId, agentId: d.agentId, clientKey: d.clientKey });
+    if (data.saved) deps.afterSave?.(d.projectId, d.requestId, data);
     return Response.json({
       schemaVersion: "connect.tool.result/2", requestId: d.requestId, actionId: contract.id, contractHash,
       companyId: COMPANY_ID, projectId: d.projectId, dataMode: "live", data,

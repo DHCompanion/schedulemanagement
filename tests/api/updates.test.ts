@@ -1,4 +1,8 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
+
+const emitted = vi.hoisted(() => [] as unknown[]);
+vi.mock("@/lib/spine", () => ({ emitUpdateEvent: async (e: unknown) => { emitted.push(e); } }));
+vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: (fn: () => unknown) => fn() }));
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "@/lib/db";
@@ -103,14 +107,17 @@ describe.runIf(hasDb)("updates routes", () => {
     const { POST: discard } = await import("@/app/api/updates/[updateId]/discard/route");
     await createDraft(post({ projectId, asOfDate: "2026-06-18", lookaheadWeeks: "3" }));
     const first = await prisma.progressUpdate.findFirstOrThrow({ where: { projectId } });
+    emitted.length = 0;
     await finalize(new Request("http://localhost/x", { method: "POST" }), params(first.id));
     expect((await discard(new Request("http://localhost/x", { method: "POST" }), params(first.id))).status).toBe(409);
+    expect(emitted).toEqual([{ osProjectId: null, eventType: "schedule-manager.update.finalized", updateId: first.id, summary: "Schedule update for 2026-06-18 finalized" }]);
 
     const refused = await createDraft(post({ projectId, asOfDate: "2026-06-18", lookaheadWeeks: "3" }));
     expect(decodeURIComponent(refused.headers.get("location")!)).toContain("after the last finalized update (2026-06-18)");
     await createDraft(post({ projectId, asOfDate: "2026-06-25", lookaheadWeeks: "3" }));
     const second = await prisma.progressUpdate.findFirstOrThrow({ where: { projectId, state: "draft" } });
     expect((await discard(new Request("http://localhost/x", { method: "POST" }), params(second.id))).status).toBe(200);
+    expect(emitted[1]).toEqual({ osProjectId: null, eventType: "schedule-manager.update.discarded", updateId: second.id, summary: "Draft schedule update for 2026-06-25 discarded" });
     expect(await prisma.progressUpdate.count({ where: { projectId } })).toBe(1);
   }, 30000);
 });
