@@ -33,7 +33,7 @@ const saved: DraftWriteResult = { saved: true, asOfDate: "2026-11-07", activitie
 function deps(current = true, result: DraftWriteResult = saved) {
   const introspected: string[] = [], saves: [number, DraftWriteInput, Writer][] = [], afterSaves: unknown[] = [];
   const d: WriteDeps = {
-    publicKey, connectOrigin: "https://connect.example", now: () => NOW,
+    publicKeys: [publicKey], connectOrigin: "https://connect.example", now: () => NOW,
     save: async (projectId, input, who) => { saves.push([projectId, input, who]); return result; },
     afterSave: (a) => { afterSaves.push(a); },
     fetch: (async (url: string, init: RequestInit) => { introspected.push(`${url} ${new Headers(init.headers).get("X-Connect-Read-Signature")}`); return Response.json({ current }); }) as unknown as typeof fetch,
