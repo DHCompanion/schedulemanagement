@@ -21,7 +21,7 @@ export type OsProjectContext = {
   session: { toolSlug: string; personId: number; projectId: number; osCapabilities: string[]; expiresAt: string };
 };
 
-async function call(path: string, token: string, init: RequestInit = {}): Promise<unknown> {
+export async function call(path: string, token: string, init: RequestInit = {}): Promise<unknown> {
   const base = process.env.SKILES_OS_API_BASE_URL;
   if (!base) throw new Error("SKILES_OS_API_BASE_URL is not set");
   const res = await fetch(`${base.replace(/\/+$/, "")}/tool-gateway${path}`, {

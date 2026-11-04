@@ -27,10 +27,13 @@ const writeSpec: DelegationSpec = {
       (e.expectedDraft === null || (isRecord(e.expectedDraft) && keys(e.expectedDraft) === PROGRESS_KEYS && progress(e.expectedDraft)))),
 };
 
+export type SavedWrite = { osProjectId: number; requestId: string; who: Writer; idempotencyKey: string; data: DraftWriteResult };
 export type WriteDeps = {
   publicKey: KeyObject;
   connectOrigin: string;
   save: (osProjectId: number, input: DraftWriteInput, who: Writer) => Promise<DraftWriteResult>;
+  /** Told about each saved write (the route tells Connect after responding); never awaited for the answer. */
+  afterSave?: (saved: SavedWrite) => void;
   fetch?: typeof fetch;
   now?: () => number;
 };
@@ -43,7 +46,9 @@ export async function handleGatewayWrite(raw: string, signature: string | null, 
     if (!d || !Number.isSafeInteger(d.personId) || d.personId < 1 || !text(d.agentId, 100) || !text(d.clientKey, 40)) return unavailable();
     // Current means authorized, not revoked, and still the pending attempt for its key.
     if (!(await stillCurrent(raw, signature!, deps, d.expiresAt)) || now() >= d.expiresAt) return unavailable();
-    const data = await deps.save(d.projectId, d.arguments as unknown as DraftWriteInput, { personId: d.personId, agentId: d.agentId, clientKey: d.clientKey });
+    const input = d.arguments as unknown as DraftWriteInput, who = { personId: d.personId, agentId: d.agentId, clientKey: d.clientKey };
+    const data = await deps.save(d.projectId, input, who);
+    if (data.saved) deps.afterSave?.({ osProjectId: d.projectId, requestId: d.requestId, who, idempotencyKey: input.idempotencyKey, data });
     return Response.json({
       schemaVersion: "connect.tool.result/2", requestId: d.requestId, actionId: contract.id, contractHash,
       companyId: COMPANY_ID, projectId: d.projectId, dataMode: "live", data,
