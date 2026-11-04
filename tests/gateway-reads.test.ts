@@ -3,7 +3,7 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { NextRequest } from "next/server";
-import { handleGatewayRead, type ReadDeps } from "@/lib/gateway/reads";
+import { connectPublicKeys, handleGatewayRead, type ReadDeps } from "@/lib/gateway/reads";
 import { scheduleUpdateStateContract as contract, scheduleUpdateStateContractHash as contractHash } from "@/lib/gateway/contract";
 import { DEFAULT_LOOKAHEAD_WEEKS, type UpdateStateInput, type UpdateStateSource } from "@/lib/gateway/updateState";
 import type { LookaheadRow } from "@/lib/lookahead/computeLookahead";
@@ -52,7 +52,7 @@ function deps(src: UpdateStateSource = source(), current: boolean[] = [true, tru
   const introspected: { url: string; body: string; signature: string | null }[] = [];
   const loaded: [number, UpdateStateInput][] = [];
   const d: ReadDeps = {
-    publicKey, connectOrigin: "https://connect.example", now: () => NOW,
+    publicKeys: [publicKey], connectOrigin: "https://connect.example", now: () => NOW,
     load: async (projectId, input) => { loaded.push([projectId, input]); return src; },
     fetch: (async (url: string, init: RequestInit) => {
       introspected.push({ url, body: String(init.body), signature: new Headers(init.headers).get("X-Connect-Read-Signature") });
@@ -190,5 +190,22 @@ describe("gateway read wiring", () => {
     if (!root) return;
     const connect = await readFile(resolve(root, "backend/src/core/aiTools/scheduleManagerReadContract.ts"));
     expect(connect.equals(await readFile(resolve(import.meta.dirname, "../lib/gateway/contract.ts")))).toBe(true);
+  });
+});
+
+describe("Connect signing-key rotation", () => {
+  const pem = (k: import("node:crypto").KeyObject) => k.export({ type: "spki", format: "pem" }).toString();
+  it("reads every Ed25519 key in the variable, and refuses an empty or mixed value", () => {
+    const next = generateKeyPairSync("ed25519");
+    expect(connectPublicKeys(pem(publicKey) + pem(next.publicKey))).toHaveLength(2);
+    expect(() => connectPublicKeys("")).toThrow();
+    expect(() => connectPublicKeys(pem(publicKey) + pem(generateKeyPairSync("rsa", { modulusLength: 2048 }).publicKey))).toThrow();
+  });
+  it("accepts a delegation signed by any configured key, and none signed by another", async () => {
+    const next = generateKeyPairSync("ed25519");
+    const { d } = deps();
+    const both = { ...d, publicKeys: [publicKey, next.publicKey] };
+    expect((await read(delegation(), both, next.privateKey)).status).toBe(200);
+    expect((await read(delegation(), { ...d, publicKeys: [publicKey] }, next.privateKey)).status).toBe(503);
   });
 });

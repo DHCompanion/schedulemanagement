@@ -1,5 +1,5 @@
-import { createPublicKey } from "node:crypto";
 import { after } from "next/server";
+import { connectPublicKeys } from "@/lib/gateway/reads";
 import { handleGatewayWrite } from "@/lib/gateway/writes";
 import { saveAgentDraft } from "@/lib/gateway/draftWrite";
 import { emitAgentDrafted } from "@/lib/spine";
@@ -14,9 +14,8 @@ export async function POST(request: Request) {
   try {
     const origin = new URL(process.env.SCHEDULE_MANAGER_GATEWAY_CONNECT_ORIGIN ?? "");
     if (process.env.SCHEDULE_MANAGER_GATEWAY_WRITES_ENABLED !== "true" || origin.protocol !== "https:" || origin.origin !== origin.href.replace(/\/$/, "")) throw Error();
-    const publicKey = createPublicKey(process.env.SCHEDULE_MANAGER_GATEWAY_CONNECT_PUBLIC_KEY ?? "");
-    if (publicKey.asymmetricKeyType !== "ed25519") throw Error();
-    return await handleGatewayWrite(raw, request.headers.get("X-Connect-Read-Signature"), { publicKey, connectOrigin: origin.origin, save: saveAgentDraft,
+    const publicKeys = connectPublicKeys(process.env.SCHEDULE_MANAGER_GATEWAY_CONNECT_PUBLIC_KEY ?? "");
+    return await handleGatewayWrite(raw, request.headers.get("X-Connect-Read-Signature"), { publicKeys, connectOrigin: origin.origin, save: saveAgentDraft,
       afterSave: (saved) => after(() => emitAgentDrafted(saved)),
     });
   } catch {
