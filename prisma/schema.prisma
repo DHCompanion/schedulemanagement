@@ -218,7 +218,10 @@ model ProgressUpdate {
   updatedAt        DateTime       @updatedAt
   finalizedAt      DateTime?
   entries          ProgressEntry[]
+  agentWrites      AgentWrite[]
 
+  // One open draft per project: partial unique index "ProgressUpdate_one_draft_per_project"
+  // lives in migration 20261103120000_safe_draft_saves (Prisma can't express partial indexes).
   @@index([projectId])
   @@index([scheduleImportId])
 }
@@ -236,9 +239,12 @@ model ProgressEntry {
   note                 String?
   forecastStart        DateTime?
   forecastFinish       DateTime?
+  /// Connect person who last changed this entry; null on entries saved before this column.
+  changedByPersonId    Int?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
+  @@unique([progressUpdateId, canonicalActivityKey])
   @@index([progressUpdateId])
   @@index([canonicalActivityKey])
 }
@@ -562,4 +568,28 @@ model BenchmarkGroup {
   computedAt DateTime @default(now())
 
   @@id([groupKind, groupValue])
+}
+
+/// One saved Connect agent draft write (connect.tool.write/1), keyed by the agent's idempotency key, so a resend of
+/// the same write returns its first answer instead of saving again. Refusals are not stored: a resend re-checks.
+model AgentWrite {
+  id               String         @id @default(cuid())
+  /// Connect person and named agent the write was made for.
+  personId         Int
+  agentId          String
+  clientKey        String
+  idempotencyKey   String
+  /// sha256 of the write's canonical arguments; the same key with other arguments is refused.
+  payloadHash      String
+  /// Null once the draft is discarded: the key and its answer stay, so a late resend can't recreate the draft.
+  progressUpdateId String?
+  progressUpdate   ProgressUpdate? @relation(fields: [progressUpdateId], references: [id], onDelete: SetNull)
+  /// The draft's data date before this write; null when the write created the draft.
+  fromAsOfDate     DateTime?
+  /// The contract-shaped answer returned to the agent.
+  result           Json
+  createdAt        DateTime       @default(now())
+
+  @@unique([personId, agentId, idempotencyKey])
+  @@index([progressUpdateId])
 }

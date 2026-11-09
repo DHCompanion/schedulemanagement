@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOrCreateDraft } from "@/lib/updates/updateService";
+import { getOrCreateDraft, SaveRefused } from "@/lib/updates/updateService";
 import { appUrl } from "@/lib/http";
 import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
 import { denyIfHistorical } from "@/lib/historical";
@@ -19,7 +19,8 @@ export async function POST(req: Request) {
   try {
     const { id } = await getOrCreateDraft(projectId, asOfDate, weeks, scope?.personId);
     return NextResponse.redirect(appUrl(req, `/projects/${projectId}/updates/${id}`), { status: 303 });
-  } catch {
-    return NextResponse.redirect(appUrl(req, `/projects/${projectId}/updates?error=1`), { status: 303 });
+  } catch (e) {
+    const why = e instanceof SaveRefused ? `&message=${encodeURIComponent(e.message)}` : "";
+    return NextResponse.redirect(appUrl(req, `/projects/${projectId}/updates?error=1${why}`), { status: 303 });
   }
 }

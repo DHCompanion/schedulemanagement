@@ -1,23 +1,17 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { denyIfOutOfScope } from "@/lib/scope";
-import { denyIfHistorical } from "@/lib/historical";
+import { NextResponse, after } from "next/server";
+import { emitUpdateEvent } from "@/lib/spine";
+import { closedEvent, guardUpdate } from "@/lib/updates/updateRoute";
 import { finalizeUpdate } from "@/lib/updates/updateService";
 
 export async function POST(req: Request, props: { params: Promise<{ updateId: string }> }) {
   const params = await props.params;
-  // The update names the project, not the request — resolve it before deciding
-  // whether this session may finalize it.
-  const update = await prisma.progressUpdate.findUnique({
-    where: { id: params.updateId },
-    select: { projectId: true },
-  });
-  if (!update) return NextResponse.json({ error: { message: "Update not found." } }, { status: 404 });
-  const denied = (await denyIfOutOfScope(req, update.projectId)) ?? (await denyIfHistorical(update.projectId));
+  const denied = await guardUpdate(req, params.updateId);
   if (denied) return denied;
 
   try {
+    const event = await closedEvent(params.updateId, "finalized");
     await finalizeUpdate(params.updateId);
+    after(() => emitUpdateEvent(event));
     return NextResponse.json({ ok: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to finalize.";

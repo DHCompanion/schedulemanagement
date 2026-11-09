@@ -94,7 +94,7 @@ async function main() {
     const draft = await getOrCreateDraft(project.id, asOf, 3, superId);
     const entries = story.activities.filter((a) => !a.summary && a.startOffset < -3).map((a) => {
       const done = a.startOffset + a.durationDays <= -3;
-      return { activityExternalUid: a.uid, canonicalActivityKey: a.key, status: done ? "complete" : "in_progress", actualStart: dateAt(a.startOffset, anchor), actualFinish: done ? dateAt(a.startOffset + a.durationDays, anchor) : null, percentComplete: done ? 100 : 50, note: null };
+      return { activityExternalUid: a.uid, canonicalActivityKey: a.key, status: done ? "complete" : "in_progress", actualStart: dateAt(a.startOffset, anchor), actualFinish: done ? dateAt(a.startOffset + a.durationDays, anchor) : null, percentComplete: done ? 100 : 50, note: null, expectedVersion: null };
     });
     await saveEntries(draft.id, entries);
     await finalizeUpdate(draft.id);

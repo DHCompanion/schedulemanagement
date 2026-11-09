@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, cleanup, screen, fireEvent, waitFor } from "@testing-library/react";
-import { stubFetch } from "../helpers/renderClient";
+import { stubConfirm, stubFetch } from "../helpers/renderClient";
 import { LookaheadUpdateForm, type LookaheadFormRow } from "@/components/LookaheadUpdateForm";
 
 const refresh = vi.hoisted(() => vi.fn());
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
+const push = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 const row: LookaheadFormRow = {
   externalUid: 7,
   canonicalActivityKey: "1.1|hang drywall",
@@ -24,7 +25,9 @@ const row: LookaheadFormRow = {
   forecastStart: null,
   forecastFinish: null,
   dueByDataDate: true,
+  version: null,
 };
+const touch = () => fireEvent.change(screen.getAllByLabelText("Note")[0], { target: { value: "crew short" } });
 const noImpacts = { ok: true, body: { impacts: [] } };
 const impact = {
   externalUid: 20, canonicalActivityKey: "1.3|paint", name: "Paint", wbsCode: "1.3",
@@ -111,9 +114,10 @@ describe("LookaheadUpdateForm", () => {
     expect(screen.getByText("1 unsaved change")).toBeTruthy();
   });
 
-  it("checks impacts, then posts every row's entry to the entries endpoint", async () => {
+  it("checks impacts, then posts the changed row's entry to the entries endpoint", async () => {
     const { calls } = stubFetch(noImpacts, { ok: true });
     renderForm([row]);
+    touch();
     fireEvent.click(screen.getByText("Save draft"));
 
     await waitFor(() => expect(calls).toHaveLength(2));
@@ -128,6 +132,7 @@ describe("LookaheadUpdateForm", () => {
   it("normalises completed_as_planned to complete before sending", async () => {
     const { calls } = stubFetch(noImpacts, { ok: true });
     renderForm([{ ...row, status: "completed_as_planned", actualStart: "2026-08-01", actualFinish: "2026-08-05", percentComplete: 100 }]);
+    touch();
     fireEvent.click(screen.getByText("Save draft"));
 
     await waitFor(() => expect(calls).toHaveLength(2));
@@ -137,11 +142,33 @@ describe("LookaheadUpdateForm", () => {
   it("sends empty strings as null", async () => {
     const { calls } = stubFetch(noImpacts, { ok: true });
     renderForm([row]);
+    fireEvent.click(screen.getByRole("button", { name: "Started on plan" }));
     fireEvent.click(screen.getByText("Save draft"));
 
     await waitFor(() => expect(calls).toHaveLength(2));
-    expect(entriesOf(calls[1])[0].actualStart).toBeNull();
+    expect(entriesOf(calls[1])[0].actualFinish).toBeNull();
     expect(entriesOf(calls[1])[0].note).toBeNull();
+  });
+
+  it("sends only changed rows, each with the version it was loaded at", async () => {
+    const { calls } = stubFetch(noImpacts, { ok: true });
+    renderForm([{ ...row, version: "2026-11-03T10:00:00.000Z" }, { ...row, externalUid: 8, canonicalActivityKey: "1.2|tape", name: "Tape", version: "v-tape" }]);
+    touch();
+    fireEvent.click(screen.getByText("Save draft"));
+
+    await waitFor(() => expect(calls).toHaveLength(2));
+    expect(entriesOf(calls[0]).map((e) => e.activityExternalUid)).toEqual([7]); // the impacts preview merges the same way
+    expect(entriesOf(calls[1])).toEqual([expect.objectContaining({ activityExternalUid: 7, expectedVersion: "2026-11-03T10:00:00.000Z" })]);
+  });
+
+  it("shows the server's reason when it refuses a stale save", async () => {
+    const message = "1 activity was changed by someone else since you opened this update: Hang Drywall. Reload to see the changes. Nothing was saved.";
+    stubFetch(noImpacts, { ok: false, body: { error: { message } } });
+    renderForm([row]);
+    touch();
+    fireEvent.click(screen.getByText("Save draft"));
+    await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it("shows a failure message and does not refresh", async () => {
@@ -171,6 +198,15 @@ describe("LookaheadUpdateForm", () => {
     expect(calls[2].body).toBeUndefined();
   });
 
+  it("reloads saved versions when finalize fails after the entries saved", async () => {
+    stubFetch(noImpacts, { ok: true }, { ok: false });
+    renderForm([row]);
+    touch();
+    fireEvent.click(screen.getByText("Finalize"));
+    await waitFor(() => expect(screen.getByText("Failed to finalize.")).toBeTruthy());
+    expect(refresh).toHaveBeenCalledOnce();
+  });
+
   it("asks before moving pushed activities, and saves forecast dates for the ones adjusted", async () => {
     const { calls } = stubFetch({ ok: true, body: { impacts: [impact] } }, { ok: true });
     renderForm([row]);
@@ -193,6 +229,7 @@ describe("LookaheadUpdateForm", () => {
   it("leaves pushed activities alone by default", async () => {
     const { calls } = stubFetch({ ok: true, body: { impacts: [impact] } }, { ok: true });
     renderForm([row]);
+    touch();
     fireEvent.click(screen.getByText("Save draft"));
     await screen.findByRole("dialog");
     fireEvent.click(screen.getByRole("button", { name: "Continue and save draft" }));
@@ -220,5 +257,60 @@ describe("LookaheadUpdateForm", () => {
     renderForm([row], true);
     expect(screen.queryByText("Save draft")).toBeNull();
     expect(screen.queryByText("Finalize")).toBeNull();
+  });
+});
+
+describe("LookaheadUpdateForm agent draft", () => {
+  const tape = { ...row, externalUid: 8, canonicalActivityKey: "1.2|tape", name: "Tape", dueByDataDate: false };
+  const renderDraft = (agentKeys: string[]) =>
+    render(<LookaheadUpdateForm updateId="u1" projectId="p1" rows={[row, tape]} readOnly={false} asOfDate="2026-11-03" agentKeys={agentKeys} />);
+
+  it("says how many activities the agent updated, marks them (even upcoming ones), and confirms through finalize", async () => {
+    const { calls } = stubFetch(noImpacts, { ok: true }, { ok: true });
+    renderDraft(["1.1|hang drywall", "1.2|tape"]);
+    expect(screen.getByRole("status").textContent).toMatch(/Your agent updated 2 activities/);
+    expect(screen.getAllByText("Updated by your agent")).toHaveLength(2);
+    expect(screen.getByText("Tape")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm & finalize" }));
+    await waitFor(() => expect(calls.map((c) => c.url)).toEqual([expect.stringMatching(/impacts$/), expect.stringMatching(/entries$/), expect.stringMatching(/finalize$/)]));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/projects/p1/updates"));
+  });
+
+  it("shows no agent notice without agent writes", () => {
+    renderDraft([]);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Updated by your agent")).toBeNull();
+  });
+
+  it("changes the data date and shows the server's refusal", async () => {
+    const { calls } = stubFetch({ ok: false, body: { error: { message: "The data date must be after the last finalized update (2026-10-21)." } } });
+    renderDraft([]);
+    fireEvent.change(screen.getByLabelText("Data date"), { target: { value: "2026-10-20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change data date" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/after the last finalized update/));
+    expect(calls[0]).toMatchObject({ url: expect.stringMatching(/\/api\/updates\/u1\/date$/), body: { asOfDate: "2026-10-20" } });
+  });
+
+  it("locks the rows from a date change until the refreshed rows arrive, so no edit is lost", async () => {
+    stubFetch({ ok: true });
+    const { rerender } = renderDraft([]);
+    fireEvent.change(screen.getByLabelText("Data date"), { target: { value: "2026-11-07" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change data date" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(screen.getAllByLabelText("Note")[0].closest("fieldset")?.disabled).toBe(true);
+    rerender(<LookaheadUpdateForm updateId="u1" projectId="p1" rows={[{ ...row }, tape]} readOnly={false} asOfDate="2026-11-07" agentKeys={[]} />);
+    expect(screen.getAllByLabelText("Note")[0].closest("fieldset")?.disabled).toBe(false);
+  });
+
+  it("discards the draft only after the person confirms", async () => {
+    const { calls } = stubFetch({ ok: true });
+    stubConfirm(false);
+    renderDraft([]);
+    fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+    expect(calls).toHaveLength(0);
+    stubConfirm(true);
+    fireEvent.click(screen.getByRole("button", { name: "Discard draft" }));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/projects/p1/updates"));
+    expect(calls[0].url).toMatch(/\/api\/updates\/u1\/discard$/);
   });
 });

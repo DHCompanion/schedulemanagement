@@ -1,4 +1,8 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
+
+const emitted = vi.hoisted(() => [] as unknown[]);
+vi.mock("@/lib/spine", () => ({ emitUpdateEvent: async (e: unknown) => { emitted.push(e); } }));
+vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: (fn: () => unknown) => fn() }));
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "@/lib/db";
@@ -77,5 +81,43 @@ describe.runIf(hasDb)("updates routes", () => {
     const after = await prisma.progressUpdate.findUniqueOrThrow({ where: { id: draft.id } });
     expect(after.state).toBe("finalized");
     expect(after.finalizedAt).not.toBeNull();
+  }, 30000);
+
+  const json = (body: unknown) => new Request("http://localhost/x", { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+  const params = (updateId: string) => ({ params: Promise.resolve({ updateId }) });
+
+  it("changes a draft's data date, or answers 422 with the reason", async () => {
+    const projectId = await projectWithImport();
+    const { POST: createDraft } = await import("@/app/api/updates/route");
+    await createDraft(post({ projectId, asOfDate: "2026-06-18", lookaheadWeeks: "3" }));
+    const draft = await prisma.progressUpdate.findFirstOrThrow({ where: { projectId } });
+    const { POST } = await import("@/app/api/updates/[updateId]/date/route");
+    expect((await POST(json({ asOfDate: "2026-06-25" }), params(draft.id))).status).toBe(200);
+    expect((await prisma.progressUpdate.findUniqueOrThrow({ where: { id: draft.id } })).asOfDate.toISOString().slice(0, 10)).toBe("2026-06-25");
+    const bad = await POST(json({ asOfDate: "nope" }), params(draft.id));
+    expect(bad.status).toBe(422);
+    expect((await bad.json()).error.message).toBe("Enter a real date.");
+    expect((await POST(json({ asOfDate: "2026-06-25" }), params("does-not-exist"))).status).toBe(404);
+  }, 30000);
+
+  it("discards a draft but not a finalized update, and refuses a new draft on or before the last finalized date", async () => {
+    const projectId = await projectWithImport();
+    const { POST: createDraft } = await import("@/app/api/updates/route");
+    const { POST: finalize } = await import("@/app/api/updates/[updateId]/finalize/route");
+    const { POST: discard } = await import("@/app/api/updates/[updateId]/discard/route");
+    await createDraft(post({ projectId, asOfDate: "2026-06-18", lookaheadWeeks: "3" }));
+    const first = await prisma.progressUpdate.findFirstOrThrow({ where: { projectId } });
+    emitted.length = 0;
+    await finalize(new Request("http://localhost/x", { method: "POST" }), params(first.id));
+    expect((await discard(new Request("http://localhost/x", { method: "POST" }), params(first.id))).status).toBe(409);
+    expect(emitted).toEqual([{ osProjectId: null, eventType: "schedule-manager.update.finalized", updateId: first.id, summary: "Schedule update for 2026-06-18 finalized" }]);
+
+    const refused = await createDraft(post({ projectId, asOfDate: "2026-06-18", lookaheadWeeks: "3" }));
+    expect(decodeURIComponent(refused.headers.get("location")!)).toContain("after the last finalized update (2026-06-18)");
+    await createDraft(post({ projectId, asOfDate: "2026-06-25", lookaheadWeeks: "3" }));
+    const second = await prisma.progressUpdate.findFirstOrThrow({ where: { projectId, state: "draft" } });
+    expect((await discard(new Request("http://localhost/x", { method: "POST" }), params(second.id))).status).toBe(200);
+    expect(emitted[1]).toEqual({ osProjectId: null, eventType: "schedule-manager.update.discarded", updateId: second.id, summary: "Draft schedule update for 2026-06-25 discarded" });
+    expect(await prisma.progressUpdate.count({ where: { projectId } })).toBe(1);
   }, 30000);
 });

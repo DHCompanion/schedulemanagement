@@ -2,11 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { appPath } from "@/lib/http";
+import { agentSummary } from "@/lib/updates/agentSummary";
 
 export const dynamic = "force-dynamic";
 
 export default async function UpdatesPage(
-  props: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }
+  props: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; message?: string }> }
 ) {
   const searchParams = await props.searchParams;
   const params = await props.params;
@@ -17,7 +18,7 @@ export default async function UpdatesPage(
   const updates = await prisma.progressUpdate.findMany({
     where: { projectId: project.id },
     orderBy: { createdAt: "desc" },
-    include: { _count: { select: { entries: true } } },
+    include: { _count: { select: { entries: true } }, agentWrites: { select: { result: true } } },
   });
   const today = new Date().toISOString().slice(0, 10);
 
@@ -28,7 +29,7 @@ export default async function UpdatesPage(
 
       {searchParams.error === "1" && (
         <p className="mb-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Couldn&apos;t start the update — try again, or adjust the dates below.
+          {searchParams.message ?? "Couldn\u2019t start the update — try again, or adjust the dates below."}
         </p>
       )}
 
@@ -59,7 +60,12 @@ export default async function UpdatesPage(
             <li key={u.id}>
               <Link href={`/projects/${project.id}/updates/${u.id}`} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50">
                 <span className="font-medium">{u.asOfDate.toISOString().slice(0, 10)} · {u.lookaheadWeeks}wk</span>
-                <span className="text-sm text-slate-500">{u.state} · {u._count.entries} entries</span>
+                <span className="text-sm text-slate-500">
+                  {u.state} · {u._count.entries} entries
+                  {u.state === "draft" && u.agentWrites.length > 0 && (
+                    <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">agent updated {agentSummary(u.agentWrites).length}</span>
+                  )}
+                </span>
               </Link>
             </li>
           ))}

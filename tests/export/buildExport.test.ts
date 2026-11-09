@@ -38,7 +38,7 @@ describe.runIf(hasDb)("buildExport", () => {
 
     // finalize an update marking UID 2 (canonicalKey "2|electrical rough-in") in progress
     const { id } = await getOrCreateDraft(project.id, "2026-06-18", 1);
-    await saveEntries(id, [{ activityExternalUid: 2, canonicalActivityKey: "2|electrical rough-in", status: "in_progress", actualStart: "2026-06-16", actualFinish: null, percentComplete: 50, note: null }]);
+    await saveEntries(id, [{ activityExternalUid: 2, canonicalActivityKey: "2|electrical rough-in", status: "in_progress", actualStart: "2026-06-16", actualFinish: null, percentComplete: 50, note: null, expectedVersion: null }]);
     await finalizeUpdate(id);
 
     const out = await buildExport(project.id, { xml, fileName: "minimal.xml" });
@@ -76,7 +76,7 @@ describe.runIf(hasDb)("buildExport", () => {
     const project = await prisma.project.create({ data: { name: "Export Route Test" } });
     await commitImport({ projectId: project.id, fileName: "minimal.xml", xml });
     const { id } = await getOrCreateDraft(project.id, "2026-06-18", 1);
-    await saveEntries(id, [{ activityExternalUid: 2, canonicalActivityKey: "2|electrical rough-in", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-18", percentComplete: 100, note: null }]);
+    await saveEntries(id, [{ activityExternalUid: 2, canonicalActivityKey: "2|electrical rough-in", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-18", percentComplete: 100, note: null, expectedVersion: null }]);
     await finalizeUpdate(id);
 
     const fd = new FormData();
@@ -114,7 +114,7 @@ describe.runIf(hasDb)("buildExport", () => {
     await prisma.activity.update({ where: { id: electrical.id }, data: { name: coarse, canonicalActivityKey: `2|${coarse.toLowerCase()}` } });
 
     const { id: draftId } = await getOrCreateDraft(project.id, "2026-06-18", 1);
-    await saveEntries(draftId, [{ activityExternalUid: 1, canonicalActivityKey: "1|mobilize", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-16", percentComplete: 100, note: null }]);
+    await saveEntries(draftId, [{ activityExternalUid: 1, canonicalActivityKey: "1|mobilize", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-16", percentComplete: 100, note: null, expectedVersion: null }]);
     await finalizeUpdate(draftId);
 
     await acceptSplit(project.id, coarse);
@@ -187,7 +187,7 @@ describe.runIf(hasDb)("buildExport", () => {
     }
 
     const { id: draftId } = await getOrCreateDraft(project.id, "2026-06-18", 1);
-    await saveEntries(draftId, [{ activityExternalUid: 1, canonicalActivityKey: "1|mobilize", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-16", percentComplete: 100, note: null }]);
+    await saveEntries(draftId, [{ activityExternalUid: 1, canonicalActivityKey: "1|mobilize", status: "complete", actualStart: "2026-06-16", actualFinish: "2026-06-16", percentComplete: 100, note: null, expectedVersion: null }]);
     await finalizeUpdate(draftId);
 
     const { xml: out } = await buildExport(project.id, { xml, fileName: "minimal.xml" });
