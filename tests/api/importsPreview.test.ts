@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { prisma } from "@/lib/db";
+import { SCOPE_COOKIE, signScope } from "@/lib/scope";
 
 const xml = readFileSync(resolve(__dirname, "../fixtures/minimal.xml"), "utf8");
 const hasDb = !!process.env.DATABASE_URL;
@@ -40,6 +41,72 @@ describe("imports preview route", () => {
     const { POST } = await import("@/app/api/imports/preview/route");
     expect((await POST(post(form))).status).toBe(422);
   });
+
+  it("refuses a project outside the session's scope", async () => {
+    process.env.SESSION_SIGNING_SECRET = "signing-secret-abc".padEnd(32, "x");
+    const cookie = await signScope({ projectId: "proj-a", osProjectId: 1, personId: 1 }, Math.floor(Date.now() / 1000));
+    const form = new FormData();
+    form.append("file", new File([xml], "minimal.xml", { type: "application/xml" }));
+    form.append("projectId", "proj-b");
+    const { POST } = await import("@/app/api/imports/preview/route");
+    const res = await POST(new Request("http://localhost/api/imports/preview", { method: "POST", body: form, headers: { Cookie: `${SCOPE_COOKIE}=${cookie}` } }));
+    expect(res.status).toBe(403);
+  });
+
+  it("has no re-import block without a projectId", async () => {
+    const form = new FormData();
+    form.append("file", new File([xml], "minimal.xml", { type: "application/xml" }));
+    const { POST } = await import("@/app/api/imports/preview/route");
+    expect((await (await POST(post(form))).json()).reimport).toBeUndefined();
+  });
+
+  it.runIf(hasDb)("compares against the project's last import, or says null on a first import", async () => {
+    const project = await prisma.project.create({ data: { name: "ZZ Reimport Preview" } });
+    try {
+      const form = () => {
+        const f = new FormData();
+        f.append("file", new File([xml], "minimal.xml", { type: "application/xml" }));
+        f.append("projectId", project.id);
+        return f;
+      };
+      const { POST } = await import("@/app/api/imports/preview/route");
+      expect((await (await POST(post(form()))).json()).reimport).toBeNull();
+
+      await prisma.scheduleImport.create({ data: { projectId: project.id, sourceFormat: "msproject_xml", fileName: "old.xml", fileHash: "h" } });
+      const { reimport } = await (await POST(post(form()))).json();
+      expect(reimport).toEqual({ resplit: [], newNames: expect.any(Array), orphanedProgress: [], progressNeedingResplit: [] });
+    } finally {
+      await prisma.project.delete({ where: { id: project.id } });
+    }
+  }, 30000);
+
+  it.runIf(hasDb)("warns only about progress on the current schedule that the file drops", async () => {
+    const project = await prisma.project.create({ data: { name: "ZZ Reimport Progress" } });
+    try {
+      const current = await prisma.scheduleImport.create({ data: { projectId: project.id, sourceFormat: "msproject_xml", fileName: "old.xml", fileHash: "h" } });
+      await prisma.activity.createMany({
+        data: [
+          { scheduleImportId: current.id, externalUid: 1, wbsCode: "1", name: "Mobilize", canonicalActivityKey: "1|mobilize", type: "task" },
+          { scheduleImportId: current.id, externalUid: 5, wbsCode: "5", name: "Dropped", canonicalActivityKey: "5|dropped", type: "task" },
+        ],
+      });
+      const update = await prisma.progressUpdate.create({
+        data: { projectId: project.id, scheduleImportId: current.id, asOfDate: new Date("2026-11-01"), state: "finalized", finalizedAt: new Date("2026-11-01") },
+      });
+      // 9|old coarse is a key the current schedule no longer has (split away): not this import's loss.
+      await prisma.progressEntry.createMany({
+        data: ["1|mobilize", "5|dropped", "9|old coarse"].map((canonicalActivityKey, i) => ({ progressUpdateId: update.id, activityExternalUid: i, canonicalActivityKey, status: "in_progress" })),
+      });
+      const form = new FormData();
+      form.append("file", new File([xml], "minimal.xml", { type: "application/xml" }));
+      form.append("projectId", project.id);
+      const { POST } = await import("@/app/api/imports/preview/route");
+      const { reimport } = await (await POST(post(form))).json();
+      expect(reimport.orphanedProgress).toEqual(["5|dropped"]);
+    } finally {
+      await prisma.project.delete({ where: { id: project.id } });
+    }
+  }, 30000);
 
   it.runIf(hasDb)("writes nothing", async () => {
     // Asserted against a filename only this test uses, not a global row count.

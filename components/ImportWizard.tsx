@@ -11,6 +11,8 @@ interface Preview {
   counts: { activities: number; milestones: number; relationships: number; resources: number };
   fieldDefinitions: { alias: string; fieldName: string }[];
   warnings: string[];
+  /** Comparison with the project's current schedule; null on a first import. */
+  reimport?: { resplit: { coarseScope: string; count: number }[]; newNames: string[]; orphanedProgress: string[]; progressNeedingResplit: string[] } | null;
 }
 
 export function ImportWizard({ projectId }: { projectId: string }) {
@@ -18,6 +20,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [statusDate, setStatusDate] = useState("");
+  const [reapply, setReapply] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +30,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
     setError(null);
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("projectId", projectId);
     const res = await fetch(appPath("/api/imports/preview"), { method: "POST", body: fd });
     setBusy(false);
     if (!res.ok) {
@@ -46,13 +50,21 @@ export function ImportWizard({ projectId }: { projectId: string }) {
     fd.append("file", file);
     fd.append("projectId", projectId);
     if (statusDate) fd.append("statusDate", `${statusDate}:00`);
+    if (reapply && preview?.reimport?.resplit.length) fd.append("reapplySplits", "1");
     const res = await fetch(appPath("/api/imports/commit"), { method: "POST", body: fd });
     setBusy(false);
     if (!res.ok) {
       setError((await res.json())?.error?.message ?? "Import failed.");
       return;
     }
-    const data: { startWizard?: boolean } = await res.json();
+    const data: { startWizard?: boolean; resplitError?: string } = await res.json();
+    if (data.resplitError) {
+      // The import itself landed; drop the preview so it can't be committed twice.
+      setPreview(null);
+      setFile(null);
+      setError(data.resplitError);
+      return;
+    }
     router.push(data.startWizard ? `/projects/${projectId}/health?wizard=1` : `/projects/${projectId}`);
     router.refresh();
   }
@@ -100,6 +112,7 @@ export function ImportWizard({ projectId }: { projectId: string }) {
               className="rounded border border-slate-300 px-3 py-2"
             />
           </label>
+          {preview.reimport && <ReimportNotes reimport={preview.reimport} reapply={reapply} setReapply={setReapply} />}
           {preview.warnings.length > 0 && (
             <p className="mb-3 text-amber-600">{preview.warnings.length} warning(s).</p>
           )}
@@ -107,6 +120,41 @@ export function ImportWizard({ projectId }: { projectId: string }) {
             {busy ? "Importing…" : "Commit import"}
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+function ReimportNotes({ reimport, reapply, setReapply }: { reimport: NonNullable<Preview["reimport"]>; reapply: boolean; setReapply: (v: boolean) => void }) {
+  const { resplit, newNames } = reimport;
+  const orphanedProgress = reapply ? reimport.orphanedProgress : [...reimport.orphanedProgress, ...reimport.progressNeedingResplit];
+  if (!resplit.length && !newNames.length && !orphanedProgress.length) {
+    return <p className="mb-3 text-slate-600">Re-import: nothing to redo — names, splits and progress all carry over.</p>;
+  }
+  return (
+    <div className="mb-3 flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 p-3">
+      <p className="font-medium">This replaces the project&apos;s current schedule</p>
+      {resplit.length > 0 && (
+        <label className="flex items-start gap-2">
+          <input type="checkbox" checked={reapply} onChange={(e) => setReapply(e.target.checked)} className="mt-1" />
+          <span>
+            Re-apply {resplit.length} previous split{resplit.length === 1 ? "" : "s"}:{" "}
+            {resplit.map((r) => `${r.coarseScope} (${r.count})`).join(", ")}
+          </span>
+        </label>
+      )}
+      {newNames.length > 0 && (
+        <p>
+          {newNames.length} name{newNames.length === 1 ? "" : "s"} not yet reviewed — they&apos;ll join the naming backlog: {newNames.slice(0, 10).join(", ")}
+          {newNames.length > 10 ? "…" : ""}
+        </p>
+      )}
+      {orphanedProgress.length > 0 && (
+        <p className="text-red-700">
+          {orphanedProgress.length} activit{orphanedProgress.length === 1 ? "y's" : "ies'"} recorded progress won&apos;t carry over — WBS or name changed:{" "}
+          {orphanedProgress.slice(0, 10).map((k) => k.replaceAll("|", " ")).join(", ")}
+          {orphanedProgress.length > 10 ? "…" : ""}
+        </p>
       )}
     </div>
   );
