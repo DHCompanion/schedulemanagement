@@ -79,14 +79,20 @@ async function previousSplitNames(projectId: string): Promise<string[]> {
 
 /** Null when the project has no schedule yet — a first import has nothing to compare. */
 export async function getReimportPreview(projectId: string, activities: IncomingActivity[]): Promise<ReimportSummary | null> {
-  if (!(await prisma.scheduleImport.findFirst({ where: { projectId }, select: { id: true } }))) return null;
+  const current = await prisma.scheduleImport.findFirst({
+    where: { projectId }, orderBy: { importedAt: "desc" }, select: { activities: { select: { canonicalActivityKey: true } } },
+  });
+  if (!current) return null;
+  // Only progress on the current schedule can be lost; keys a split already
+  // replaced (getFinalizedEntries keeps the coarse one) are not this import's loss.
+  const onSchedule = new Set(current.activities.map((a) => a.canonicalActivityKey));
   const [splitRules, dictionary, status, entries, splitNames, dismissals] = await Promise.all([
     getCompletenessRules(), getDictionary(), getNameStatus(), getFinalizedEntries(projectId), previousSplitNames(projectId),
     prisma.completenessDismissal.findMany({ where: { projectId } }),
   ]);
   return summarizeReimport({
     activities, splitRules, dictionary, settledNames: status.settled,
-    progressKeys: resolveCurrentProgress(entries).keys(), previousSplitNames: splitNames,
+    progressKeys: [...resolveCurrentProgress(entries).keys()].filter((k) => onSchedule.has(k)), previousSplitNames: splitNames,
     dismissed: new Set(dismissals.map((d) => `${d.canonicalActivityKey}::${d.coarseScope}`)),
   });
 }

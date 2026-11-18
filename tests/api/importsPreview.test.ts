@@ -80,6 +80,34 @@ describe("imports preview route", () => {
     }
   }, 30000);
 
+  it.runIf(hasDb)("warns only about progress on the current schedule that the file drops", async () => {
+    const project = await prisma.project.create({ data: { name: "ZZ Reimport Progress" } });
+    try {
+      const current = await prisma.scheduleImport.create({ data: { projectId: project.id, sourceFormat: "msproject_xml", fileName: "old.xml", fileHash: "h" } });
+      await prisma.activity.createMany({
+        data: [
+          { scheduleImportId: current.id, externalUid: 1, wbsCode: "1", name: "Mobilize", canonicalActivityKey: "1|mobilize", type: "task" },
+          { scheduleImportId: current.id, externalUid: 5, wbsCode: "5", name: "Dropped", canonicalActivityKey: "5|dropped", type: "task" },
+        ],
+      });
+      const update = await prisma.progressUpdate.create({
+        data: { projectId: project.id, scheduleImportId: current.id, asOfDate: new Date("2026-11-01"), state: "finalized", finalizedAt: new Date("2026-11-01") },
+      });
+      // 9|old coarse is a key the current schedule no longer has (split away): not this import's loss.
+      await prisma.progressEntry.createMany({
+        data: ["1|mobilize", "5|dropped", "9|old coarse"].map((canonicalActivityKey, i) => ({ progressUpdateId: update.id, activityExternalUid: i, canonicalActivityKey, status: "in_progress" })),
+      });
+      const form = new FormData();
+      form.append("file", new File([xml], "minimal.xml", { type: "application/xml" }));
+      form.append("projectId", project.id);
+      const { POST } = await import("@/app/api/imports/preview/route");
+      const { reimport } = await (await POST(post(form))).json();
+      expect(reimport.orphanedProgress).toEqual(["5|dropped"]);
+    } finally {
+      await prisma.project.delete({ where: { id: project.id } });
+    }
+  }, 30000);
+
   it.runIf(hasDb)("writes nothing", async () => {
     // Asserted against a filename only this test uses, not a global row count.
     // Vitest runs test files in parallel against one shared database, and the
