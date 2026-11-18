@@ -152,7 +152,7 @@ function ReimportNotes({ reimport, reapply, setReapply }: { reimport: NonNullabl
       {orphanedProgress.length > 0 && (
         <p className="text-red-700">
           {orphanedProgress.length} activit{orphanedProgress.length === 1 ? "y's" : "ies'"} recorded progress won&apos;t carry over — WBS or name changed:{" "}
-          {orphanedProgress.slice(0, 10).map((k) => k.replace("|", " ")).join(", ")}
+          {orphanedProgress.slice(0, 10).map((k) => k.replaceAll("|", " ")).join(", ")}
           {orphanedProgress.length > 10 ? "…" : ""}
         </p>
       )}
