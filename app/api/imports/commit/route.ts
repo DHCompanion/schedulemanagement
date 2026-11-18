@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readUploadedXml } from "@/lib/http";
 import { prisma } from "@/lib/db";
 import { commitImport } from "@/lib/import/commitImport";
+import { reapplySplits } from "@/lib/import/reimportPreview";
 import { denyOutOfScope, scopeFromRequest } from "@/lib/scope";
 import { denyIfHistorical } from "@/lib/historical";
 
@@ -30,12 +31,23 @@ export async function POST(req: Request) {
       statusDateOverride: statusDate,
       personId: scope?.personId,
     });
+    // Not atomic with the import: a failed re-split must not read as a failed
+    // import (a retry would import twice), so it is reported alongside the id.
+    let resplit: string[] = [];
+    let resplitError: string | undefined;
+    if (form.get("reapplySplits") === "1") {
+      try {
+        resplit = await reapplySplits(projectId, scope?.personId);
+      } catch (e) {
+        resplitError = `Imported, but re-applying splits failed: ${e instanceof Error ? e.message : "unknown error"}. Finish them from Completeness.`;
+      }
+    }
     const [importCount, project] = await Promise.all([
       prisma.scheduleImport.count({ where: { projectId } }),
       prisma.project.findUnique({ where: { id: projectId }, select: { onboardingCompletedAt: true } }),
     ]);
     const startWizard = importCount === 1 && !project?.onboardingCompletedAt;
-    return NextResponse.json({ id, startWizard });
+    return NextResponse.json({ id, startWizard, resplit, resplitError });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to import.";
     return NextResponse.json({ error: { message } }, { status: 422 });
