@@ -45,5 +45,21 @@ describe("summarizeReimport", () => {
       previousSplitNames: ["Finishes"],
     });
     expect(summary.orphanedProgress).toEqual(["1.3|demo", "2.1|paint"]);
+    // Only found again if the split is re-applied: lost when the box is unticked.
+    expect(summary.progressNeedingResplit).toEqual(["1.5.1|paint", "1.5.2|flooring"]);
+  });
+
+  it("leaves a dismissed activity coarse, as the commit's re-split will", () => {
+    const summary = summarizeReimport({
+      activities: [act(1, "1.5", "Finishes"), act(2, "1.6", "Finishes")],
+      splitRules: rules,
+      dictionary,
+      settledNames: new Set(),
+      progressKeys: ["1.5.1|paint", "1.6.1|paint"],
+      previousSplitNames: ["Finishes"],
+      dismissed: new Set(["1.6|finishes::Finishes"]),
+    });
+    expect(summary.resplit).toEqual([{ coarseScope: "Finishes", count: 1 }]);
+    expect(summary.orphanedProgress).toEqual(["1.6.1|paint"]);
   });
 });

@@ -74,7 +74,7 @@ describe("imports preview route", () => {
 
       await prisma.scheduleImport.create({ data: { projectId: project.id, sourceFormat: "msproject_xml", fileName: "old.xml", fileHash: "h" } });
       const { reimport } = await (await POST(post(form()))).json();
-      expect(reimport).toEqual({ resplit: [], newNames: expect.any(Array), orphanedProgress: [] });
+      expect(reimport).toEqual({ resplit: [], newNames: expect.any(Array), orphanedProgress: [], progressNeedingResplit: [] });
     } finally {
       await prisma.project.delete({ where: { id: project.id } });
     }

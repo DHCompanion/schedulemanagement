@@ -25,12 +25,17 @@ export interface ReimportInput {
   progressKeys: Iterable<string>;
   /** Raw names of coarse activities this project has split before. */
   previousSplitNames: string[];
+  /** `${canonicalActivityKey}::${coarseScope}` of the project's completeness dismissals. */
+  dismissed?: Set<string>;
 }
 
 export interface ReimportSummary {
   resplit: { coarseScope: string; count: number }[];
   newNames: string[];
+  /** Progress lost whatever is chosen. */
   orphanedProgress: string[];
+  /** Progress found again only if the splits are re-applied. */
+  progressNeedingResplit: string[];
 }
 
 export function summarizeReimport(input: ReimportInput): ReimportSummary {
@@ -38,7 +43,9 @@ export function summarizeReimport(input: ReimportInput): ReimportSummary {
   const leaves = input.activities.filter(isLeafActive);
 
   const splitBefore = splitScopes(input.previousSplitNames, splitRules, dictionary);
-  const resplitIssues = checkCompleteness(leaves, splitRules, dictionary).filter((i) => splitBefore.has(i.coarseScope));
+  // Same filter the commit's re-split gets through getCompleteness: a dismissed activity stays coarse.
+  const resplitIssues = checkCompleteness(leaves, splitRules, dictionary)
+    .filter((i) => splitBefore.has(i.coarseScope) && !input.dismissed?.has(`${i.canonicalActivityKey}::${i.coarseScope}`));
 
   const newNames = new Map<string, string>();
   for (const a of leaves) {
@@ -47,12 +54,14 @@ export function summarizeReimport(input: ReimportInput): ReimportSummary {
   }
 
   const keys = new Set(input.activities.map((a) => a.canonicalActivityKey));
-  for (const i of resplitIssues) i.finerScopes.forEach((scope, n) => keys.add(finerActivityKey(i.wbsCode, scope, n)));
+  const minted = new Set(resplitIssues.flatMap((i) => i.finerScopes.map((scope, n) => finerActivityKey(i.wbsCode, scope, n))));
+  const missing = [...input.progressKeys].filter((k) => !keys.has(k));
 
   return {
     resplit: summarizeCompleteness(resplitIssues).byCoarseScope,
     newNames: [...newNames.values()],
-    orphanedProgress: [...input.progressKeys].filter((k) => !keys.has(k)),
+    orphanedProgress: missing.filter((k) => !minted.has(k)),
+    progressNeedingResplit: missing.filter((k) => minted.has(k)),
   };
 }
 
@@ -71,12 +80,14 @@ async function previousSplitNames(projectId: string): Promise<string[]> {
 /** Null when the project has no schedule yet — a first import has nothing to compare. */
 export async function getReimportPreview(projectId: string, activities: IncomingActivity[]): Promise<ReimportSummary | null> {
   if (!(await prisma.scheduleImport.findFirst({ where: { projectId }, select: { id: true } }))) return null;
-  const [splitRules, dictionary, status, entries, splitNames] = await Promise.all([
+  const [splitRules, dictionary, status, entries, splitNames, dismissals] = await Promise.all([
     getCompletenessRules(), getDictionary(), getNameStatus(), getFinalizedEntries(projectId), previousSplitNames(projectId),
+    prisma.completenessDismissal.findMany({ where: { projectId } }),
   ]);
   return summarizeReimport({
     activities, splitRules, dictionary, settledNames: status.settled,
     progressKeys: resolveCurrentProgress(entries).keys(), previousSplitNames: splitNames,
+    dismissed: new Set(dismissals.map((d) => `${d.canonicalActivityKey}::${d.coarseScope}`)),
   });
 }
 

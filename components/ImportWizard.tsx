@@ -12,7 +12,7 @@ interface Preview {
   fieldDefinitions: { alias: string; fieldName: string }[];
   warnings: string[];
   /** Comparison with the project's current schedule; null on a first import. */
-  reimport?: { resplit: { coarseScope: string; count: number }[]; newNames: string[]; orphanedProgress: string[] } | null;
+  reimport?: { resplit: { coarseScope: string; count: number }[]; newNames: string[]; orphanedProgress: string[]; progressNeedingResplit: string[] } | null;
 }
 
 export function ImportWizard({ projectId }: { projectId: string }) {
@@ -126,7 +126,8 @@ export function ImportWizard({ projectId }: { projectId: string }) {
 }
 
 function ReimportNotes({ reimport, reapply, setReapply }: { reimport: NonNullable<Preview["reimport"]>; reapply: boolean; setReapply: (v: boolean) => void }) {
-  const { resplit, newNames, orphanedProgress } = reimport;
+  const { resplit, newNames } = reimport;
+  const orphanedProgress = reapply ? reimport.orphanedProgress : [...reimport.orphanedProgress, ...reimport.progressNeedingResplit];
   if (!resplit.length && !newNames.length && !orphanedProgress.length) {
     return <p className="mb-3 text-slate-600">Re-import: nothing to redo — names, splits and progress all carry over.</p>;
   }
